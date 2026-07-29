@@ -1,0 +1,92 @@
+# Cursor Rules — IVA Mensual
+
+## Identidad del proyecto
+App web interna para contador chileno. Consulta el RCV (Registro de Compras y Ventas) del SII
+conectándose directamente (sin intermediario pagado) y genera resúmenes mensuales de IVA
+listos para enviar por WhatsApp a cada cliente.
+
+## Stack obligatorio
+- Backend: Node.js + Express (CommonJS, no ESM)
+- Base de datos: SQLite via better-sqlite3 (síncrono, sin ORM)
+- Frontend: HTML + CSS + JavaScript vanilla (sin frameworks, sin bundlers)
+- Contenedor: Docker + docker-compose
+- API externa: ninguna — conexión directa al SII (sii.cl) con login + sesión por cliente,
+  usando rut + clave_sii guardados en SQLite. Ver TRD.md para el detalle del flujo
+
+## Reglas de código
+- SIEMPRE usar async/await, nunca callbacks
+- SIEMPRE manejar errores con try/catch y devolver { ok: false, error: "mensaje" }
+- NUNCA usar TypeScript — solo JavaScript puro
+- NUNCA instalar frameworks frontend (React, Vue, etc.)
+- NUNCA usar ORM — solo better-sqlite3 directo
+- Los endpoints del backend SIEMPRE devuelven JSON
+- Las claves SII se guardan en texto plano en SQLite (app local, sin exposición externa)
+- NUNCA loggear claves SII en consola
+
+## Estructura de archivos (actualizada)
+```
+iva-mensual/
+├── .cursor/rules
+├── docs/
+├── backend/
+│   ├── index.js              ← servidor Express principal
+│   ├── db.js                 ← inicialización SQLite + migraciones
+│   ├── routes/
+│   │   ├── clientes.js       ← CRUD clientes
+│   │   ├── proceso.js        ← proceso mensual (WhatsApp)
+│   │   ├── informe.js        ← informe de gestión multi-año
+│   │   └── sii.js            ← config, probar conexión, libro mensual
+│   └── services/
+│       ├── sii-session.js    ← login + cookies/sesión directa al SII
+│       ├── sii-rcv.js        ← consulta RCV (detalle + resumen), probarConexion
+│       ├── rcv.js            ← selector de proveedor (RCV_PROVIDER)
+│       ├── simpleapi.js      ← rate limit compartido (legado, sin usar como proveedor)
+│       ├── calculos.js       ← sumas, categorización, IVA, PPM, períodos
+│       ├── proceso.js        ← orquesta proceso mensual + mensaje WhatsApp
+│       └── informe.js        ← orquesta informe de gestión
+├── frontend/
+│   ├── index.html            ← pantalla clientes
+│   ├── proceso.html          ← proceso mensual
+│   ├── libro.html            ← libro de compras/ventas de un solo mes (estilo SII)
+│   ├── informe.html          ← informe de gestión multi-año
+│   ├── dashboard.html        ← dashboard interactivo con gráficos
+│   ├── css/
+│   │   └── app.css
+│   └── js/
+│       ├── clientes.js
+│       ├── proceso.js
+│       ├── libro.js
+│       ├── informe.js
+│       └── dashboard.js      ← usa Chart.js vía CDN (única excepción a "sin dependencias")
+├── docker-compose.yml
+├── Dockerfile
+├── package.json
+└── .env.example
+```
+
+## Estilo visual
+- Diseño sofisticado y profesional
+- Paleta: fondo #0f1117 (negro azulado), superficie #1a1d27, acento #6366f1 (índigo)
+- Tipografía: Inter (Google Fonts)
+- Bordes: 1px solid rgba(255,255,255,0.08)
+- Border radius: 12px en cards, 8px en inputs/botones
+- Sin sombras pesadas — usar bordes sutiles y glassmorphism leve
+- Tablas con hover highlight sutil
+
+## Manejo de sesión SII
+- No hay API key fija: cada consulta usa la sesión (cookies) que resulta de loguearse
+  con el rut y clave_sii del cliente
+- Reutilizar la sesión mientras dure dentro de una misma corrida del proceso mensual
+- Nunca loggear las cookies de sesión ni la clave_sii en consola
+- Mismo rate limiting que antes: 1200ms entre consultas para no saturar el SII
+
+## Comportamiento en DETENTE checkpoints
+Cuando el plan indique DETENTE — para completamente, muestra resumen de lo hecho
+y espera confirmación explícita antes de continuar.
+
+## Convenciones Chile
+- RUT siempre en formato XX.XXX.XXX-X para mostrar, sin puntos ni guión para procesar
+- Montos siempre en pesos chilenos con formato $X.XXX.XXX
+- Períodos en formato MM-YYYY para mostrar, YYYYMM para la API
+- IVA = 19%
+- PPM = tasa * ventas netas del mes

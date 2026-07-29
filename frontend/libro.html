@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Libro de Compras y Ventas — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container container-wide">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Libro de Compras y Ventas</h1>
+        <p class="page-subtitle">Resumen por tipo de documento — igual al del portal del SII, mes a mes</p>
+      </div>
+    </div>
+
+    <section class="libro-controls">
+      <div class="controls-row">
+        <div class="control-group">
+          <label for="select-cliente">Empresa</label>
+          <select id="select-cliente">
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="select-mes">Mes</label>
+          <select id="select-mes"></select>
+        </div>
+        <div class="control-group">
+          <label for="select-anio">Año</label>
+          <select id="select-anio"></select>
+        </div>
+      </div>
+      <div class="controls-row controls-row-check">
+        <label class="form-checkbox libro-check">
+          <input type="checkbox" id="check-compras" checked>
+          Compras
+        </label>
+        <label class="form-checkbox libro-check">
+          <input type="checkbox" id="check-ventas" checked>
+          Ventas
+        </label>
+        <button type="button" class="btn btn-primary" id="btn-consultar">Consultar libro</button>
+      </div>
+    </section>
+
+    <section class="progress-section" id="progress-section" hidden>
+      <div class="progress-header">
+        <span id="progress-label">Consultando SII...</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill progress-fill-indeterminate" id="progress-fill"></div>
+      </div>
+    </section>
+
+    <div id="libro-result"></div>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="/shared/format.js"></script>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/export.js"></script>
+  <script src="/shared/datagrid.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script src="/js/libro.js"></script>
+  <script>initLayout('libro')</script>
+</body>
+</html>

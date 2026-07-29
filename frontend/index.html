@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Clientes</h1>
+        <p class="page-subtitle" id="clientes-count">Cargando...</p>
+      </div>
+      <button type="button" class="btn btn-primary" id="btn-agregar">+ Agregar</button>
+    </div>
+
+    <div class="client-list" id="client-list"></div>
+  </main>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" role="dialog" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">Agregar cliente</h2>
+        <button type="button" class="btn-icon" id="btn-cerrar-modal" aria-label="Cerrar">✕</button>
+      </div>
+      <form id="form-cliente">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="input-rut">RUT *</label>
+            <input type="text" id="input-rut" class="form-input" placeholder="76123456-7" required>
+            <p class="form-error" id="error-rut" hidden></p>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-nombre">Nombre empresa *</label>
+            <input type="text" id="input-nombre" class="form-input" placeholder="Comercial XYZ Ltda." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-clave">Clave SII *</label>
+            <div class="input-password-wrap">
+              <input type="password" id="input-clave" class="form-input" placeholder="••••••••" required>
+              <button type="button" class="btn-toggle-password" id="btn-toggle-clave" aria-label="Mostrar clave">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-ppm">Tasa PPM (ej: 0.015 = 1.5%) *</label>
+            <input type="number" id="input-ppm" class="form-input" placeholder="0.015" step="0.001" min="0" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-telefono">Teléfono (con código país) *</label>
+            <input type="text" id="input-telefono" class="form-input" placeholder="56912345678" required>
+          </div>
+          <label class="form-checkbox">
+            <input type="checkbox" id="input-exento">
+            Cliente exento de IVA
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-guardar">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/shared/format.js"></script>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script src="/js/clientes.js"></script>
+  <script>initLayout('clientes')</script>
+</body>
+</html>

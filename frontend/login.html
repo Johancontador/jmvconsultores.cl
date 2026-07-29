@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ingresar — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    body.login-body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(560px circle at 50% 0%, rgba(99, 102, 241, 0.10), transparent 65%),
+        var(--bg-base);
+      padding: 1.5rem;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 2.25rem 2rem;
+      box-shadow: var(--shadow-lg);
+    }
+    .login-logo {
+      text-align: center;
+      font-size: 1.375rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 1.75rem;
+    }
+    .login-error {
+      color: var(--error);
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: var(--radius-input);
+      font-size: 0.875rem;
+      padding: 0.625rem 0.875rem;
+      margin-bottom: 1rem;
+    }
+    .login-error:empty {
+      display: none;
+    }
+    .login-card .btn-primary {
+      width: 100%;
+      justify-content: center;
+      margin-top: 0.5rem;
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body class="login-body">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="login-logo">💼 IVA Mensual</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="form-group">
+      <label class="form-label" for="input-username">Usuario</label>
+      <input type="text" id="input-username" class="form-input" autocomplete="username" required autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="input-password">Contraseña</label>
+      <input type="password" id="input-password" class="form-input" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn btn-primary" id="btn-login">Ingresar</button>
+  </form>
+
+  <script src="/shared/api.js"></script>
+  <script>
+    const form = document.getElementById('login-form')
+    const errorEl = document.getElementById('login-error')
+    const btn = document.getElementById('btn-login')
+
+    // Si ya hay sesión activa, no mostrar el login de nuevo.
+    apiGet('/api/auth/me').then(() => {
+      window.location.href = '/dashboard.html'
+    }).catch(() => {})
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      errorEl.textContent = ''
+      btn.disabled = true
+      btn.textContent = 'Ingresando...'
+      try {
+        await apiPost('/api/auth/login', {
+          username: document.getElementById('input-username').value.trim(),
+          password: document.getElementById('input-password').value,
+        })
+        window.location.href = '/dashboard.html'
+      } catch (err) {
+        errorEl.textContent = err.message || 'No se pudo iniciar sesión'
+        btn.disabled = false
+        btn.textContent = 'Ingresar'
+      }
+    })
+  </script>
+</body>
+</html>

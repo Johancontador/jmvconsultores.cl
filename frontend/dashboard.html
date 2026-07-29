@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container container-wide">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Ventas, compras y margen — vista comparativa por período</p>
+      </div>
+      <a href="/proceso.html" class="btn btn-secondary">⬇ Procesar mes (todos los clientes)</a>
+    </div>
+
+    <section class="dash-controls">
+      <div class="controls-row">
+        <div class="control-group">
+          <label for="select-cliente">Empresa</label>
+          <select id="select-cliente">
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label for="dash-mes-inicio">Mes inicio</label>
+          <select id="dash-mes-inicio"></select>
+        </div>
+        <div class="control-group">
+          <label for="dash-anio-inicio">Año inicio</label>
+          <select id="dash-anio-inicio"></select>
+        </div>
+        <div class="control-group">
+          <label for="dash-mes-fin">Mes fin</label>
+          <select id="dash-mes-fin"></select>
+        </div>
+        <div class="control-group">
+          <label for="dash-anio-fin">Año fin</label>
+          <select id="dash-anio-fin"></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-generar">Actualizar dashboard</button>
+      </div>
+    </section>
+
+    <section class="progress-section" id="progress-section" hidden>
+      <div class="progress-header">
+        <span id="progress-label">Consultando SII...</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <p class="progress-detail" id="progress-detail"></p>
+    </section>
+
+    <div id="dash-empty" class="empty-state">
+      <p>Selecciona una empresa y un rango de años, luego "Actualizar dashboard".</p>
+    </div>
+
+    <div id="dash-content" hidden>
+      <section class="kpi-grid" id="kpi-grid"></section>
+
+      <section class="dash-grid">
+        <div class="dash-card">
+          <h3>Ventas netas por mes</h3>
+          <div class="chart-wrap"><canvas id="chart-ventas"></canvas></div>
+        </div>
+        <div class="dash-card">
+          <h3>Compras netas por mes</h3>
+          <div class="chart-wrap"><canvas id="chart-compras"></canvas></div>
+        </div>
+        <div class="dash-card dash-card-wide">
+          <h3>Comparativo Ventas vs Compras</h3>
+          <div class="chart-wrap"><canvas id="chart-comparativo"></canvas></div>
+        </div>
+        <div class="dash-card dash-card-wide">
+          <h3>Margen bruto por mes</h3>
+          <div class="chart-wrap"><canvas id="chart-margen"></canvas></div>
+        </div>
+        <div class="dash-card dash-card-wide" id="dash-card-anual" hidden>
+          <h3>Comparativo anual</h3>
+          <div class="chart-wrap"><canvas id="chart-anual"></canvas></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/shared/format.js"></script>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/rango.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script src="/js/dashboard.js"></script>
+  <script>initLayout('dashboard')</script>
+</body>
+</html>
