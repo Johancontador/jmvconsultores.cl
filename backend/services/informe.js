@@ -14,6 +14,9 @@ const {
 
 const informes = new Map()
 
+// Columns fetched by listarInformesDeBD
+const INFORME_LISTA_COLUMNS = 'id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado, total_meses, consultas_estimadas, resumen_json, creado_en'
+
 function crearInformeId() {
   return `inf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
@@ -192,14 +195,12 @@ function cargarInformeDeBD(informeId, userId) {
 function listarInformesDeBD(userId, limit = 50, offset = 0, clienteId = null) {
   if (clienteId) {
     return db.prepare(`
-      SELECT id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado,
-             total_meses, consultas_estimadas, resumen_json, creado_en
+      SELECT ${INFORME_LISTA_COLUMNS}
       FROM informes WHERE user_id = ? AND cliente_id = ? ORDER BY creado_en DESC LIMIT ? OFFSET ?
     `).all(userId, clienteId, limit, offset)
   }
   return db.prepare(`
-    SELECT id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado,
-           total_meses, consultas_estimadas, resumen_json, creado_en
+    SELECT ${INFORME_LISTA_COLUMNS}
     FROM informes WHERE user_id = ? ORDER BY creado_en DESC LIMIT ? OFFSET ?
   `).all(userId, limit, offset)
 }
