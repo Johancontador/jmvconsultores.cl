@@ -231,7 +231,7 @@ async function _cargarClientesEnTopbar() {
       return
     }
     $select.innerHTML = '<option value="">Selecciona un cliente…</option>' +
-      clientes.map((c) => `<option value="${c.id}">${c.nombre}</option>`).join('')
+      clientes.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('')
     const activo = window.ShellState.getClienteId()
     if (activo && clientes.some((c) => c.id === activo)) $select.value = String(activo)
   } catch {
