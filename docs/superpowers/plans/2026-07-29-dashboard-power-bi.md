@@ -686,6 +686,7 @@ git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo
 
 **Files:**
 - Modify: `frontend/shared/layout.js` (agregar al `initLayout` existente de Task 4)
+- Modify: `frontend/shared/rango.js` (agregar clases `form-label`/`form-select` al HTML que genera — ver Step 1b)
 
 **Interfaces:**
 - Consumes: `window.ShellState` (Task 2), `apiGet`/`apiPost` (`shared/api.js`), `rangoMesAnioHtml`/`inicializarRangoMesAnio`/`leerRangoMesAnio`/`validarRangoMesAnio` (`shared/rango.js` — debe cargarse antes que `layout.js` en el shell), `showToast` (`shared/toast.js`).
@@ -693,6 +694,7 @@ git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo
   - `window.LayoutHeader.setBadge(estado: 'conectado'|'sincronizando'|'sin-datos')`
   - `window.LayoutHeader.setProgreso(pct: number|null)` — `null` oculta la barra de progreso
   - Dispara evento custom `window.dispatchEvent(new CustomEvent('shell:conectar'))` cuando se presiona "Conectar" — Task 6 escucha este evento.
+  - `rangoMesAnioHtml` (Step 1b) cambia de firma visual (agrega clases `form-label`/`form-select`) pero no de comportamiento — mismos ids, mismos parámetros.
 
 - [ ] **Step 1: Agregar el bloque de header dentro de `initLayout`, solo cuando `esShell` es true**
 
@@ -725,7 +727,7 @@ Modificar el `root.innerHTML = ...` de `initLayout` (Task 4, Step 1) agregando e
     ${esShell ? `
     <header class="topbar">
       <div class="control-group topbar-cliente">
-        <select id="topbar-select-cliente"><option value="">Cargando clientes...</option></select>
+        <select id="topbar-select-cliente" class="form-select"><option value="">Cargando clientes...</option></select>
       </div>
       <button type="button" class="btn btn-primary btn-sm" id="topbar-btn-conectar">⚡ Conectar</button>
       <span class="badge-estado badge-sin-datos" id="topbar-badge">Sin datos</span>
@@ -739,6 +741,36 @@ Modificar el `root.innerHTML = ...` de `initLayout` (Task 4, Step 1) agregando e
       <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-pdf">⬇ PDF</button>
     </section>` : ''}`
 ```
+
+- [ ] **Step 1b: Agregar clases `form-label`/`form-select` en `frontend/shared/rango.js`**
+
+`rangoMesAnioHtml` (usada arriba, en la barra de filtro global) genera `<label>`/`<select>` sin ninguna clase — `app.css` sí tiene componentes `.form-label`/`.form-select` ya diseñados y con estilos completos (fondo, borde, focus, hover — ver `app.css` sección de formularios), pero esta función nunca los usó, así que sus controles se ven como un `<select>` nativo del navegador sin estilo, no como el resto de la app. Tras este rediseño `rangoMesAnioHtml` solo se sigue usando en un único lugar (esta barra de filtro global), así que corregirlo aquí no afecta nada más.
+
+En `frontend/shared/rango.js`, reemplazar la función `rangoMesAnioHtml` (líneas 6-24) por:
+
+```js
+function rangoMesAnioHtml(prefijo) {
+  return `
+    <div class="control-group">
+      <label for="${prefijo}-mes-inicio" class="form-label">Mes inicio</label>
+      <select id="${prefijo}-mes-inicio" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-anio-inicio" class="form-label">Año inicio</label>
+      <select id="${prefijo}-anio-inicio" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-mes-fin" class="form-label">Mes fin</label>
+      <select id="${prefijo}-mes-fin" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-anio-fin" class="form-label">Año fin</label>
+      <select id="${prefijo}-anio-fin" class="form-select"></select>
+    </div>`
+}
+```
+
+(El resto de `rango.js` — `inicializarRangoMesAnio`, `leerRangoMesAnio`, `validarRangoMesAnio` — no cambia, solo esta función.)
 
 - [ ] **Step 2: Después del bloque de colapso de sidebar (antes del cierre de `initLayout`), agregar la inicialización del header**
 
@@ -821,6 +853,7 @@ async function _initHeader() {
 
 Esta tarea todavía no tiene `#panel-central` en ninguna página (llega en Task 9), así que para probarla de forma aislada: crear temporalmente un `<div id="panel-central"></div>` dentro de `index.html` (solo para la prueba, revertir después de verificar) y cargar `shared/shell-state.js` + `shared/rango.js` antes que `shared/layout.js`. Recargar la página y confirmar:
 - Aparece el header arriba con el selector de cliente (poblado con los clientes reales), el botón "⚡ Conectar" y el badge "Sin datos".
+- El selector de cliente y los 4 selects de Mes/Año se ven como controles con estilo (fondo, borde, radio de esquina) igual al resto de la app — no como un `<select>` nativo sin estilo del navegador.
 - Debajo aparece la barra de filtro global con Mes/Año inicio y fin, más los 3 botones de exportar.
 - Cambiar el cliente en el dropdown no tira errores en consola (aunque todavía no repinta nada — eso es Task 6).
 - Cambiar el rango de fechas no tira errores.
@@ -831,7 +864,7 @@ Expected: sin errores en consola, todos los controles visibles y con datos reale
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/shared/layout.js
+git add frontend/shared/layout.js frontend/shared/rango.js
 git commit -m "feat(frontend): header con cliente activo, Conectar, badge y filtro global en layout.js"
 ```
 
