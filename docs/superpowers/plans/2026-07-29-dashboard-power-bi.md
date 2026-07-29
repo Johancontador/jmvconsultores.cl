@@ -199,6 +199,7 @@ git commit -m "feat(backend): filtrar informes por cliente_id en GET /api/inform
   - `getRango(): {anioInicio:number, mesInicio:number, anioFin:number, mesFin:number}` — con default (enero del año actual → mes actual) si no hay nada guardado
   - `setRango(rango): void` — persiste y notifica listeners
   - `onCambio(fn: () => void): void` — se llama cada vez que cliente o rango cambian
+  - `cubreRango(informe: {anio_inicio, anio_fin, mes_inicio, mes_fin}, rango): boolean` — true si el rango de un informe ya guardado (formato de fila de `GET /api/informe`) cubre por completo el `rango` pedido (mismo formato que devuelve `getRango()`). Única implementación — Tasks 7 y 8 la consumen en vez de definir su propia copia, para no duplicar esta lógica en dos archivos.
 
 - [ ] **Step 1: Crear el archivo**
 
@@ -250,7 +251,19 @@ const ShellState = (() => {
     listeners.forEach((fn) => fn())
   }
 
-  return { getClienteId, setClienteId, getRango, setRango, onCambio }
+  // Único lugar que decide si un informe ya guardado (fila de GET /api/informe,
+  // con anio_inicio/anio_fin/mes_inicio/mes_fin) alcanza para cubrir el rango
+  // pedido — reportes.js y dashboard.js comparten esta misma función en vez de
+  // cada uno definir su propia copia.
+  function cubreRango(informe, rango) {
+    const inicioOk = informe.anio_inicio < rango.anioInicio ||
+      (informe.anio_inicio === rango.anioInicio && informe.mes_inicio <= rango.mesInicio)
+    const finOk = informe.anio_fin > rango.anioFin ||
+      (informe.anio_fin === rango.anioFin && informe.mes_fin >= rango.mesFin)
+    return inicioOk && finOk
+  }
+
+  return { getClienteId, setClienteId, getRango, setRango, onCambio, cubreRango }
 })()
 
 window.ShellState = ShellState
@@ -265,6 +278,8 @@ ShellState.setClienteId(5)
 ShellState.getClienteId() // debe devolver 5
 ShellState.setRango({anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7})
 ShellState.getRango() // debe devolver ese objeto
+ShellState.cubreRango({anio_inicio:2025, mes_inicio:1, anio_fin:2026, mes_fin:12}, {anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7}) // debe devolver true
+ShellState.cubreRango({anio_inicio:2026, mes_inicio:1, anio_fin:2026, mes_fin:3}, {anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7}) // debe devolver false
 ```
 
 Expected: los tres `console.log` devuelven los valores esperados y no hay errores en consola. (Este archivo aún no está enlazado en ninguna página — se enlaza en Task 9. Para probarlo ahora, se puede pegar el contenido temporalmente en la consola de cualquier página del sitio.)
@@ -907,7 +922,7 @@ git commit -m "feat(frontend): shell-router.js orquesta el swap de vistas sin re
 - Modify: `frontend/js/reportes.js` (final del archivo — exportar `window.ReportesEngine`)
 
 **Interfaces:**
-- Consumes: `window.ShellState.getClienteId()/getRango()` (Task 2).
+- Consumes: `window.ShellState.getClienteId()/getRango()/cubreRango(informe, rango)` (Task 2).
 - Produces (global `window.ReportesEngine`, usado por Task 6):
   - `CATALOGO` (el objeto ya existente, sin cambios de contenido)
   - `mostrarReporte(tipo: string): void` — antes se llamaba `seleccionarReporte`, se renombra en el export público mantiene el nombre interno.
@@ -945,20 +960,12 @@ function renderControlesInforme() {
   cargarInformeCacheado(clienteId, window.ShellState.getRango())
 }
 
-function _cubreRango(informe, r) {
-  const inicioOk = informe.anio_inicio < r.anioInicio ||
-    (informe.anio_inicio === r.anioInicio && informe.mes_inicio <= r.mesInicio)
-  const finOk = informe.anio_fin > r.anioFin ||
-    (informe.anio_fin === r.anioFin && informe.mes_fin >= r.mesFin)
-  return inicioOk && finOk
-}
-
 async function cargarInformeCacheado(clienteId, r) {
   $resultado.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`
   try {
     const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
     const ultimo = lista.informes && lista.informes[0]
-    if (ultimo && ultimo.estado === 'completado' && _cubreRango(ultimo, r)) {
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
       const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
       ultimoDato = data
       renderReporte(data)
@@ -1070,7 +1077,7 @@ git commit -m "refactor(frontend): adaptar reportes.js al shell — quita nav in
 - Modify: `frontend/js/dashboard.js` (reescritura completa)
 
 **Interfaces:**
-- Consumes: `window.ShellState.getClienteId()/getRango()` (Task 2), `window.LayoutHeader.setBadge/setProgreso` (Task 5), `fmt`/`fmtCorto` (`shared/format.js`), `showToast` (`shared/toast.js`), `apiGet`/`apiPost`/`iniciarPolling` (`shared/api.js`).
+- Consumes: `window.ShellState.getClienteId()/getRango()/cubreRango(informe, rango)` (Task 2), `window.LayoutHeader.setBadge/setProgreso` (Task 5), `fmt`/`fmtCorto` (`shared/format.js`), `showToast` (`shared/toast.js`), `apiGet`/`apiPost`/`iniciarPolling` (`shared/api.js`).
 - Produces (global `window.DashboardBI`, usado por Task 6):
   - `mostrar(): void` — carga cache-first (igual patrón que reportes.js) y pinta KPIs + gráficos.
   - `conectar(): void` — fuerza sync real al SII y repinta al completar.
@@ -1220,14 +1227,6 @@ function _mostrarVacio(mensaje) {
   document.getElementById('dash-empty').querySelector('p').textContent = mensaje
 }
 
-function _cubreRango(informe, r) {
-  const inicioOk = informe.anio_inicio < r.anioInicio ||
-    (informe.anio_inicio === r.anioInicio && informe.mes_inicio <= r.mesInicio)
-  const finOk = informe.anio_fin > r.anioFin ||
-    (informe.anio_fin === r.anioFin && informe.mes_fin >= r.mesFin)
-  return inicioOk && finOk
-}
-
 async function mostrar() {
   const clienteId = window.ShellState.getClienteId()
   if (!clienteId) {
@@ -1239,7 +1238,7 @@ async function mostrar() {
   try {
     const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
     const ultimo = lista.informes && lista.informes[0]
-    if (ultimo && ultimo.estado === 'completado' && _cubreRango(ultimo, r)) {
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
       const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
       await _pintar(data)
       window.LayoutHeader.setBadge('conectado')
@@ -1498,5 +1497,7 @@ No hay commit en este paso — es el checkpoint final de verificación antes de 
 - Verificación local antes de VPS (spec §11) → Task 10.
 
 **Consistencia de tipos/nombres verificada:** `window.ShellState` (Task 2) se consume igual en Tasks 5, 6, 7, 8. `window.LayoutSidebar.render(tipo)` (Task 4) y `window.LayoutHeader.setBadge/setProgreso` (Task 5) se consumen igual en Task 6/7/8. `window.ReportesEngine.{CATALOGO, mostrarReporte, ejecutarInformeReal}` (Task 7) coincide exactamente con lo que consume Task 6. `window.DashboardBI.{mostrar, conectar}` (Task 8) coincide con Task 6.
+
+**Corrección de pre-flight (escaneo previo a la ejecución):** la primera versión de este plan definía `_cubreRango(informe, r)` de forma idéntica y por separado en Task 7 (`reportes.js`) y Task 8 (`dashboard.js`) — duplicación verbatim de un bloque de lógica, exactamente lo que un revisor marcaría como defecto. Se corrigió moviendo la función a `window.ShellState.cubreRango(informe, rango)` (Task 2), consumida desde ambos archivos.
 
 **Sin placeholders:** todos los pasos de código tienen implementación completa, no hay "TODO"/"implementar después".
