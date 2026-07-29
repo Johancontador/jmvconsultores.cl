@@ -917,9 +917,9 @@ img, svg, video, canvas { display: block; max-width: 100%; }
 .nav-group-toggle { width: 100%; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: none; border: none; color: var(--fg-secondary); font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-medium); cursor: pointer; text-align: left; transition: all var(--dur-fast); }
 .nav-group-toggle:hover { background: var(--bg-elevated); color: var(--fg-primary); }
 .nav-group-toggle .nav-caret { margin-left: auto; font-size: var(--fs-xs); transition: transform var(--dur-fast); }
-.nav-group.open .nav-caret { transform: rotate(90deg); }
+.nav-group.open > .nav-group-toggle .nav-caret { transform: rotate(90deg); }
 .nav-children { display: none; flex-direction: column; padding-left: 2.5rem; gap: var(--space-1); }
-.nav-group.open .nav-children { display: flex; }
+.nav-group.open > .nav-children { display: flex; }
 .nav-child-link { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); font-size: var(--fs-sm); color: var(--fg-secondary); transition: all var(--dur-fast); }
 .nav-child-link:hover { background: var(--bg-hover); color: var(--fg-primary); }
 .nav-child-link.active { color: var(--accent); font-weight: var(--fw-semibold); }
