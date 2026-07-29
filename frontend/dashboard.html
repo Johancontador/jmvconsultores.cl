@@ -8,88 +8,61 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js" integrity="sha384-Xl/CUCfJbzsngMp0CFxkmF0VW/8C160IsGujqeQlIhaGxKz2+JsIGORFqtCPeldF" crossorigin="anonymous"></script>
 </head>
+<!-- Nota: estos 4 hashes SRI se calcularon con `curl | openssl dgst -sha384` sobre los archivos reales servidos por jsdelivr para estas versiones exactas — si alguna vez se sube la versión del paquete, hay que recalcular el hash o el navegador bloqueará el script. -->
 <body>
   <div id="layout-root"></div>
 
-  <main class="container container-wide">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">Dashboard</h1>
-        <p class="page-subtitle">Ventas, compras y margen — vista comparativa por período</p>
+  <main class="container container-wide" id="panel-central">
+    <div id="vista-dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Ventas, compras y margen — vista comparativa por período</p>
+        </div>
       </div>
-      <a href="/proceso.html" class="btn btn-secondary">⬇ Procesar mes (todos los clientes)</a>
-    </div>
 
-    <section class="dash-controls">
-      <div class="controls-row">
-        <div class="control-group">
-          <label for="select-cliente">Empresa</label>
-          <select id="select-cliente">
-            <option value="">Cargando...</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="dash-mes-inicio">Mes inicio</label>
-          <select id="dash-mes-inicio"></select>
-        </div>
-        <div class="control-group">
-          <label for="dash-anio-inicio">Año inicio</label>
-          <select id="dash-anio-inicio"></select>
-        </div>
-        <div class="control-group">
-          <label for="dash-mes-fin">Mes fin</label>
-          <select id="dash-mes-fin"></select>
-        </div>
-        <div class="control-group">
-          <label for="dash-anio-fin">Año fin</label>
-          <select id="dash-anio-fin"></select>
-        </div>
-        <button type="button" class="btn btn-primary" id="btn-generar">Actualizar dashboard</button>
-      </div>
-    </section>
-
-    <section class="progress-section" id="progress-section" hidden>
-      <div class="progress-header">
-        <span id="progress-label">Consultando SII...</span>
-        <span id="progress-pct">0%</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-      <p class="progress-detail" id="progress-detail"></p>
-    </section>
-
-    <div id="dash-empty" class="empty-state">
-      <p>Selecciona una empresa y un rango de años, luego "Actualizar dashboard".</p>
-    </div>
-
-    <div id="dash-content" hidden>
-      <section class="kpi-grid" id="kpi-grid"></section>
-
-      <section class="dash-grid">
-        <div class="dash-card">
-          <h3>Ventas netas por mes</h3>
-          <div class="chart-wrap"><canvas id="chart-ventas"></canvas></div>
-        </div>
-        <div class="dash-card">
-          <h3>Compras netas por mes</h3>
-          <div class="chart-wrap"><canvas id="chart-compras"></canvas></div>
-        </div>
-        <div class="dash-card dash-card-wide">
-          <h3>Comparativo Ventas vs Compras</h3>
-          <div class="chart-wrap"><canvas id="chart-comparativo"></canvas></div>
-        </div>
-        <div class="dash-card dash-card-wide">
-          <h3>Margen bruto por mes</h3>
-          <div class="chart-wrap"><canvas id="chart-margen"></canvas></div>
-        </div>
-        <div class="dash-card dash-card-wide" id="dash-card-anual" hidden>
-          <h3>Comparativo anual</h3>
-          <div class="chart-wrap"><canvas id="chart-anual"></canvas></div>
-        </div>
+      <section class="progress-section" id="progress-section-dashboard" hidden>
+        <div class="progress-header"><span id="progress-label-dashboard">Consultando SII...</span></div>
+        <div class="progress-track"><div class="progress-fill progress-fill-indeterminate"></div></div>
       </section>
+
+      <div id="dash-empty" class="empty-state">
+        <p>Selecciona una empresa en la barra superior y presiona "Conectar".</p>
+      </div>
+
+      <div id="dash-content" hidden>
+        <section class="kpi-grid" id="kpi-grid"></section>
+
+        <section class="dash-grid">
+          <div class="dash-card dash-card-wide">
+            <h3>Comparativo Ventas vs Compras</h3>
+            <div class="chart-wrap"><canvas id="chart-comparativo"></canvas></div>
+          </div>
+          <div class="dash-card dash-card-wide">
+            <h3>Evolución mensual de IVA</h3>
+            <div class="chart-wrap"><canvas id="chart-iva-evolucion"></canvas></div>
+          </div>
+          <div class="dash-card dash-card-dona" id="dash-card-dona" hidden>
+            <h3>Compras por Proveedor</h3>
+            <div class="chart-wrap"><canvas id="chart-dona-proveedores"></canvas></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="vista-reporte" hidden>
+      <h2 id="reporte-titulo">Selecciona un reporte</h2>
+      <section class="informe-controls" id="reporte-controles"></section>
+      <section class="progress-section" id="progress-section" hidden>
+        <div class="progress-header"><span id="progress-label">Consultando...</span></div>
+        <div class="progress-track"><div class="progress-fill progress-fill-indeterminate"></div></div>
+      </section>
+      <div id="reporte-resultado"></div>
     </div>
   </main>
 
@@ -98,8 +71,17 @@
   <script src="/shared/toast.js"></script>
   <script src="/shared/api.js"></script>
   <script src="/shared/rango.js"></script>
+  <script src="/shared/table.js"></script>
+  <script src="/shared/filters.js"></script>
+  <script src="/shared/export.js"></script>
+  <script src="/shared/datagrid.js"></script>
+  <script src="/shared/shell-state.js"></script>
   <script src="/shared/layout.js"></script>
   <script src="/js/dashboard.js"></script>
-  <script>initLayout('dashboard')</script>
+  <script src="/js/reportes.js"></script>
+  <script src="/shared/shell-router.js"></script>
+  <script>
+    initLayout('inicio').then(() => window.ShellRouter.init())
+  </script>
 </body>
 </html>
