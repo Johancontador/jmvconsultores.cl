@@ -167,7 +167,23 @@ async function initLayout(activeKey) {
         </div>
       </div>
     </aside>
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>`
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    ${esShell ? `
+    <header class="topbar">
+      <div class="control-group topbar-cliente">
+        <select id="topbar-select-cliente" class="form-select"><option value="">Cargando clientes...</option></select>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" id="topbar-btn-conectar">⚡ Conectar</button>
+      <span class="badge-estado badge-sin-datos" id="topbar-badge">Sin datos</span>
+      <span class="topbar-spacer"></span>
+    </header>
+    <div class="topbar-progress" id="topbar-progress" hidden><div class="topbar-progress-fill" id="topbar-progress-fill"></div></div>
+    <section class="filtro-global-bar">
+      ${rangoMesAnioHtml('filtro-global')}
+      <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-csv">⬇ CSV</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-excel">⬇ Excel</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-pdf">⬇ PDF</button>
+    </section>` : ''}`
 
   document.body.classList.add('has-sidebar')
   if (esShell) document.body.classList.add('has-topbar')
@@ -199,5 +215,75 @@ async function initLayout(activeKey) {
   document.getElementById('btn-logout').addEventListener('click', async () => {
     try { await apiPost('/api/auth/logout') } catch (err) { /* sesión ya inválida, igual redirige */ }
     window.location.href = '/login.html'
+  })
+
+  if (esShell) {
+    await _initHeader()
+  }
+}
+
+async function _cargarClientesEnTopbar() {
+  const $select = document.getElementById('topbar-select-cliente')
+  try {
+    const clientes = await apiGet('/api/clientes')
+    if (clientes.length === 0) {
+      $select.innerHTML = '<option value="">Sin clientes — agregue uno primero</option>'
+      return
+    }
+    $select.innerHTML = '<option value="">Selecciona un cliente…</option>' +
+      clientes.map((c) => `<option value="${c.id}">${c.nombre}</option>`).join('')
+    const activo = window.ShellState.getClienteId()
+    if (activo && clientes.some((c) => c.id === activo)) $select.value = String(activo)
+  } catch {
+    $select.innerHTML = '<option value="">Error al cargar</option>'
+  }
+}
+
+const LayoutHeader = {
+  setBadge(estado) {
+    const $badge = document.getElementById('topbar-badge')
+    if (!$badge) return
+    $badge.className = 'badge-estado'
+    if (estado === 'conectado') { $badge.classList.add('badge-conectado'); $badge.textContent = 'Conectado' }
+    else if (estado === 'sincronizando') { $badge.classList.add('badge-sincronizando'); $badge.textContent = 'Sincronizando…' }
+    else { $badge.classList.add('badge-sin-datos'); $badge.textContent = 'Sin datos' }
+  },
+  setProgreso(pct) {
+    const $wrap = document.getElementById('topbar-progress')
+    const $fill = document.getElementById('topbar-progress-fill')
+    if (!$wrap || !$fill) return
+    if (pct === null) { $wrap.hidden = true; return }
+    $wrap.hidden = false
+    $fill.style.width = `${pct}%`
+  },
+}
+window.LayoutHeader = LayoutHeader
+
+async function _initHeader() {
+  await _cargarClientesEnTopbar()
+
+  inicializarRangoMesAnio('filtro-global')
+  const rangoGuardado = window.ShellState.getRango()
+  document.getElementById('filtro-global-mes-inicio').value = String(rangoGuardado.mesInicio)
+  document.getElementById('filtro-global-anio-inicio').value = String(rangoGuardado.anioInicio)
+  document.getElementById('filtro-global-mes-fin').value = String(rangoGuardado.mesFin)
+  document.getElementById('filtro-global-anio-fin').value = String(rangoGuardado.anioFin)
+
+  document.getElementById('topbar-select-cliente').addEventListener('change', (e) => {
+    const id = e.target.value
+    if (id) window.ShellState.setClienteId(Number(id))
+  })
+
+  ;['filtro-global-mes-inicio', 'filtro-global-anio-inicio', 'filtro-global-mes-fin', 'filtro-global-anio-fin'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', () => {
+      const r = leerRangoMesAnio('filtro-global')
+      const error = validarRangoMesAnio(r)
+      if (error) { showToast(error, 'error'); return }
+      window.ShellState.setRango(r)
+    })
+  })
+
+  document.getElementById('topbar-btn-conectar').addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('shell:conectar'))
   })
 }

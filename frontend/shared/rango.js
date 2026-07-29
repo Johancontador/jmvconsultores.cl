@@ -6,20 +6,20 @@
 function rangoMesAnioHtml(prefijo) {
   return `
     <div class="control-group">
-      <label for="${prefijo}-mes-inicio">Mes inicio</label>
-      <select id="${prefijo}-mes-inicio"></select>
+      <label for="${prefijo}-mes-inicio" class="form-label">Mes inicio</label>
+      <select id="${prefijo}-mes-inicio" class="form-select"></select>
     </div>
     <div class="control-group">
-      <label for="${prefijo}-anio-inicio">Año inicio</label>
-      <select id="${prefijo}-anio-inicio"></select>
+      <label for="${prefijo}-anio-inicio" class="form-label">Año inicio</label>
+      <select id="${prefijo}-anio-inicio" class="form-select"></select>
     </div>
     <div class="control-group">
-      <label for="${prefijo}-mes-fin">Mes fin</label>
-      <select id="${prefijo}-mes-fin"></select>
+      <label for="${prefijo}-mes-fin" class="form-label">Mes fin</label>
+      <select id="${prefijo}-mes-fin" class="form-select"></select>
     </div>
     <div class="control-group">
-      <label for="${prefijo}-anio-fin">Año fin</label>
-      <select id="${prefijo}-anio-fin"></select>
+      <label for="${prefijo}-anio-fin" class="form-label">Año fin</label>
+      <select id="${prefijo}-anio-fin" class="form-select"></select>
     </div>`
 }
 
