@@ -422,6 +422,7 @@ git commit -m "feat(css): fundamentos visuales para topbar, sidebar colapsable y
 
 **Files:**
 - Modify: `frontend/shared/layout.js` (reescritura completa del archivo)
+- Modify: `frontend/css/app.css` (agregar al final — reset de botón para `.nav-tipo-btn`, ver Step 2)
 
 **Interfaces:**
 - Consumes: `apiGet` (de `shared/api.js`, ya cargado antes que `layout.js` en cada página).
@@ -638,21 +639,44 @@ async function initLayout(activeKey) {
 }
 ```
 
-- [ ] **Step 2: Verificación visual manual**
+- [ ] **Step 2: Agregar reset de botón para `.nav-tipo-btn` en `frontend/css/app.css`**
+
+Los ítems hoja del sidebar (los que tienen `tipo`) ahora son elementos `<button class="nav-link nav-tipo-btn">` en vez de `<a>` — `.nav-link` (ya existente en `app.css`, pensada originalmente solo para `<a>`) no resetea el estilo por defecto del navegador para `<button>` (fondo gris, borde, fuente del sistema), a diferencia de `.nav-group-toggle` que sí lo hace. Sin este reset, los ítems hoja del sidebar se verían visualmente rotos (con chrome de botón nativo) mientras que los grupos desplegables se verían bien.
+
+Agregar al final de `frontend/css/app.css` (después del bloque de Task 3, sección "28. DASHBOARD BI"):
+
+```css
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   29. RESET DE BOTÓN PARA ÍTEMS HOJA DEL SIDEBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+.nav-tipo-btn {
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+```
+
+- [ ] **Step 3: Verificación visual manual**
 
 Correr el servidor (`npm run dev`), abrir `http://localhost:<puerto>/index.html` (Clientes — página legada, sin `#panel-central`) en el navegador:
 - El sidebar debe mostrar: Inicio, Tributarios ▾ (con IVA ▾ anidado dentro), Comercial ▾, Ranking ▾ (con Análisis ▾ anidado), Comparativos ▾.
 - Click en "Tributarios" despliega sus hijos; click en "IVA" dentro despliega Mensual/Anual/Por Cliente/Estado.
+- Los ítems hoja (ej. "Mensual" dentro de IVA) se ven igual que los ítems normales del sidebar — sin fondo gris ni borde de botón nativo del navegador.
 - El botón ⇤ junto al logo colapsa el sidebar a solo íconos y lo recuerda tras recargar la página (F5).
 - En una ventana angosta (<900px, o devtools responsive) el sidebar se sigue comportando como antes: oculto con overlay al abrir con el botón ☰.
 - Click en cualquier ítem con `tipo` (ej. "Por Cliente") — como no existe `#panel-central` en esta página ni `ShellRouter` todavía, debe navegar a `/dashboard.html` (se verá el dashboard viejo por ahora — se reemplaza en Task 9).
 
 Expected: todo lo anterior se cumple, sin errores en consola.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/shared/layout.js
+git add frontend/shared/layout.js frontend/css/app.css
 git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo en layout.js"
 ```
 
