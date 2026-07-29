@@ -1220,4 +1220,17 @@ body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
 .kpi-tendencia { font-size: var(--fs-xs); font-weight: var(--fw-semibold); display: inline-flex; align-items: center; gap: 2px; }
 .kpi-tendencia-up { color: var(--success); }
 .kpi-tendencia-down { color: var(--danger); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   29. RESET DE BOTÓN PARA ÍTEMS HOJA DEL SIDEBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+.nav-tipo-btn {
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
 .dash-card-dona .chart-wrap { max-height: 280px; }
