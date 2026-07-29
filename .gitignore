@@ -4,3 +4,5 @@ data/
 *.log
 tmp-*.json
 .DS_Store
+.claude/worktrees/
+.superpowers/
