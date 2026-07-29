@@ -199,6 +199,7 @@ git commit -m "feat(backend): filtrar informes por cliente_id en GET /api/inform
   - `getRango(): {anioInicio:number, mesInicio:number, anioFin:number, mesFin:number}` — con default (enero del año actual → mes actual) si no hay nada guardado
   - `setRango(rango): void` — persiste y notifica listeners
   - `onCambio(fn: () => void): void` — se llama cada vez que cliente o rango cambian
+  - `cubreRango(informe: {anio_inicio, anio_fin, mes_inicio, mes_fin}, rango): boolean` — true si el rango de un informe ya guardado (formato de fila de `GET /api/informe`) cubre por completo el `rango` pedido (mismo formato que devuelve `getRango()`). Única implementación — Tasks 7 y 8 la consumen en vez de definir su propia copia, para no duplicar esta lógica en dos archivos.
 
 - [ ] **Step 1: Crear el archivo**
 
@@ -250,7 +251,19 @@ const ShellState = (() => {
     listeners.forEach((fn) => fn())
   }
 
-  return { getClienteId, setClienteId, getRango, setRango, onCambio }
+  // Único lugar que decide si un informe ya guardado (fila de GET /api/informe,
+  // con anio_inicio/anio_fin/mes_inicio/mes_fin) alcanza para cubrir el rango
+  // pedido — reportes.js y dashboard.js comparten esta misma función en vez de
+  // cada uno definir su propia copia.
+  function cubreRango(informe, rango) {
+    const inicioOk = informe.anio_inicio < rango.anioInicio ||
+      (informe.anio_inicio === rango.anioInicio && informe.mes_inicio <= rango.mesInicio)
+    const finOk = informe.anio_fin > rango.anioFin ||
+      (informe.anio_fin === rango.anioFin && informe.mes_fin >= rango.mesFin)
+    return inicioOk && finOk
+  }
+
+  return { getClienteId, setClienteId, getRango, setRango, onCambio, cubreRango }
 })()
 
 window.ShellState = ShellState
@@ -265,6 +278,8 @@ ShellState.setClienteId(5)
 ShellState.getClienteId() // debe devolver 5
 ShellState.setRango({anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7})
 ShellState.getRango() // debe devolver ese objeto
+ShellState.cubreRango({anio_inicio:2025, mes_inicio:1, anio_fin:2026, mes_fin:12}, {anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7}) // debe devolver true
+ShellState.cubreRango({anio_inicio:2026, mes_inicio:1, anio_fin:2026, mes_fin:3}, {anioInicio:2025, mesInicio:1, anioFin:2026, mesFin:7}) // debe devolver false
 ```
 
 Expected: los tres `console.log` devuelven los valores esperados y no hay errores en consola. (Este archivo aún no está enlazado en ninguna página — se enlaza en Task 9. Para probarlo ahora, se puede pegar el contenido temporalmente en la consola de cualquier página del sitio.)
@@ -407,6 +422,7 @@ git commit -m "feat(css): fundamentos visuales para topbar, sidebar colapsable y
 
 **Files:**
 - Modify: `frontend/shared/layout.js` (reescritura completa del archivo)
+- Modify: `frontend/css/app.css` (agregar al final — reset de botón para `.nav-tipo-btn`, ver Step 2)
 
 **Interfaces:**
 - Consumes: `apiGet` (de `shared/api.js`, ya cargado antes que `layout.js` en cada página).
@@ -623,21 +639,44 @@ async function initLayout(activeKey) {
 }
 ```
 
-- [ ] **Step 2: Verificación visual manual**
+- [ ] **Step 2: Agregar reset de botón para `.nav-tipo-btn` en `frontend/css/app.css`**
+
+Los ítems hoja del sidebar (los que tienen `tipo`) ahora son elementos `<button class="nav-link nav-tipo-btn">` en vez de `<a>` — `.nav-link` (ya existente en `app.css`, pensada originalmente solo para `<a>`) no resetea el estilo por defecto del navegador para `<button>` (fondo gris, borde, fuente del sistema), a diferencia de `.nav-group-toggle` que sí lo hace. Sin este reset, los ítems hoja del sidebar se verían visualmente rotos (con chrome de botón nativo) mientras que los grupos desplegables se verían bien.
+
+Agregar al final de `frontend/css/app.css` (después del bloque de Task 3, sección "28. DASHBOARD BI"):
+
+```css
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   29. RESET DE BOTÓN PARA ÍTEMS HOJA DEL SIDEBAR
+   ───────────────────────────────────────────────────────────────────────────── */
+.nav-tipo-btn {
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+```
+
+- [ ] **Step 3: Verificación visual manual**
 
 Correr el servidor (`npm run dev`), abrir `http://localhost:<puerto>/index.html` (Clientes — página legada, sin `#panel-central`) en el navegador:
 - El sidebar debe mostrar: Inicio, Tributarios ▾ (con IVA ▾ anidado dentro), Comercial ▾, Ranking ▾ (con Análisis ▾ anidado), Comparativos ▾.
 - Click en "Tributarios" despliega sus hijos; click en "IVA" dentro despliega Mensual/Anual/Por Cliente/Estado.
+- Los ítems hoja (ej. "Mensual" dentro de IVA) se ven igual que los ítems normales del sidebar — sin fondo gris ni borde de botón nativo del navegador.
 - El botón ⇤ junto al logo colapsa el sidebar a solo íconos y lo recuerda tras recargar la página (F5).
 - En una ventana angosta (<900px, o devtools responsive) el sidebar se sigue comportando como antes: oculto con overlay al abrir con el botón ☰.
 - Click en cualquier ítem con `tipo` (ej. "Por Cliente") — como no existe `#panel-central` en esta página ni `ShellRouter` todavía, debe navegar a `/dashboard.html` (se verá el dashboard viejo por ahora — se reemplaza en Task 9).
 
 Expected: todo lo anterior se cumple, sin errores en consola.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/shared/layout.js
+git add frontend/shared/layout.js frontend/css/app.css
 git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo en layout.js"
 ```
 
@@ -647,6 +686,7 @@ git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo
 
 **Files:**
 - Modify: `frontend/shared/layout.js` (agregar al `initLayout` existente de Task 4)
+- Modify: `frontend/shared/rango.js` (agregar clases `form-label`/`form-select` al HTML que genera — ver Step 1b)
 
 **Interfaces:**
 - Consumes: `window.ShellState` (Task 2), `apiGet`/`apiPost` (`shared/api.js`), `rangoMesAnioHtml`/`inicializarRangoMesAnio`/`leerRangoMesAnio`/`validarRangoMesAnio` (`shared/rango.js` — debe cargarse antes que `layout.js` en el shell), `showToast` (`shared/toast.js`).
@@ -654,6 +694,7 @@ git commit -m "feat(frontend): sidebar en acordeón anidado + colapso responsivo
   - `window.LayoutHeader.setBadge(estado: 'conectado'|'sincronizando'|'sin-datos')`
   - `window.LayoutHeader.setProgreso(pct: number|null)` — `null` oculta la barra de progreso
   - Dispara evento custom `window.dispatchEvent(new CustomEvent('shell:conectar'))` cuando se presiona "Conectar" — Task 6 escucha este evento.
+  - `rangoMesAnioHtml` (Step 1b) cambia de firma visual (agrega clases `form-label`/`form-select`) pero no de comportamiento — mismos ids, mismos parámetros.
 
 - [ ] **Step 1: Agregar el bloque de header dentro de `initLayout`, solo cuando `esShell` es true**
 
@@ -686,7 +727,7 @@ Modificar el `root.innerHTML = ...` de `initLayout` (Task 4, Step 1) agregando e
     ${esShell ? `
     <header class="topbar">
       <div class="control-group topbar-cliente">
-        <select id="topbar-select-cliente"><option value="">Cargando clientes...</option></select>
+        <select id="topbar-select-cliente" class="form-select"><option value="">Cargando clientes...</option></select>
       </div>
       <button type="button" class="btn btn-primary btn-sm" id="topbar-btn-conectar">⚡ Conectar</button>
       <span class="badge-estado badge-sin-datos" id="topbar-badge">Sin datos</span>
@@ -700,6 +741,36 @@ Modificar el `root.innerHTML = ...` de `initLayout` (Task 4, Step 1) agregando e
       <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-pdf">⬇ PDF</button>
     </section>` : ''}`
 ```
+
+- [ ] **Step 1b: Agregar clases `form-label`/`form-select` en `frontend/shared/rango.js`**
+
+`rangoMesAnioHtml` (usada arriba, en la barra de filtro global) genera `<label>`/`<select>` sin ninguna clase — `app.css` sí tiene componentes `.form-label`/`.form-select` ya diseñados y con estilos completos (fondo, borde, focus, hover — ver `app.css` sección de formularios), pero esta función nunca los usó, así que sus controles se ven como un `<select>` nativo del navegador sin estilo, no como el resto de la app. Tras este rediseño `rangoMesAnioHtml` solo se sigue usando en un único lugar (esta barra de filtro global), así que corregirlo aquí no afecta nada más.
+
+En `frontend/shared/rango.js`, reemplazar la función `rangoMesAnioHtml` (líneas 6-24) por:
+
+```js
+function rangoMesAnioHtml(prefijo) {
+  return `
+    <div class="control-group">
+      <label for="${prefijo}-mes-inicio" class="form-label">Mes inicio</label>
+      <select id="${prefijo}-mes-inicio" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-anio-inicio" class="form-label">Año inicio</label>
+      <select id="${prefijo}-anio-inicio" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-mes-fin" class="form-label">Mes fin</label>
+      <select id="${prefijo}-mes-fin" class="form-select"></select>
+    </div>
+    <div class="control-group">
+      <label for="${prefijo}-anio-fin" class="form-label">Año fin</label>
+      <select id="${prefijo}-anio-fin" class="form-select"></select>
+    </div>`
+}
+```
+
+(El resto de `rango.js` — `inicializarRangoMesAnio`, `leerRangoMesAnio`, `validarRangoMesAnio` — no cambia, solo esta función.)
 
 - [ ] **Step 2: Después del bloque de colapso de sidebar (antes del cierre de `initLayout`), agregar la inicialización del header**
 
@@ -782,6 +853,7 @@ async function _initHeader() {
 
 Esta tarea todavía no tiene `#panel-central` en ninguna página (llega en Task 9), así que para probarla de forma aislada: crear temporalmente un `<div id="panel-central"></div>` dentro de `index.html` (solo para la prueba, revertir después de verificar) y cargar `shared/shell-state.js` + `shared/rango.js` antes que `shared/layout.js`. Recargar la página y confirmar:
 - Aparece el header arriba con el selector de cliente (poblado con los clientes reales), el botón "⚡ Conectar" y el badge "Sin datos".
+- El selector de cliente y los 4 selects de Mes/Año se ven como controles con estilo (fondo, borde, radio de esquina) igual al resto de la app — no como un `<select>` nativo sin estilo del navegador.
 - Debajo aparece la barra de filtro global con Mes/Año inicio y fin, más los 3 botones de exportar.
 - Cambiar el cliente en el dropdown no tira errores en consola (aunque todavía no repinta nada — eso es Task 6).
 - Cambiar el rango de fechas no tira errores.
@@ -792,7 +864,7 @@ Expected: sin errores en consola, todos los controles visibles y con datos reale
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/shared/layout.js
+git add frontend/shared/layout.js frontend/shared/rango.js
 git commit -m "feat(frontend): header con cliente activo, Conectar, badge y filtro global en layout.js"
 ```
 
@@ -907,7 +979,7 @@ git commit -m "feat(frontend): shell-router.js orquesta el swap de vistas sin re
 - Modify: `frontend/js/reportes.js` (final del archivo — exportar `window.ReportesEngine`)
 
 **Interfaces:**
-- Consumes: `window.ShellState.getClienteId()/getRango()` (Task 2).
+- Consumes: `window.ShellState.getClienteId()/getRango()/cubreRango(informe, rango)` (Task 2).
 - Produces (global `window.ReportesEngine`, usado por Task 6):
   - `CATALOGO` (el objeto ya existente, sin cambios de contenido)
   - `mostrarReporte(tipo: string): void` — antes se llamaba `seleccionarReporte`, se renombra en el export público mantiene el nombre interno.
@@ -945,20 +1017,12 @@ function renderControlesInforme() {
   cargarInformeCacheado(clienteId, window.ShellState.getRango())
 }
 
-function _cubreRango(informe, r) {
-  const inicioOk = informe.anio_inicio < r.anioInicio ||
-    (informe.anio_inicio === r.anioInicio && informe.mes_inicio <= r.mesInicio)
-  const finOk = informe.anio_fin > r.anioFin ||
-    (informe.anio_fin === r.anioFin && informe.mes_fin >= r.mesFin)
-  return inicioOk && finOk
-}
-
 async function cargarInformeCacheado(clienteId, r) {
   $resultado.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`
   try {
     const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
     const ultimo = lista.informes && lista.informes[0]
-    if (ultimo && ultimo.estado === 'completado' && _cubreRango(ultimo, r)) {
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
       const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
       ultimoDato = data
       renderReporte(data)
@@ -1070,7 +1134,7 @@ git commit -m "refactor(frontend): adaptar reportes.js al shell — quita nav in
 - Modify: `frontend/js/dashboard.js` (reescritura completa)
 
 **Interfaces:**
-- Consumes: `window.ShellState.getClienteId()/getRango()` (Task 2), `window.LayoutHeader.setBadge/setProgreso` (Task 5), `fmt`/`fmtCorto` (`shared/format.js`), `showToast` (`shared/toast.js`), `apiGet`/`apiPost`/`iniciarPolling` (`shared/api.js`).
+- Consumes: `window.ShellState.getClienteId()/getRango()/cubreRango(informe, rango)` (Task 2), `window.LayoutHeader.setBadge/setProgreso` (Task 5), `fmt`/`fmtCorto` (`shared/format.js`), `showToast` (`shared/toast.js`), `apiGet`/`apiPost`/`iniciarPolling` (`shared/api.js`).
 - Produces (global `window.DashboardBI`, usado por Task 6):
   - `mostrar(): void` — carga cache-first (igual patrón que reportes.js) y pinta KPIs + gráficos.
   - `conectar(): void` — fuerza sync real al SII y repinta al completar.
@@ -1220,14 +1284,6 @@ function _mostrarVacio(mensaje) {
   document.getElementById('dash-empty').querySelector('p').textContent = mensaje
 }
 
-function _cubreRango(informe, r) {
-  const inicioOk = informe.anio_inicio < r.anioInicio ||
-    (informe.anio_inicio === r.anioInicio && informe.mes_inicio <= r.mesInicio)
-  const finOk = informe.anio_fin > r.anioFin ||
-    (informe.anio_fin === r.anioFin && informe.mes_fin >= r.mesFin)
-  return inicioOk && finOk
-}
-
 async function mostrar() {
   const clienteId = window.ShellState.getClienteId()
   if (!clienteId) {
@@ -1239,7 +1295,7 @@ async function mostrar() {
   try {
     const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
     const ultimo = lista.informes && lista.informes[0]
-    if (ultimo && ultimo.estado === 'completado' && _cubreRango(ultimo, r)) {
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
       const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
       await _pintar(data)
       window.LayoutHeader.setBadge('conectado')
@@ -1498,5 +1554,7 @@ No hay commit en este paso — es el checkpoint final de verificación antes de 
 - Verificación local antes de VPS (spec §11) → Task 10.
 
 **Consistencia de tipos/nombres verificada:** `window.ShellState` (Task 2) se consume igual en Tasks 5, 6, 7, 8. `window.LayoutSidebar.render(tipo)` (Task 4) y `window.LayoutHeader.setBadge/setProgreso` (Task 5) se consumen igual en Task 6/7/8. `window.ReportesEngine.{CATALOGO, mostrarReporte, ejecutarInformeReal}` (Task 7) coincide exactamente con lo que consume Task 6. `window.DashboardBI.{mostrar, conectar}` (Task 8) coincide con Task 6.
+
+**Corrección de pre-flight (escaneo previo a la ejecución):** la primera versión de este plan definía `_cubreRango(informe, r)` de forma idéntica y por separado en Task 7 (`reportes.js`) y Task 8 (`dashboard.js`) — duplicación verbatim de un bloque de lógica, exactamente lo que un revisor marcaría como defecto. Se corrigió moviendo la función a `window.ShellState.cubreRango(informe, rango)` (Task 2), consumida desde ambos archivos.
 
 **Sin placeholders:** todos los pasos de código tienen implementación completa, no hay "TODO"/"implementar después".

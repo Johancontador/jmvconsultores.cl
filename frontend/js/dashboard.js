@@ -1,215 +1,213 @@
-const $cliente = document.getElementById('select-cliente')
-const $btnGenerar = document.getElementById('btn-generar')
-const $progress = document.getElementById('progress-section')
-const $progressLabel = document.getElementById('progress-label')
-const $progressPct = document.getElementById('progress-pct')
-const $progressFill = document.getElementById('progress-fill')
-const $progressDetail = document.getElementById('progress-detail')
-const $empty = document.getElementById('dash-empty')
-const $content = document.getElementById('dash-content')
-const $kpiGrid = document.getElementById('kpi-grid')
-
-// fmt, fmtCorto, showToast vienen de shared/format.js y shared/toast.js
-// (cargados antes que este script).
-
+/**
+ * Vista de aterrizaje (landing) del shell: 5 KPIs, barra Ventas vs Compras,
+ * línea de evolución de IVA, y dona de compras por proveedor. Reutiliza la
+ * MISMA respuesta de /api/informe (igual dato que consumen los reportes de
+ * reportes.js) — no hay cálculos nuevos en el backend.
+ */
 const COLOR_ACCENT = '#2563eb'
 const COLOR_ACCENT_HOVER = '#3b82f6'
 const COLOR_SUCCESS = '#10b981'
+const COLOR_ERROR = '#ef4444'
 const COLOR_TEXT_SECONDARY = '#94a3b8'
 const COLOR_GRID = 'rgba(255,255,255,0.06)'
+const COLORES_DONA = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#10b981', '#f59e0b', '#94a3b8']
 
-let charts = {}
+let _charts = {}
+let _ultimoDato = null
 
-async function cargarClientes() {
-  try {
-    const res = await fetch('/api/clientes')
-    const clientes = await res.json()
-    if (clientes.length === 0) {
-      $cliente.innerHTML = '<option value="">Sin clientes — agregue uno primero</option>'
-      return
-    }
-    $cliente.innerHTML = clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')
-  } catch {
-    $cliente.innerHTML = '<option value="">Error al cargar</option>'
-  }
-}
-
-function chartDefaults() {
+function _chartDefaults() {
   return {
-    plugins: {
-      legend: { labels: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' } } },
-    },
+    plugins: { legend: { labels: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' } } } },
     scales: {
       x: { ticks: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' } }, grid: { color: COLOR_GRID } },
-      y: { ticks: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' }, callback: v => fmtCorto(v) }, grid: { color: COLOR_GRID } },
+      y: { ticks: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' }, callback: (v) => fmtCorto(v) }, grid: { color: COLOR_GRID } },
     },
   }
 }
 
-function destruirCharts() {
-  Object.values(charts).forEach(c => c && c.destroy())
-  charts = {}
+function _destruirCharts() {
+  Object.values(_charts).forEach((c) => c && c.destroy())
+  _charts = {}
 }
 
-function renderKPIs(data) {
+function _variacionPct(actual, previo) {
+  if (!previo) return null
+  return Math.round(((actual - previo) / Math.abs(previo)) * 1000) / 10
+}
+
+function _kpiHtml(icono, label, valor, variacion) {
+  const tendenciaHtml = variacion === null ? '' : `
+    <span class="kpi-tendencia ${variacion >= 0 ? 'kpi-tendencia-up' : 'kpi-tendencia-down'}">
+      ${variacion >= 0 ? '▲' : '▼'} ${Math.abs(variacion)}%
+    </span>`
+  return `
+    <div class="kpi-card kpi-card-bi">
+      <div class="kpi-icono">${icono}</div>
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-valor">${valor}</div>
+      ${tendenciaHtml}
+    </div>`
+}
+
+function _renderKPIs(data) {
   const r = data.resumen
-  const items = [
-    { label: 'Ventas netas', valor: fmt(r.ventas_neto), color: COLOR_ACCENT },
-    { label: 'Compras netas', valor: fmt(r.compras_neto), color: COLOR_TEXT_SECONDARY },
-    { label: 'Margen bruto', valor: fmt(r.margen), color: COLOR_SUCCESS },
-    { label: '% Margen', valor: `${r.pct_margen}%`, color: COLOR_SUCCESS },
-  ]
-  $kpiGrid.innerHTML = items.map(i => `
-    <div class="kpi-card">
-      <div class="kpi-label">${i.label}</div>
-      <div class="kpi-valor" style="color:${i.color}">${i.valor}</div>
-    </div>`).join('')
+  const meses = data.meses.filter((m) => m.estado === 'ok')
+  const penultimo = meses.length > 1 ? meses[meses.length - 2] : null
+  const ultimo = meses.length > 0 ? meses[meses.length - 1] : null
+
+  const $grid = document.getElementById('kpi-grid')
+  $grid.innerHTML = [
+    _kpiHtml('💰', 'Ventas del Mes', fmt(r.ventas_neto), ultimo && penultimo ? _variacionPct(ultimo.ventas_neto, penultimo.ventas_neto) : null),
+    _kpiHtml('🛒', 'Compras', fmt(r.compras_neto), ultimo && penultimo ? _variacionPct(ultimo.compras_neto, penultimo.compras_neto) : null),
+    _kpiHtml('📤', 'IVA Débito', fmt(r.debito_fiscal), null),
+    _kpiHtml('📥', 'IVA Crédito', fmt(r.credito_fiscal), null),
+    _kpiHtml('⚖️', 'Resultado', r.iva_pagar < 0 ? `Remanente ${fmt(Math.abs(r.iva_pagar))}` : `A pagar ${fmt(r.iva_pagar)}`, null),
+  ].join('')
 }
 
-function renderCharts(data) {
-  const meses = data.meses.filter(m => m.estado === 'ok')
-  const labels = meses.map(m => `${m.mes_nombre.slice(0, 3)} ${m.anio}`)
+function _renderGraficos(data) {
+  const meses = data.meses.filter((m) => m.estado === 'ok')
+  const labels = meses.map((m) => `${m.mes_nombre.slice(0, 3)} ${m.anio}`)
 
-  destruirCharts()
-  const defaults = chartDefaults()
+  _destruirCharts()
+  const defaults = _chartDefaults()
 
-  charts.ventas = new Chart(document.getElementById('chart-ventas'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Ventas Netas', data: meses.map(m => m.ventas_neto), backgroundColor: COLOR_ACCENT, borderRadius: 6 }] },
-    options: { ...defaults, plugins: { ...defaults.plugins, legend: { display: false } } },
-  })
-
-  charts.compras = new Chart(document.getElementById('chart-compras'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Compras Netas', data: meses.map(m => m.compras_neto), backgroundColor: COLOR_TEXT_SECONDARY, borderRadius: 6 }] },
-    options: { ...defaults, plugins: { ...defaults.plugins, legend: { display: false } } },
-  })
-
-  charts.comparativo = new Chart(document.getElementById('chart-comparativo'), {
+  _charts.comparativo = new Chart(document.getElementById('chart-comparativo'), {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Ventas', data: meses.map(m => m.ventas_neto), backgroundColor: COLOR_ACCENT, borderRadius: 6 },
-        { label: 'Compras', data: meses.map(m => m.compras_neto), backgroundColor: COLOR_TEXT_SECONDARY, borderRadius: 6 },
+        { label: 'Ventas', data: meses.map((m) => m.ventas_neto), backgroundColor: COLOR_ACCENT, borderRadius: 6 },
+        { label: 'Compras', data: meses.map((m) => m.compras_neto), backgroundColor: COLOR_TEXT_SECONDARY, borderRadius: 6 },
+      ],
+    },
+    options: {
+      ...defaults,
+      onClick: (evt, elementos) => {
+        if (!elementos.length) return
+        const m = meses[elementos[0].index]
+        window.ShellState.setRango({ anioInicio: m.anio, mesInicio: m.mes, anioFin: m.anio, mesFin: m.mes })
+      },
+    },
+  })
+
+  _charts.ivaEvolucion = new Chart(document.getElementById('chart-iva-evolucion'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Débito Fiscal', data: meses.map((m) => m.debito_fiscal), borderColor: COLOR_ACCENT, tension: 0.3 },
+        { label: 'Crédito Fiscal', data: meses.map((m) => m.credito_fiscal), borderColor: COLOR_SUCCESS, tension: 0.3 },
+        { label: 'IVA a Pagar', data: meses.map((m) => m.iva_pagar), borderColor: COLOR_ERROR, tension: 0.3 },
       ],
     },
     options: defaults,
   })
 
-  charts.margen = new Chart(document.getElementById('chart-margen'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Margen Bruto',
-        data: meses.map(m => m.margen),
-        borderColor: COLOR_SUCCESS,
-        backgroundColor: 'rgba(16,185,129,0.15)',
-        fill: true,
-        tension: 0.35,
-        pointBackgroundColor: COLOR_SUCCESS,
-      }],
-    },
-    options: defaults,
-  })
-
-  const cardAnual = document.getElementById('dash-card-anual')
-  if (data.por_anio.length > 1) {
-    cardAnual.hidden = false
-    charts.anual = new Chart(document.getElementById('chart-anual'), {
-      type: 'bar',
+  const proveedores = (data.top_proveedores || []).slice(0, 7)
+  const $donaCard = document.getElementById('dash-card-dona')
+  if (proveedores.length > 0) {
+    $donaCard.hidden = false
+    _charts.dona = new Chart(document.getElementById('chart-dona-proveedores'), {
+      type: 'doughnut',
       data: {
-        labels: data.por_anio.map(a => String(a.anio)),
-        datasets: [
-          { label: 'Ventas', data: data.por_anio.map(a => a.ventas_neto), backgroundColor: COLOR_ACCENT, borderRadius: 6 },
-          { label: 'Compras', data: data.por_anio.map(a => a.compras_neto), backgroundColor: COLOR_TEXT_SECONDARY, borderRadius: 6 },
-          { label: 'Margen', data: data.por_anio.map(a => a.margen), backgroundColor: COLOR_SUCCESS, borderRadius: 6 },
-        ],
+        labels: proveedores.map((p) => p.razonSocial),
+        datasets: [{ data: proveedores.map((p) => p.neto), backgroundColor: COLORES_DONA, borderWidth: 0 }],
       },
-      options: defaults,
+      options: {
+        plugins: {
+          legend: { position: 'right', labels: { color: COLOR_TEXT_SECONDARY, font: { family: 'Inter' }, boxWidth: 12 } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmt(ctx.raw)}` } },
+        },
+      },
     })
   } else {
-    cardAnual.hidden = true
+    $donaCard.hidden = true
   }
 }
 
-async function generarDashboard() {
-  const clienteId = $cliente.value
+async function _pintar(data) {
+  _ultimoDato = data
+  document.getElementById('dash-empty').hidden = true
+  document.getElementById('dash-content').hidden = false
+  _renderKPIs(data)
+  _renderGraficos(data)
+}
+
+function _mostrarVacio(mensaje) {
+  document.getElementById('dash-empty').hidden = false
+  document.getElementById('dash-content').hidden = true
+  document.getElementById('dash-empty').querySelector('p').textContent = mensaje
+}
+
+async function mostrar() {
+  const clienteId = window.ShellState.getClienteId()
   if (!clienteId) {
-    showToast('Seleccione una empresa', 'error')
+    _mostrarVacio('Selecciona una empresa en la barra superior.')
+    window.LayoutHeader.setBadge('sin-datos')
     return
   }
-
-  const r = leerRangoMesAnio('dash')
-  const errorRango = validarRangoMesAnio(r)
-  if (errorRango) {
-    showToast(errorRango, 'error')
-    return
+  const r = window.ShellState.getRango()
+  try {
+    const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
+    const ultimo = lista.informes && lista.informes[0]
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
+      const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
+      await _pintar(data)
+      window.LayoutHeader.setBadge('conectado')
+    } else {
+      _mostrarVacio('Sin datos sincronizados para este cliente y período — presiona "Conectar".')
+      window.LayoutHeader.setBadge('sin-datos')
+    }
+  } catch (err) {
+    _mostrarVacio('Sin datos todavía — presiona "Conectar" para sincronizar con el SII.')
+    window.LayoutHeader.setBadge('sin-datos')
   }
+}
 
-  const body = {
-    cliente_id: Number(clienteId),
-    anio_inicio: r.anioInicio,
-    anio_fin: r.anioFin,
-    mes_inicio: r.mesInicio,
-    mes_fin: r.mesFin,
-    modo: 'resumen',
-  }
+async function conectar() {
+  const clienteId = window.ShellState.getClienteId()
+  if (!clienteId) { showToast('Selecciona una empresa primero', 'error'); return }
+  const r = window.ShellState.getRango()
 
-  $btnGenerar.disabled = true
-  $progress.hidden = false
-  $progressFill.style.width = '0%'
+  window.LayoutHeader.setBadge('sincronizando')
+  window.LayoutHeader.setProgreso(0)
+  document.getElementById('progress-section-dashboard').hidden = false
 
   try {
-    const res = await fetch('/api/informe/generar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    const data = await apiPost('/api/informe/generar', {
+      cliente_id: clienteId, anio_inicio: r.anioInicio, anio_fin: r.anioFin,
+      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'resumen',
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error)
-
-    // Usar el polling compartido
-    const stopPolling = iniciarPolling(
+    iniciarPolling(
       () => apiGet(`/api/informe/${data.informe_id}/estado`),
       {
         onUpdate: (estado) => {
           const pct = estado.total > 0 ? Math.round((estado.procesados / estado.total) * 100) : 0
-          $progressLabel.textContent = `Consultando SII... ${estado.procesados} de ${estado.total} meses`
-          $progressPct.textContent = `${pct}%`
-          $progressFill.style.width = `${pct}%`
-          $progressDetail.textContent = estado.procesando ? `Consultando: ${estado.procesando}` : ''
+          window.LayoutHeader.setProgreso(pct)
+          document.getElementById('progress-label-dashboard').textContent = `Consultando SII... ${estado.procesados} de ${estado.total} meses`
           if (estado.estado === 'completado') {
-            stopPolling()
-            $progress.hidden = true
-            $empty.hidden = true
-            $content.hidden = false
-            renderKPIs(estado)
-            if (typeof Chart === 'undefined') {
-              throw new Error('No se pudo cargar la librería de gráficos (Chart.js) — revisa tu conexión a internet')
-            }
-            renderCharts(estado)
+            document.getElementById('progress-section-dashboard').hidden = true
+            window.LayoutHeader.setProgreso(null)
+            window.LayoutHeader.setBadge('conectado')
+            _pintar(estado)
             showToast('Dashboard actualizado')
-            $btnGenerar.disabled = false
           } else if (estado.estado === 'error') {
-            stopPolling()
-            $progress.hidden = true
+            document.getElementById('progress-section-dashboard').hidden = true
+            window.LayoutHeader.setProgreso(null)
+            window.LayoutHeader.setBadge('sin-datos')
             showToast(estado.error_msg || 'Error al generar dashboard', 'error')
-            $btnGenerar.disabled = false
           }
         },
         esTerminal: (estado) => estado.estado === 'completado' || estado.estado === 'error',
       }
     )
   } catch (err) {
-    $progress.hidden = true
+    document.getElementById('progress-section-dashboard').hidden = true
+    window.LayoutHeader.setProgreso(null)
+    window.LayoutHeader.setBadge('sin-datos')
     showToast(err.message, 'error')
-    $btnGenerar.disabled = false
   }
 }
 
-$btnGenerar.addEventListener('click', generarDashboard)
-
-inicializarRangoMesAnio('dash')
-cargarClientes()
+window.DashboardBI = { mostrar, conectar }

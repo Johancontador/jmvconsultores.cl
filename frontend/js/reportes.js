@@ -263,68 +263,11 @@ const CATALOGO = {
   },
 }
 
-// Centro de Reportes: categorías con los ítems que se ven en el nav interno.
-// "tipo" apunta a una clave de CATALOGO; "externo" navega a otra página
-// (Libro de un solo mes sigue existiendo aparte, para consultas rápidas);
-// "hijos" arma un desplegable (ej. IVA con sus 4 variantes).
-const CATEGORIAS = [
-  {
-    label: 'Tributarios',
-    items: [
-      {
-        label: 'IVA', hijos: [
-          { label: 'Mensual', tipo: 'iva-mensual' },
-          { label: 'Anual', tipo: 'iva-anual' },
-          { label: 'Por Cliente', tipo: 'iva-por-cliente' },
-          { label: 'Estado', tipo: 'estado-iva' },
-        ],
-      },
-      { label: 'Libro Compra', tipo: 'libro-compras-rango' },
-      { label: 'Libro Venta', tipo: 'libro-ventas-rango' },
-      { label: 'Desglose Compras', tipo: 'desglose-gestion-compras' },
-      { label: 'Desglose Ventas', tipo: 'desglose-gestion-ventas' },
-      { label: 'Resumen', tipo: 'resumen-tributario' },
-      { label: 'Exportaciones', tipo: 'exportaciones' },
-    ],
-  },
-  {
-    label: 'Comercial',
-    items: [
-      { label: 'Clientes', tipo: 'top-clientes' },
-      { label: 'Proveedores', tipo: 'top-proveedores' },
-      {
-        label: 'Ranking', hijos: [
-          { label: 'Mensual', tipo: 'ranking-mensual' },
-          { label: 'Anual', tipo: 'ranking-anual' },
-        ],
-      },
-      { label: 'Evolución', tipo: 'ventas-mes' },
-    ],
-  },
-  {
-    label: 'Análisis',
-    items: [
-      {
-        label: 'Comparativos', hijos: [
-          { label: 'Mensual', tipo: 'comparativo-mensual' },
-          { label: 'Anual', tipo: 'comparativo-anual' },
-        ],
-      },
-      { label: 'Tendencias', tipo: 'tendencias' },
-      { label: 'Variaciones', tipo: 'variaciones' },
-      { label: 'KPIs', tipo: 'kpis' },
-      { label: 'Alertas', tipo: 'alertas' },
-      { label: 'Informe de Gestión', tipo: 'informe-gestion' },
-    ],
-  },
-]
-
 const $titulo = document.getElementById('reporte-titulo')
 const $controles = document.getElementById('reporte-controles')
 const $progress = document.getElementById('progress-section')
 const $progressLabel = document.getElementById('progress-label')
 const $resultado = document.getElementById('reporte-resultado')
-const $nav = document.getElementById('centro-nav')
 
 let tipo = null
 let reporte = null
@@ -332,28 +275,71 @@ let ultimoDato = null
 let chartInstancia = null
 
 function renderControlesInforme() {
-  $controles.innerHTML = `
-    <div class="controls-row">
-      <div class="control-group">
-        <label for="select-cliente">Empresa</label>
-        <select id="select-cliente"><option value="">Cargando...</option></select>
-      </div>
-      ${rangoMesAnioHtml('rep')}
-      <button type="button" class="btn btn-primary" id="btn-generar">Generar</button>
-    </div>`
+  $controles.innerHTML = ''
+  const clienteId = window.ShellState.getClienteId()
+  if (!clienteId) {
+    $resultado.innerHTML = `<div class="empty-state"><p>Selecciona un cliente en la barra superior para ver este reporte.</p></div>`
+    return
+  }
+  cargarInformeCacheado(clienteId, window.ShellState.getRango())
+}
 
-  inicializarRangoMesAnio('rep')
-  cargarClientesEnSelect(document.getElementById('select-cliente'))
+async function cargarInformeCacheado(clienteId, r) {
+  $resultado.innerHTML = `<div class="empty-state"><p>Cargando…</p></div>`
+  try {
+    const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
+    const ultimo = lista.informes && lista.informes[0]
+    if (ultimo && ultimo.estado === 'completado' && window.ShellState.cubreRango(ultimo, r)) {
+      const data = await apiPost(`/api/informe/${ultimo.id}/cargar`, {})
+      ultimoDato = data
+      renderReporte(data)
+    } else {
+      $resultado.innerHTML = `<div class="empty-state"><p>Sin datos sincronizados para este cliente y período — presiona "Conectar" en la barra superior.</p></div>`
+    }
+  } catch (err) {
+    $resultado.innerHTML = `<div class="empty-state"><p>Sin datos todavía — presiona "Conectar" en la barra superior.</p></div>`
+  }
+}
 
-  document.getElementById('btn-generar').addEventListener('click', async () => {
-    const clienteId = document.getElementById('select-cliente').value
-    if (!clienteId) return showToast('Seleccione una empresa', 'error')
-    const r = leerRangoMesAnio('rep')
-    const errorRango = validarRangoMesAnio(r)
-    if (errorRango) return showToast(errorRango, 'error')
-
-    await ejecutarInforme(clienteId, r.anioInicio, r.anioFin, r.mesInicio, r.mesFin)
-  })
+async function ejecutarInformeReal(clienteId, r) {
+  window.LayoutHeader.setBadge('sincronizando')
+  window.LayoutHeader.setProgreso(0)
+  $progress.hidden = false
+  try {
+    const data = await apiPost('/api/informe/generar', {
+      cliente_id: Number(clienteId), anio_inicio: r.anioInicio, anio_fin: r.anioFin,
+      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'resumen',
+    })
+    iniciarPolling(
+      () => apiGet(`/api/informe/${data.informe_id}/estado`),
+      {
+        onUpdate: (estado) => {
+          const pct = estado.total > 0 ? Math.round((estado.procesados / estado.total) * 100) : 0
+          $progressLabel.textContent = `Consultando SII... ${estado.procesados} de ${estado.total} (${pct}%)`
+          window.LayoutHeader.setProgreso(pct)
+          if (estado.estado === 'completado') {
+            $progress.hidden = true
+            window.LayoutHeader.setProgreso(null)
+            window.LayoutHeader.setBadge('conectado')
+            ultimoDato = estado
+            if (tipo && reporte && reporte.fuente === 'informe') renderReporte(estado)
+            showToast('Datos actualizados')
+          } else if (estado.estado === 'error') {
+            $progress.hidden = true
+            window.LayoutHeader.setProgreso(null)
+            window.LayoutHeader.setBadge('sin-datos')
+            showToast(estado.error_msg || 'Error al sincronizar', 'error')
+          }
+        },
+        esTerminal: (estado) => estado.estado === 'completado' || estado.estado === 'error',
+      }
+    )
+  } catch (err) {
+    $progress.hidden = true
+    window.LayoutHeader.setProgreso(null)
+    window.LayoutHeader.setBadge('sin-datos')
+    showToast(err.message, 'error')
+  }
 }
 
 function renderControlesProceso() {
@@ -944,12 +930,10 @@ function seleccionarReporte(nuevoTipo) {
   tipo = nuevoTipo
   reporte = CATALOGO[tipo]
 
-  history.pushState(null, '', `?tipo=${tipo}`)
   document.title = `${reporte.titulo} — IVA Mensual`
   $titulo.textContent = reporte.titulo
   $progress.hidden = true
   $resultado.innerHTML = ''
-  renderNav()
 
   if (reporte.esInfo) {
     $controles.innerHTML = ''
@@ -960,32 +944,6 @@ function seleccionarReporte(nuevoTipo) {
   if (reporte.fuente === 'proceso') renderControlesProceso()
   else renderControlesInforme()
 }
-
-function init() {
-  renderNav()
-  const params = new URLSearchParams(location.search)
-  const tipoInicial = params.get('tipo')
-  if (tipoInicial && CATALOGO[tipoInicial]) {
-    seleccionarReporte(tipoInicial)
-  } else {
-    $titulo.textContent = 'Selecciona un reporte'
-    $resultado.innerHTML = `<div class="empty-state"><p>Elige un reporte del menú de arriba para empezar.</p></div>`
-  }
-}
-
-window.addEventListener('popstate', () => {
-  const params = new URLSearchParams(location.search)
-  const t = params.get('tipo')
-  if (t && CATALOGO[t]) seleccionarReporte(t)
-})
-
-// Cierra los desplegables del nav (IVA, Ranking, Comparativos) al hacer click
-// fuera de ellos — la barra ahora es horizontal y se nota mucho más si quedan abiertos.
-document.addEventListener('click', (e) => {
-  document.querySelectorAll('.centro-item-hijos.open').forEach((hijos) => {
-    if (!hijos.parentElement.contains(e.target)) hijos.classList.remove('open')
-  })
-})
 
 // ============ INFORME DE GESTIÓN NARRATIVO ============
 function renderInformeGestion(data, bannerErrores = '') {
@@ -1314,4 +1272,8 @@ async function exportarInformeGestionPDF(data) {
   }
 }
 
-init()
+window.ReportesEngine = {
+  CATALOGO,
+  mostrarReporte: seleccionarReporte,
+  ejecutarInformeReal,
+}
