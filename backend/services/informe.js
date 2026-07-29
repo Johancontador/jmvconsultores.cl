@@ -189,7 +189,14 @@ function cargarInformeDeBD(informeId, userId) {
   }
 }
 
-function listarInformesDeBD(userId, limit = 50, offset = 0) {
+function listarInformesDeBD(userId, limit = 50, offset = 0, clienteId = null) {
+  if (clienteId) {
+    return db.prepare(`
+      SELECT id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado,
+             total_meses, consultas_estimadas, resumen_json, creado_en
+      FROM informes WHERE user_id = ? AND cliente_id = ? ORDER BY creado_en DESC LIMIT ? OFFSET ?
+    `).all(userId, clienteId, limit, offset)
+  }
   return db.prepare(`
     SELECT id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado,
            total_meses, consultas_estimadas, resumen_json, creado_en

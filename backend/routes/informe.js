@@ -102,7 +102,8 @@ router.get('/', (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 50, 200)
     const offset = Number(req.query.offset) || 0
-    const informes = listarInformesDeBD(req.user.id, limit, offset)
+    const clienteId = req.query.cliente_id ? Number(req.query.cliente_id) : null
+    const informes = listarInformesDeBD(req.user.id, limit, offset, clienteId)
     // Parse resumen_json for display
     const data = informes.map(i => ({
       id: i.id,
