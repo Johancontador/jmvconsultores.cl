@@ -1125,3 +1125,99 @@ body.has-sidebar .container-wide { max-width: none; }
 .stagger > *:nth-child(6)  { animation-delay: 300ms; }
 .stagger > *:nth-child(7)  { animation-delay: 360ms; }
 .stagger > *:nth-child(8)  { animation-delay: 420ms; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   26. TOPBAR — cliente activo, conectar, estado, filtro global
+   ───────────────────────────────────────────────────────────────────────────── */
+.topbar {
+  position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: var(--header-h);
+  background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: 0 var(--space-5); z-index: calc(var(--z-sticky) - 1);
+  transition: left var(--dur-base) var(--ease-out);
+}
+body.sidebar-collapsed .topbar { left: var(--sidebar-w-sm); }
+.topbar-cliente { min-width: 220px; }
+.topbar-spacer { flex: 1; }
+
+.badge-estado {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3); border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.badge-estado::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.badge-conectado { background: var(--success-soft); color: var(--success); }
+.badge-sincronizando { background: rgba(234,179,8,0.14); color: #eab308; }
+.badge-sin-datos { background: var(--bg-elevated); color: var(--fg-secondary); }
+
+.topbar-progress {
+  position: fixed; top: var(--header-h); left: var(--sidebar-w); right: 0; height: 3px;
+  background: transparent; z-index: calc(var(--z-sticky) - 1);
+  transition: left var(--dur-base) var(--ease-out);
+}
+body.sidebar-collapsed .topbar-progress { left: var(--sidebar-w-sm); }
+.topbar-progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width var(--dur-fast) linear; }
+
+.filtro-global-bar {
+  position: fixed; top: var(--header-h); left: var(--sidebar-w); right: 0;
+  z-index: calc(var(--z-sticky) - 2); background: var(--bg-base);
+  border-bottom: 1px solid var(--border-subtle); padding: var(--space-3) var(--space-5);
+  display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap;
+  transition: left var(--dur-base) var(--ease-out);
+}
+body.sidebar-collapsed .filtro-global-bar { left: var(--sidebar-w-sm); }
+.filtro-global-bar .control-group { margin-bottom: 0; }
+
+body.has-sidebar.has-topbar .container { padding-top: calc(var(--header-h) + 84px + var(--space-5)); }
+
+@media (max-width: 900px) {
+  .topbar, .filtro-global-bar, .topbar-progress { left: 0; }
+  body.sidebar-collapsed .topbar, body.sidebar-collapsed .filtro-global-bar, body.sidebar-collapsed .topbar-progress { left: 0; }
+  .filtro-global-bar { flex-direction: column; align-items: stretch; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   27. SIDEBAR COLAPSABLE (riel de íconos en desktop/laptop)
+   ───────────────────────────────────────────────────────────────────────────── */
+.sidebar-collapse-btn {
+  width: 32px; height: 32px; margin-left: auto; background: none;
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  color: var(--fg-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.sidebar-collapse-btn:hover { background: var(--bg-elevated); color: var(--fg-primary); }
+
+body.sidebar-collapsed .sidebar { width: var(--sidebar-w-sm); }
+body.sidebar-collapsed .sidebar .nav-label,
+body.sidebar-collapsed .sidebar .sidebar-logo span,
+body.sidebar-collapsed .sidebar .nav-caret,
+body.sidebar-collapsed .sidebar .nav-children,
+body.sidebar-collapsed .sidebar .nav-username { display: none; }
+body.sidebar-collapsed .sidebar .nav-link,
+body.sidebar-collapsed .sidebar .nav-group-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
+body.sidebar-collapsed.has-sidebar .container { margin-left: var(--sidebar-w-sm); width: calc(100% - var(--sidebar-w-sm)); }
+
+body.sidebar-collapsed .sidebar .nav-link:hover::after,
+body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
+  content: attr(title); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+  background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2); font-size: var(--fs-xs); white-space: nowrap; z-index: var(--z-sticky);
+  box-shadow: var(--shadow-md);
+}
+.nav-link, .nav-group-toggle { position: relative; }
+.nav-children-nested { padding-left: var(--space-4); }
+
+@media (max-width: 900px) {
+  .sidebar-collapse-btn { display: none; }
+  body.sidebar-collapsed .sidebar { width: var(--sidebar-w); }
+  body.sidebar-collapsed.has-sidebar .container { margin-left: 0; width: 100%; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   28. DASHBOARD BI — KPI con tendencia, gráfico de dona
+   ───────────────────────────────────────────────────────────────────────────── */
+.kpi-card-bi { display: flex; flex-direction: column; gap: var(--space-2); }
+.kpi-card-bi .kpi-icono { font-size: var(--fs-xl); opacity: 0.85; }
+.kpi-tendencia { font-size: var(--fs-xs); font-weight: var(--fw-semibold); display: inline-flex; align-items: center; gap: 2px; }
+.kpi-tendencia-up { color: var(--success); }
+.kpi-tendencia-down { color: var(--error); }
+.dash-card-dona .chart-wrap { max-height: 280px; }
