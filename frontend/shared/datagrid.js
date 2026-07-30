@@ -239,6 +239,15 @@ function renderDataGrid(contenedor, config) {
   })
 
   pintar()
+
+  // Expone actualizar() para que un llamador (ej. filtros de Libro) pueda
+  // reemplazar las filas base sin tener que reconstruir toda la grilla.
+  return {
+    actualizar: (nuevasFilas) => {
+      config.filas = nuevasFilas
+      pintar()
+    },
+  }
 }
 
 function mostrarMenuContextual(x, y, items) {

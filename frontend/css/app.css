@@ -965,6 +965,11 @@ body.has-sidebar .container-wide { max-width: none; }
 .libro-warning { background: var(--warning-soft); border: 1px solid rgba(var(--warning-rgb), 0.3); color: var(--warning); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
 .libro-nota { font-size: var(--fs-sm); color: var(--fg-secondary); margin: var(--space-2) 0; font-style: italic; }
 
+/* Filtros sobre el detalle (Libro Compras/Ventas). Hereda estilos de
+   .filtros-bar / .filtro-group / .filtro-input (sección 18); este envoltorio
+   solo separa la barra del toolbar que pinta renderDataGrid encima. */
+.libro-filtros { margin-bottom: var(--space-4); }
+
 /* ─────────────────────────────────────────────────────────────────────────────
    18. FILTROS BAR (reporte)
    ───────────────────────────────────────────────────────────────────────────── */

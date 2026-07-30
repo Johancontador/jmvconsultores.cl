@@ -53,7 +53,11 @@ function renderFiltros(contenedor, definicion, valoresIniciales, onChange) {
 /** Aplica un objeto de filtros a un array de filas (compras/ventas/documentos). */
 function aplicarFiltros(filas, filtros) {
   return filas.filter((fila) => {
-    if (filtros.rut && !String(fila.rutDoc || '').includes(filtros.rut.replace(/[.\-]/g, ''))) return false
+    if (filtros.rut) {
+      const rutFila = String(fila.rutDoc || '').replace(/[.\-]/g, '')
+      const rutBusqueda = filtros.rut.replace(/[.\-]/g, '')
+      if (!rutFila.includes(rutBusqueda)) return false
+    }
     if (filtros.folio && String(fila.folio || '') !== String(filtros.folio)) return false
     if (filtros.tipoDoc && String(fila.tipoDoc) !== String(filtros.tipoDoc)) return false
     if (filtros.montoMin && (fila.montoNeto || 0) < Number(filtros.montoMin)) return false

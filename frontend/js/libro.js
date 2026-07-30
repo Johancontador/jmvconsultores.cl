@@ -196,8 +196,9 @@ function montarGridDetalle(tipo) {
 
   // NC en negativo — sumar la columna Neto/IVA/Total ya da el resultado neto real.
   const detalleConSigno = libro.detalle.map(conSignoNC)
+  const detalleOriginal = detalleConSigno // salva la lista base para resetear filtros
 
-  renderDataGrid(contenedor, {
+  const gridControl = renderDataGrid(contenedor, {
     columnas: [
       { key: 'folio', label: 'Folio', congelar: true },
       { key: 'tipoDoc', label: 'Tipo', format: (v) => nombreTipoDoc(v) },
@@ -246,6 +247,24 @@ function montarGridDetalle(tipo) {
         [fila], `documento_${fila.folio}`
       ) },
     ],
+  })
+
+  // Barra de filtros sobre el detalle (RUT/folio/tipo/monto) — usa shared/filters.js.
+  const tiposDocUnicos = [...new Set(detalleOriginal.map((d) => d.tipoDoc))]
+    .sort((a, b) => String(a).localeCompare(String(b), 'es'))
+  const definicionFiltros = [
+    { key: 'rut', label: 'RUT', type: 'text', placeholder: 'Ej: 12345678' },
+    { key: 'folio', label: 'Folio', type: 'text', placeholder: 'N° folio' },
+    { key: 'tipoDoc', label: 'Tipo', type: 'select', options: [{ value: '', label: 'Todos' }, ...tiposDocUnicos.map((v) => ({ value: v, label: nombreTipoDoc(v) }))] },
+    { key: 'montoMin', label: 'Neto mín', type: 'number', placeholder: '0' },
+    { key: 'montoMax', label: 'Neto máx', type: 'number', placeholder: '∞' },
+  ]
+  const filtrosHost = document.createElement('div')
+  filtrosHost.className = 'libro-filtros'
+  contenedor.insertBefore(filtrosHost, contenedor.firstChild)
+  renderFiltros(filtrosHost, definicionFiltros, {}, (valores) => {
+    const filtradas = aplicarFiltros(detalleOriginal, valores)
+    gridControl.actualizar(filtradas)
   })
 }
 
