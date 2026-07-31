@@ -26,6 +26,17 @@ const app = express()
 const PORT = process.env.PORT || 3500
 
 app.use(express.json())
+
+// Headers de seguridad básicos (defensa en profundidad — no hay ningún dato
+// de terceros embebido ni se necesita CSP elaborada, solo cerrar los vectores
+// obvios: clickjacking, MIME-sniffing, filtración de referrer entre sitios).
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
+
 app.use('/api/auth', require('./routes/auth'))
 app.use(express.static(path.join(__dirname, '../frontend')))
 

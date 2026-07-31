@@ -20,7 +20,7 @@ async function cargarClientes() {
       return
     }
     $cliente.innerHTML = clientes.map(c =>
-      `<option value="${c.id}">${c.nombre} (${c.rut})</option>`
+      `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.rut})</option>`
     ).join('')
   } catch {
     $cliente.innerHTML = '<option value="">Error al cargar</option>'
@@ -49,7 +49,7 @@ function renderInforme(data) {
   let html = `
     <div class="informe-doc-header">
       <h2 class="informe-doc-title">Análisis de Ventas, Compras y Margen Bruto</h2>
-      <p class="informe-doc-subtitle">${cliente.nombre} · RUT ${formatRut(cliente.rut)}</p>
+      <p class="informe-doc-subtitle">${escapeHtml(cliente.nombre)} · RUT ${formatRut(cliente.rut)}</p>
       <p class="informe-doc-subtitle">Período: ${periodoLabel} · Cifras en pesos chilenos (CLP) — Montos Netos sin IVA</p>
     </div>
 
@@ -141,7 +141,7 @@ function renderInforme(data) {
   if (errores.length > 0) {
     html += `<div class="informe-section"><h3>Meses con error</h3><table class="informe-table"><tbody>`
     for (const e of errores) {
-      html += `<tr class="row-error"><td>${e.mes_nombre} ${e.anio}</td><td colspan="4">${e.error_msg}</td></tr>`
+      html += `<tr class="row-error"><td>${escapeHtml(e.mes_nombre)} ${e.anio}</td><td colspan="4">${escapeHtml(e.error_msg || '')}</td></tr>`
     }
     html += `</tbody></table></div>`
   }

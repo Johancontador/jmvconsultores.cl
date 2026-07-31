@@ -26,9 +26,14 @@ function renderTabla(contenedor, columnas, filas, opciones = {}) {
     return copia
   }
 
+  // Ningún format() de esta app devuelve HTML real (fmt/formatRut/nombreTipoDoc
+  // son todos texto plano) — se escapa siempre para que datos externos no
+  // controlados por el usuario (ej. razón social de una contraparte del SII)
+  // no puedan inyectar HTML/JS si alguna vez traen caracteres como "<" o "&".
   function celda(col, fila) {
     const valor = fila[col.key]
-    return col.format ? col.format(valor, fila) : (valor ?? '')
+    const texto = col.format ? col.format(valor, fila) : (valor ?? '')
+    return typeof escapeHtml === 'function' ? escapeHtml(String(texto)) : texto
   }
 
   function pintar() {

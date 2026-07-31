@@ -15,7 +15,28 @@ const ShellRouter = (() => {
     vistaActiva = 'dashboard'
     _mostrarContenedor('dashboard')
     window.LayoutSidebar.render(null)
+    _actualizarVisibilidadHeader(null)
     window.DashboardBI.mostrar()
+  }
+
+  // "IVA por Cliente" (fuente: proceso) no depende del cliente/rango del
+  // header — usa su propio selector de Mes/Año y botón "Generar". Antes se
+  // dejaban visibles el selector de cliente, "Conectar" y la barra de
+  // filtro global (Mes inicio/Año inicio/Mes fin/Año fin) del header al
+  // mismo tiempo que los controles propios del reporte — tres selectores de
+  // período en pantalla sin relación entre sí, confuso. Se ocultan los que
+  // no aplican.
+  function _actualizarVisibilidadHeader(tipo) {
+    const reporte = window.ReportesEngine.CATALOGO[tipo]
+    const esProceso = reporte && reporte.fuente === 'proceso'
+    const $topbarCliente = document.querySelector('.topbar-cliente')
+    const $topbarConectar = document.getElementById('topbar-btn-conectar')
+    const $topbarBadge = document.getElementById('topbar-badge')
+    const $filtroGlobal = document.querySelector('.filtro-global-bar')
+    if ($topbarCliente) $topbarCliente.hidden = esProceso
+    if ($topbarConectar) $topbarConectar.hidden = esProceso
+    if ($topbarBadge) $topbarBadge.hidden = esProceso
+    if ($filtroGlobal) $filtroGlobal.hidden = esProceso
   }
 
   function mostrarReporte(tipo) {
@@ -23,6 +44,7 @@ const ShellRouter = (() => {
     vistaActiva = tipo
     _mostrarContenedor('reporte')
     window.LayoutSidebar.render(tipo)
+    _actualizarVisibilidadHeader(tipo)
     window.ReportesEngine.mostrarReporte(tipo)
   }
 

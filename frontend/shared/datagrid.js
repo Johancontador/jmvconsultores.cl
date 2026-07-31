@@ -49,9 +49,13 @@ function renderDataGrid(contenedor, config) {
     return config.columnas.filter((c) => !columnasOcultas.has(c.key))
   }
 
+  // Ver la misma nota en shared/table.js: escapamos siempre porque datos
+  // externos (razón social de una contraparte del SII) no deben poder
+  // inyectar HTML.
   function celda(col, fila) {
     const valor = fila[col.key]
-    return col.format ? col.format(valor, fila) : (valor ?? '')
+    const texto = col.format ? col.format(valor, fila) : (valor ?? '')
+    return typeof escapeHtml === 'function' ? escapeHtml(String(texto)) : texto
   }
 
   function filaHtml(fila, cols) {
@@ -282,12 +286,12 @@ function mostrarModalDetalle(titulo, campos) {
   overlay.innerHTML = `
     <div class="modal">
       <div class="modal-header">
-        <h2 class="modal-title">${titulo}</h2>
+        <h2 class="modal-title">${escapeHtml(String(titulo))}</h2>
         <button type="button" class="btn-icon dg-cerrar-modal" aria-label="Cerrar">✕</button>
       </div>
       <div class="modal-body">
         ${campos.map(([label, valor]) => `
-          <div class="dg-modal-campo"><span>${label}</span><strong>${valor}</strong></div>`).join('')}
+          <div class="dg-modal-campo"><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(valor ?? ''))}</strong></div>`).join('')}
       </div>
     </div>`
   document.body.appendChild(overlay)

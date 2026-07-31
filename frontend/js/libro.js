@@ -32,7 +32,7 @@ async function cargarClientes() {
       return
     }
     $cliente.innerHTML = clientes.map(c =>
-      `<option value="${c.id}">${c.nombre} (${formatRut(c.rut)})</option>`
+      `<option value="${c.id}">${escapeHtml(c.nombre)} (${formatRut(c.rut)})</option>`
     ).join('')
   } catch {
     $cliente.innerHTML = '<option value="">Error al cargar</option>'
@@ -106,13 +106,13 @@ function renderAlertaReclamadas(libro) {
         ${reclamadas.map((d) => `
           <tr>
             <td>${periodoLabel}</td>
-            <td>${d.fechaDocto || '—'}</td>
-            <td>${d.razonSocial}</td>
-            <td>${d.folio}</td>
+            <td>${escapeHtml(d.fechaDocto || '—')}</td>
+            <td>${escapeHtml(d.razonSocial || '')}</td>
+            <td>${escapeHtml(String(d.folio ?? ''))}</td>
             <td>${fmt(d.montoNeto)}</td>
             <td>${fmt(d.montoIVA)}</td>
             <td>${fmt(d.montoTotal)}</td>
-            <td>${d.fechaReclamo}</td>
+            <td>${escapeHtml(d.fechaReclamo || '')}</td>
           </tr>`).join('')}
       </tbody>
     </table>`

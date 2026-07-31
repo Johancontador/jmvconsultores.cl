@@ -63,10 +63,10 @@ async function cargarClientes() {
 function renderProgressLog(resultados) {
   $progressLog.innerHTML = resultados.map(r => {
     if (r.estado === 'ok') {
-      return `<li class="log-ok">✅ ${r.nombre} — ok</li>`
+      return `<li class="log-ok">✅ ${escapeHtml(r.nombre)} — ok</li>`
     }
     if (r.estado === 'error') {
-      return `<li class="log-error">❌ ${r.nombre} — ${r.error_msg}</li>`
+      return `<li class="log-error">❌ ${escapeHtml(r.nombre)} — ${escapeHtml(r.error_msg || '')}</li>`
     }
     return ''
   }).join('')
