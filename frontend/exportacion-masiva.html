@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte Masivo — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Reporte Masivo</h1>
+        <p class="page-subtitle">Descarga un ZIP con un Excel por cliente (hojas Ventas y Compras) para el período elegido</p>
+      </div>
+    </div>
+
+    <section class="controls-row" id="exp-controles">
+      <div class="control-group">
+        <label for="exp-mes-inicio">Mes inicio</label>
+        <select id="exp-mes-inicio"></select>
+      </div>
+      <div class="control-group">
+        <label for="exp-anio-inicio">Año inicio</label>
+        <select id="exp-anio-inicio"></select>
+      </div>
+      <div class="control-group">
+        <label for="exp-mes-fin">Mes fin</label>
+        <select id="exp-mes-fin"></select>
+      </div>
+      <div class="control-group">
+        <label for="exp-anio-fin">Año fin</label>
+        <select id="exp-anio-fin"></select>
+      </div>
+      <button type="button" class="btn btn-primary" id="exp-btn-generar">Generar reporte masivo</button>
+    </section>
+
+    <section class="progress-section" id="exp-progress" hidden>
+      <div class="progress-header"><span id="exp-progress-label">Sincronizando con el SII…</span></div>
+      <div class="progress-track"><div class="progress-fill" id="exp-progress-fill" style="width:0%"></div></div>
+      <p class="progress-detail" id="exp-progress-detail"></p>
+    </section>
+
+    <div id="exp-resultado"></div>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/shared/format.js"></script>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/rango.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script src="/js/exportacion-masiva.js"></script>
+  <script>initLayout('exportacion-masiva')</script>
+</body>
+</html>

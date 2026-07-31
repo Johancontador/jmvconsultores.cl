@@ -15,6 +15,7 @@
 const NAV_ITEMS = [
   { key: 'inicio', label: 'Inicio', icon: '🏠', tipo: null },
   { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },
+  { key: 'exportacion-masiva', label: 'Reporte Masivo', icon: '📦', href: '/exportacion-masiva.html' },
   {
     key: 'tributarios', label: 'Tributarios', icon: '🧾', hijos: [
       {

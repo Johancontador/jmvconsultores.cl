@@ -32,6 +32,7 @@ app.use(express.static(path.join(__dirname, '../frontend')))
 app.use('/api/clientes', requireAuth, require('./routes/clientes'))
 app.use('/api/informe', requireAuth, require('./routes/informe'))
 app.use('/api/proceso', requireAuth, require('./routes/proceso'))
+app.use('/api/exportacion-masiva', requireAuth, require('./routes/exportacion-masiva'))
 app.use('/api/sii', requireAuth, require('./routes/sii'))
 
 app.get('/api/health', (req, res) => {
