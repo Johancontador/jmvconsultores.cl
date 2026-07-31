@@ -3,8 +3,10 @@ services:
     build: .
     container_name: iva-mensual
     restart: unless-stopped
+    # Antes: "3500:3500" — accesible directo desde Internet (causa del bug de cookie Secure).
+    # Ahora: solo loopback del host. El contenedor nginx-iva lo alcanza via la red Docker interna.
     ports:
-      - "3500:3500"
+      - "127.0.0.1:3500:3500"
     env_file:
       - .env
     volumes:
@@ -15,3 +17,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Nginx termina TLS con cert autofirmado y proxeá al iva-mensual.
+  # Expone 8443 al host porque nginx_prod (geodaniela) ya tiene 443.
+  nginx-iva:
+    image: nginx:1.27-alpine
+    container_name: nginx-iva
+    restart: unless-stopped
+    depends_on:
+      - iva-mensual
+    ports:
+      - "8443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro

@@ -1,6 +1,5 @@
 const express = require('express')
-const { iniciarInforme, obtenerEstado, generarPeriodos, guardarInformeEnBD, cargarInformeDeBD, listarInformesDeBD, eliminarInformeDeBD, informes } = require('../services/informe')
-const { generarPeriodos: genPeriodos, agruparPorAnio, calcularResumenGlobal } = require('../services/calculos')
+const { iniciarInforme, obtenerEstado, generarPeriodos, guardarInformeEnBD, cargarInformeDeBD, listarInformesDeBD, eliminarInformeDeBD, informes, agruparPorAnio, calcularResumenGlobal } = require('../services/informe')
 
 const router = express.Router()
 
@@ -134,7 +133,6 @@ router.post('/:informe_id/cargar', (req, res) => {
       return res.status(404).json({ ok: false, error: 'Informe no encontrado' })
     }
     // Reconstruir por_anio y resumen
-    const { agruparPorAnio, calcularResumenGlobal } = require('../services/calculos')
     const okMeses = estado.meses.filter(m => m.estado === 'ok')
     estado.por_anio = agruparPorAnio(okMeses)
     estado.resumen = calcularResumenGlobal(okMeses)

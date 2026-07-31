@@ -169,6 +169,7 @@ db.exec(`
       FOREIGN KEY (informe_id) REFERENCES informes(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_informe_meses_informe ON informe_meses(informe_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_informe_meses_periodo ON informe_meses(informe_id, periodo);
 
   CREATE TABLE IF NOT EXISTS informe_documentos (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

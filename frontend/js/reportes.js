@@ -791,28 +791,30 @@ function renderAlertas(data) {
       </div>`
 
   const tablaReclamadasHtml = reclamadas.length === 0 ? '' : `
-    <h3 class="libro-subtitle" style="margin-top:1.5rem">Facturas de venta reclamadas</h3>
-    <table class="informe-table libro-table">
-      <thead>
-        <tr>
-          <th>Mes</th><th>Fecha</th><th>Cliente</th><th>N° Factura</th>
-          <th>Neto</th><th>IVA</th><th>Total</th><th>Fecha Reclamo</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${reclamadas.map((r) => `
+    <details class="alertas-reclamadas" style="margin-top:1.5rem" open>
+      <summary class="libro-subtitle">Facturas de venta reclamadas (${reclamadas.length})</summary>
+      <table class="informe-table libro-table" style="margin-top:0.75rem">
+        <thead>
           <tr>
-            <td>${r.mes_nombre} ${r.anio}</td>
-            <td>${r.fechaDocto || '—'}</td>
-            <td>${escapeHtml(r.razonSocial)}</td>
-            <td>${r.folio}</td>
-            <td>${fmt(r.montoNeto)}</td>
-            <td>${fmt(r.montoIVA)}</td>
-            <td>${fmt(r.montoTotal)}</td>
-            <td>${r.fechaReclamo}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`
+            <th>Mes</th><th>Fecha</th><th>Cliente</th><th>N° Factura</th>
+            <th>Neto</th><th>IVA</th><th>Total</th><th>Fecha Reclamo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reclamadas.map((r) => `
+            <tr>
+              <td>${r.mes_nombre} ${r.anio}</td>
+              <td>${r.fechaDocto || '—'}</td>
+              <td>${escapeHtml(r.razonSocial || '—')}</td>
+              <td>${r.folio || '—'}</td>
+              <td>${fmt(r.montoNeto || 0)}</td>
+              <td>${fmt(r.montoIVA || 0)}</td>
+              <td>${fmt(r.montoTotal || 0)}</td>
+              <td>${r.fechaReclamo || '—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </details>`
 
   $resultado.innerHTML = listaHtml + tablaReclamadasHtml
 }

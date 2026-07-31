@@ -6,3 +6,4 @@ tmp-*.json
 .DS_Store
 .claude/worktrees/
 .superpowers/
+nginx/certs/

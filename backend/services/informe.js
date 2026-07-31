@@ -37,7 +37,7 @@ function guardarInformeEnBD(informe) {
 
   const stmtMes = db.prepare(`
     INSERT INTO informe_meses (informe_id, anio, mes, periodo, mes_nombre, ventas_neto, ventas_iva, compras_neto, compras_iva, margen, pct_margen, debito_fiscal, credito_fiscal, iva_pagar, estado, error_msg, detalle_ventas_json, detalle_compras_json, docs_ventas, docs_compras, creado_en, actualizado_en)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(informe_id, periodo) DO UPDATE SET
       ventas_neto = excluded.ventas_neto,
       ventas_iva = excluded.ventas_iva,
@@ -126,7 +126,12 @@ function cargarInformeDeBD(informeId, userId) {
   const meses = db.prepare(`SELECT * FROM informe_meses WHERE informe_id = ? ORDER BY anio, mes`).all(informeId)
   const topClientes = db.prepare(`SELECT rut, razon_social as razonSocial, cantidad, neto, iva, total FROM informe_top_contrapartes WHERE informe_id = ? AND tipo = 'cliente' ORDER BY neto DESC`).all(informeId)
   const topProveedores = db.prepare(`SELECT rut, razon_social as razonSocial, cantidad, neto, iva, total FROM informe_top_contrapartes WHERE informe_id = ? AND tipo = 'proveedor' ORDER BY neto DESC`).all(informeId)
-  const reclamadas = db.prepare(`SELECT * FROM informe_reclamadas WHERE informe_id = ? ORDER BY anio, mes`).all(informeId)
+  const reclamadas = db.prepare(`
+    SELECT mes_nombre, anio, periodo, folio, razon_social as razonSocial, rut_doc as rutDoc,
+           fecha_docto as fechaDocto, monto_neto as montoNeto, monto_iva as montoIVA,
+           monto_total as montoTotal, fecha_reclamo as fechaReclamo
+    FROM informe_reclamadas WHERE informe_id = ? ORDER BY anio, periodo
+  `).all(informeId)
 
   // Reconstruir documentos_ventas y documentos_compras desde los meses
   let documentos_ventas = []
@@ -493,4 +498,4 @@ function obtenerEstado(informeId, userId) {
   }
 }
 
-module.exports = { iniciarInforme, obtenerEstado, generarPeriodos, guardarInformeEnBD, cargarInformeDeBD, listarInformesDeBD, eliminarInformeDeBD }
+module.exports = { iniciarInforme, obtenerEstado, generarPeriodos, guardarInformeEnBD, cargarInformeDeBD, listarInformesDeBD, eliminarInformeDeBD, informes, agruparPorAnio, calcularResumenGlobal }

@@ -555,7 +555,7 @@ img, svg, video, canvas { display: block; max-width: 100%; }
 }
 .kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-default); }
 .kpi-label { font-size: var(--fs-xs); font-weight: var(--fw-medium); text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); margin-bottom: var(--space-2); }
-.kpi-value { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-semibold); line-height: var(--lh-tight); }
+.kpi-value, .kpi-valor { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-semibold); line-height: var(--lh-tight); }
 .kpi-trend { display: inline-flex; align-items: center; gap: var(--space-1); margin-top: var(--space-2); font-size: var(--fs-xs); font-weight: var(--fw-medium); }
 .kpi-trend.up { color: var(--success); }
 .kpi-trend.down { color: var(--danger); }
@@ -1041,6 +1041,17 @@ body.has-sidebar .container-wide { max-width: none; }
 .informe-table td.align-right { text-align: right; font-family: var(--font-mono); }
 .informe-table tfoot td { font-weight: var(--fw-bold); background: #f1f5f9; border-top: 2px solid #cbd5e1; }
 
+/* .informe-table de arriba asume el fondo blanco de .informe-doc (vista imprimible).
+   .tabla-generica (renderTabla en shared/table.js) reutiliza esa misma clase en
+   páginas con el tema oscuro del shell — sin este override el texto claro queda
+   sobre fondo claro en las filas pares. Solo aplica fuera de .informe-doc. */
+.tabla-generica.informe-table:not(.informe-doc *) { font-size: var(--fs-sm); }
+.tabla-generica.informe-table th,
+.tabla-generica.informe-table td { border: 1px solid var(--border-subtle); }
+.tabla-generica.informe-table th { background: var(--bg-elevated); color: var(--fg-secondary); }
+.tabla-generica.informe-table tbody tr:nth-child(even) td { background: var(--bg-hover); }
+.tabla-generica.informe-table tfoot td { background: var(--bg-elevated); border-top: 2px solid var(--border-default); }
+
 .informe-anio-title { font-weight: var(--fw-semibold); color: #0f172a; }
 .informe-obs-list { list-style: none; padding: 0; }
 .informe-obs-list li { position: relative; padding-left: var(--space-5); margin-bottom: var(--space-2); font-size: var(--fs-sm); line-height: var(--lh-relaxed); color: #334155; }
@@ -1225,6 +1236,57 @@ body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
 .kpi-tendencia { font-size: var(--fs-xs); font-weight: var(--fw-semibold); display: inline-flex; align-items: center; gap: 2px; }
 .kpi-tendencia-up { color: var(--success); }
 .kpi-tendencia-down { color: var(--danger); }
+
+/* Sin este grid, .kpi-card y .dash-card caían a bloque de ancho completo
+   (una tarjeta de "una línea" ocupando toda la fila) — de ahí el reclamo de
+   "recuadros muy grandes". */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-4);
+}
+.dash-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.dash-card h3 { font-size: var(--fs-md); font-weight: var(--fw-semibold); margin-bottom: var(--space-4); }
+.dash-card-dona { grid-column: span 1; }
+
+/* Reporte de Alertas: tarjetas de alerta + tabla colapsable de reclamadas */
+.libro-subtitle { font-size: var(--fs-md); font-weight: var(--fw-semibold); margin: 0; }
+.alertas-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.alerta-card {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+.alerta-card.alerta-advertencia { border-left-color: var(--warning); }
+.alerta-card.alerta-error { border-left-color: var(--danger); }
+.alerta-card.alerta-info { border-left-color: var(--accent); }
+.alerta-icono { font-size: var(--fs-lg); line-height: 1; }
+.alerta-titulo { font-weight: var(--fw-semibold); margin-bottom: var(--space-1); }
+.alerta-detalle { font-size: var(--fs-sm); color: var(--fg-secondary); }
+.alertas-reclamadas summary {
+  cursor: pointer;
+  padding: var(--space-2) 0;
+  list-style: none;
+}
+.alertas-reclamadas summary::-webkit-details-marker { display: none; }
+.alertas-reclamadas summary::before { content: '▸ '; color: var(--fg-muted); }
+.alertas-reclamadas[open] summary::before { content: '▾ '; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    29. RESET DE BOTÓN PARA ÍTEMS HOJA DEL SIDEBAR

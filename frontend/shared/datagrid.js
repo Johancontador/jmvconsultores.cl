@@ -118,7 +118,7 @@ function renderDataGrid(contenedor, config) {
         <tr class="dg-grupo-header" data-grupo="${valorGrupo}">
           <td colspan="${cols.length}">
             <span class="dg-grupo-toggle">▾</span> ${nombre} <span class="dg-grupo-count">(${filasGrupo.length})</span>
-            ${subtotal ? `<span class="dg-grupo-subtotal">${cols.filter((c) => c.align === 'right').map((c) => c.format ? c.format(subtotal[c.key], subtotal) : subtotal[c.key]).join(' · ')}</span>` : ''}
+            ${subtotal ? `<span class="dg-grupo-subtotal">${cols.filter((c) => c.align === 'right' && c.key in subtotal).map((c) => c.format ? c.format(subtotal[c.key], subtotal) : subtotal[c.key]).join(' · ')}</span>` : ''}
           </td>
         </tr>`
       html += filasGrupo.map((f) => filaHtml(f, cols)).join('')
@@ -132,7 +132,7 @@ function renderDataGrid(contenedor, config) {
     const t = config.totales(filas)
     return `
       <tfoot><tr class="row-total">
-        ${cols.map((c, i) => `<td class="${c.align === 'right' ? 'th-right' : ''}">${i === 0 ? 'TOTAL' : (c.format ? c.format(t[c.key], t) : (t[c.key] ?? ''))}</td>`).join('')}
+        ${cols.map((c, i) => `<td class="${c.align === 'right' ? 'th-right' : ''}">${i === 0 ? 'TOTAL' : (!(c.key in t) ? '' : (c.format ? c.format(t[c.key], t) : (t[c.key] ?? '')))}</td>`).join('')}
       </tr></tfoot>`
   }
 
