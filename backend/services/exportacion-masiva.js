@@ -19,6 +19,43 @@ function nombreTipoDoc(tipoDoc) {
   return NOMBRES_TIPO_DOC[Number(tipoDoc)] || `Tipo ${tipoDoc}`
 }
 
+const TIPOS_NOTA_CREDITO = new Set([60, 61])
+
+// El SII no entrega siempre las mismas columnas de "monto" — varía por
+// cliente/rubro (IVA No Recuperable, Activo Fijo, Uso Común, Tabacos, Otro
+// Impuesto, etc.). Estas ya se muestran aparte con su propio campo
+// normalizado; el resto se agrega como columnas dinámicas — igual que hace
+// el Libro Compra/Venta interactivo (frontend/js/reportes.js).
+const _MONTOS_YA_CUBIERTOS = /exento|^monto\s*neto$|^monto\s*total$|^monto\s*iva$|^monto\s*iva\s*recuperable$/i
+
+function columnasMontosGestion(docs) {
+  const vistos = new Map()
+  docs.forEach((d) => {
+    Object.keys(d.montos || {}).forEach((k) => {
+      if (_MONTOS_YA_CUBIERTOS.test(k)) return
+      if (!vistos.has(k)) vistos.set(k, `mg__${vistos.size}`)
+    })
+  })
+  return [...vistos.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, key]) => ({ header: label, key, width: 16, style: { numFmt: '#,##0' } }))
+}
+
+// Nota de Crédito corrige (resta) un documento anterior — igual que en
+// sumarDocumentos()/conSignoNC() del resto de la app, se refleja en negativo
+// para que sumar la columna en Excel ya dé el neto real.
+function conSigno(doc, columnasGestion) {
+  const signo = TIPOS_NOTA_CREDITO.has(Number(doc.tipoDoc)) ? -1 : 1
+  const plano = { ...doc, tipoDocNombre: nombreTipoDoc(doc.tipoDoc) }
+  plano.montoExento = signo * (doc.montoExento || 0)
+  plano.montoNeto = signo * (doc.montoNeto || 0)
+  plano.montoIVA = signo * (doc.montoIVA || 0)
+  plano.montoTotal = signo * (doc.montoTotal || 0)
+  for (const col of columnasGestion) {
+    plano[col.key] = signo * ((doc.montos || {})[col.header] || 0)
+  }
+  return plano
+}
+
 const EXPORTS_DIR = path.join(__dirname, '../../data/exports')
 if (!fs.existsSync(EXPORTS_DIR)) fs.mkdirSync(EXPORTS_DIR, { recursive: true })
 
@@ -42,20 +79,23 @@ const COLUMNAS_HOJA = [
 ]
 
 function llenarHoja(hoja, docs) {
-  hoja.columns = COLUMNAS_HOJA
+  const columnasGestion = columnasMontosGestion(docs)
+  const columnas = [...COLUMNAS_HOJA, ...columnasGestion]
+  hoja.columns = columnas
   hoja.getRow(1).font = { bold: true }
   hoja.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
-  for (const d of docs) {
-    hoja.addRow({ ...d, tipoDocNombre: nombreTipoDoc(d.tipoDoc) })
-  }
-  if (docs.length > 0) {
-    const filaTotal = hoja.addRow({
-      mes_nombre: 'TOTAL',
-      montoExento: docs.reduce((s, d) => s + (d.montoExento || 0), 0),
-      montoNeto: docs.reduce((s, d) => s + (d.montoNeto || 0), 0),
-      montoIVA: docs.reduce((s, d) => s + (d.montoIVA || 0), 0),
-      montoTotal: docs.reduce((s, d) => s + (d.montoTotal || 0), 0),
-    })
+
+  const filas = docs.map((d) => conSigno(d, columnasGestion))
+  for (const f of filas) hoja.addRow(f)
+
+  if (filas.length > 0) {
+    const totalRow = { mes_nombre: 'TOTAL' }
+    for (const col of columnas) {
+      if (col.key === 'mes_nombre') continue
+      if (!col.style) continue // solo suma columnas numéricas (montos)
+      totalRow[col.key] = filas.reduce((s, f) => s + (f[col.key] || 0), 0)
+    }
+    const filaTotal = hoja.addRow(totalRow)
     filaTotal.font = { bold: true }
   }
 }
