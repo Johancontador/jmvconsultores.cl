@@ -277,4 +277,47 @@ if (clientesSchema && /rut\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(clientesSchema.sq
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_rut_activo ON clientes(rut) WHERE activo = 1;`)
 
+// Migración: reparar la FK de "procesos". SQLite reescribe automáticamente las
+// referencias FK de OTRAS tablas cuando se hace "ALTER TABLE ... RENAME TO"
+// (desde SQLite 3.25+) — al renombrar clientes -> clientes_old_migracion en la
+// migración de arriba, "procesos.cliente_id" quedó apuntando a
+// "clientes_old_migracion", que se dropea después. Resultado: cualquier
+// INSERT/UPDATE en "procesos" con foreign_keys=ON revienta con
+// "no such table: main.clientes_old_migracion" (rompía por completo el flujo
+// de "IVA por Cliente" / proceso masivo por período). Se repara recreando la
+// tabla con la FK apuntando a la "clientes" real.
+const procesosSchema = db
+  .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'procesos'`)
+  .get()
+
+if (procesosSchema && /clientes_old_migracion/i.test(procesosSchema.sql)) {
+  db.pragma('foreign_keys = OFF')
+  db.exec(`
+    BEGIN TRANSACTION;
+    ALTER TABLE procesos RENAME TO procesos_old_migracion;
+    CREATE TABLE procesos (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      periodo       TEXT NOT NULL,
+      cliente_id    INTEGER NOT NULL,
+      ventas_neto   REAL DEFAULT 0,
+      ventas_iva    REAL DEFAULT 0,
+      ventas_total  REAL DEFAULT 0,
+      compras_neto  REAL DEFAULT 0,
+      compras_iva   REAL DEFAULT 0,
+      compras_total REAL DEFAULT 0,
+      iva_determinado REAL DEFAULT 0,
+      ppm_monto     REAL DEFAULT 0,
+      total_pagar   REAL DEFAULT 0,
+      estado        TEXT DEFAULT 'pendiente',
+      error_msg     TEXT,
+      creado_en     TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+    );
+    INSERT INTO procesos SELECT * FROM procesos_old_migracion;
+    DROP TABLE procesos_old_migracion;
+    COMMIT;
+  `)
+  db.pragma('foreign_keys = ON')
+}
+
 module.exports = db
