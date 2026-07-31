@@ -162,7 +162,17 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
+
+/* Feedback táctil: :hover no dispara en touch, así que sin esto los botones
+   y tarjetas se sienten "muertos" al tocar en el celular. */
+.nav-link:active, .nav-group-toggle:active, .nav-child-link:active,
+.kpi-card:active, .dash-card:active, .client-card:active, .centro-item:active {
+  transform: scale(0.98);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+* { -webkit-tap-highlight-color: transparent; }
 
 body {
   font-family: var(--font-sans);
@@ -172,6 +182,10 @@ body {
   color: var(--fg-primary);
   background: var(--bg-canvas);
   min-height: 100vh;
+  /* Red de seguridad: nada debería desbordar el ancho de la página en
+     celular (una tabla, un gráfico) — si pasa, que scrollee ese elemento,
+     no la página entera de lado a lado. */
+  overflow-x: hidden;
 }
 
 :focus-visible {
@@ -224,6 +238,9 @@ img, svg, video, canvas { display: block; max-width: 100%; }
   max-width: var(--max-w-wide);
   margin: 0 auto;
   padding: 0 var(--space-6);
+}
+@media (max-width: 640px) {
+  .container { padding: 0 var(--space-4); }
 }
 
 .container-narrow { max-width: var(--max-w-narrow); }
@@ -1034,7 +1051,14 @@ body.has-sidebar .container-wide { max-width: none; }
 .informe-text { font-size: var(--fs-base); line-height: var(--lh-relaxed); color: #334155; margin-bottom: var(--space-4); }
 .informe-text strong { color: #0f172a; font-weight: var(--fw-semibold); }
 
+/* table.js (renderTabla) llena #reporte-tabla directo con el <table>, sin
+   envolver en un contenedor con scroll — a diferencia de datagrid.js, que sí
+   lo hace (.dg-scroll). Sin esto, cualquier tabla ancha (Resumen Tributario,
+   Rankings, Top Clientes/Proveedores) desborda toda la página en el celular
+   en vez de scrollear solo la tabla. */
+#reporte-tabla { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .informe-table { width: 100%; border-collapse: collapse; margin: var(--space-4) 0; font-size: var(--fs-sm); }
+.tabla-generica.informe-table { min-width: 560px; }
 .informe-table th, .informe-table td { padding: var(--space-2) var(--space-3); border: 1px solid #e2e8f0; text-align: left; }
 .informe-table th { background: #f8fafc; font-weight: var(--fw-semibold); color: #334155; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.03em; }
 .informe-table tbody tr:nth-child(even) td { background: #f8fafc; }
@@ -1186,6 +1210,43 @@ body.sidebar-collapsed .filtro-global-bar { left: var(--sidebar-w-sm); }
 
 body.has-sidebar.has-topbar .container { padding-top: calc(var(--header-h) + 84px + var(--space-5)); }
 
+/* Móvil: topbar y filtro global dejan de ser "fixed" con un padding-top
+   calculado a mano (que se desalineaba apenas la barra de filtros se
+   apilaba en columna y crecía más de los 84px asumidos) — pasan al flujo
+   normal del documento, así el contenido siempre queda exactamente
+   debajo sin importar cuánto midan. */
+@media (max-width: 900px) {
+  .topbar {
+    position: static;
+    height: auto;
+    flex-wrap: wrap;
+    align-items: stretch;
+    row-gap: var(--space-2);
+    padding: var(--space-3) var(--space-4) var(--space-3) calc(44px + var(--space-3) + var(--space-2));
+  }
+  .topbar-cliente { min-width: 0; flex: 1 1 100%; order: 1; }
+  #topbar-btn-conectar { order: 2; flex: 1 1 auto; }
+  .topbar .badge-estado { order: 3; flex: 0 0 auto; }
+  .topbar-spacer { display: none; }
+  .topbar-progress { position: static; }
+  body.sidebar-collapsed .topbar-progress { left: 0; }
+
+  .filtro-global-bar {
+    position: static;
+    padding: var(--space-3) var(--space-4);
+    align-items: stretch;
+  }
+  .filtro-global-bar .control-group { flex: 1 1 calc(50% - var(--space-3)); min-width: 130px; }
+  .filtro-global-bar .btn { flex: 1 1 auto; }
+
+  body.has-sidebar.has-topbar .container { padding-top: var(--space-4); }
+
+  /* Objetivo táctil mínimo recomendado (~44px) — .btn-sm y los selects
+     quedaban demasiado angostos para tocar con el dedo con comodidad. */
+  .btn, .form-select, .nav-link, .nav-group-toggle { min-height: 44px; }
+  .btn-sm { padding-top: var(--space-2); padding-bottom: var(--space-2); font-size: var(--fs-sm); }
+}
+
 @media (max-width: 900px) {
   .topbar, .filtro-global-bar, .topbar-progress { left: 0; }
   body.sidebar-collapsed .topbar, body.sidebar-collapsed .filtro-global-bar, body.sidebar-collapsed .topbar-progress { left: 0; }
@@ -1301,3 +1362,9 @@ body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
   cursor: pointer;
 }
 .dash-card-dona .chart-wrap { max-height: 280px; }
+/* Chart.js es responsive por default, pero el <canvas> igual necesita
+   max-width:100% como red de seguridad — sin esto un canvas con atributos
+   width/height HTML explícitos (el valor inicial antes del primer resize)
+   puede alcanzar a pintarse más ancho que su tarjeta en el primer frame. */
+.chart-wrap { position: relative; width: 100%; }
+.chart-wrap canvas { max-width: 100%; }
