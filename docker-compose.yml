@@ -20,6 +20,9 @@ services:
 
   # Nginx termina TLS con cert autofirmado y proxeá al iva-mensual.
   # Expone 8443 al host porque nginx_prod (geodaniela) ya tiene 443.
+  # 8443 lo atiende el stream{} de nginx.conf (detecta TLS vs HTTP plano y
+  # autocorrige en vez de devolver 400) — por eso el mapeo es 8443:8443 y no
+  # 8443:443 como antes; el server HTTPS real quedó en el 8444, interno.
   nginx-iva:
     image: nginx:1.27-alpine
     container_name: nginx-iva
@@ -27,8 +30,9 @@ services:
     depends_on:
       - iva-mensual
     ports:
-      - "8443:443"
+      - "8443:8443"
       - "8080:8080"
     volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
