@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const ExcelJS = require('exceljs')
-const archiver = require('archiver')
+const { ZipArchive } = require('archiver')
 
 const db = require('../db')
 const { consultarRCV } = require('./rcv')
@@ -100,7 +100,7 @@ async function ejecutarExportacion(exportId, userId, rango) {
 
   const zipPath = path.join(EXPORTS_DIR, `${exportId}.zip`)
   const output = fs.createWriteStream(zipPath)
-  const archive = archiver('zip', { zlib: { level: 9 } })
+  const archive = new ZipArchive({ zlib: { level: 9 } })
   const zipListo = new Promise((resolve, reject) => {
     output.on('close', resolve)
     archive.on('error', reject)
