@@ -14,6 +14,7 @@
 // "hijos" arma un desplegable; puede anidarse (Ranking ▾ → Análisis ▾ → Mensual/Anual).
 const NAV_ITEMS = [
   { key: 'inicio', label: 'Inicio', icon: '🏠', tipo: null },
+  { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },
   {
     key: 'tributarios', label: 'Tributarios', icon: '🧾', hijos: [
       {
@@ -82,6 +83,13 @@ function _navItemHtml(item, profundidad = 0) {
           ${item.hijos.map((h) => _navItemHtml(h, profundidad + 1)).join('')}
         </div>
       </div>`
+  }
+  if (item.href) {
+    return `
+      <a href="${item.href}" class="nav-link" title="${item.label}">
+        ${item.icon ? `<span class="nav-icon">${item.icon}</span>` : ''}
+        <span class="nav-label">${item.label}</span>
+      </a>`
   }
   const esInicio = item.tipo === null
   const activo = esInicio ? _activeTipo === null : item.tipo === _activeTipo
