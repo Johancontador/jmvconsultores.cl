@@ -33,10 +33,15 @@ const ShellRouter = (() => {
     const $topbarConectar = document.getElementById('topbar-btn-conectar')
     const $topbarBadge = document.getElementById('topbar-badge')
     const $filtroGlobal = document.querySelector('.filtro-global-bar')
-    if ($topbarCliente) $topbarCliente.hidden = esProceso
-    if ($topbarConectar) $topbarConectar.hidden = esProceso
-    if ($topbarBadge) $topbarBadge.hidden = esProceso
-    if ($filtroGlobal) $filtroGlobal.hidden = esProceso
+    // Estos elementos tienen su propio "display" en app.css (ej.
+    // .filtro-global-bar { display: flex }) con la misma especificidad que
+    // la regla nativa [hidden]{display:none} — el atributo "hidden" pierde
+    // el empate de cascada. style.display inline siempre gana.
+    const ocultar = (el) => { if (el) el.style.display = esProceso ? 'none' : '' }
+    ocultar($topbarCliente)
+    ocultar($topbarConectar)
+    ocultar($topbarBadge)
+    ocultar($filtroGlobal)
   }
 
   function mostrarReporte(tipo) {
