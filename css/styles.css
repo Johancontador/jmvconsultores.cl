@@ -339,3 +339,24 @@ a.contact__item:hover { border-color: var(--electric); transform: translateX(4px
   .hero__blob, .wa-float { animation: none; }
   html { scroll-behavior: auto; }
 }
+
+/* ── Fondo 3D ── */
+#bg3d {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: block;
+}
+body > header,
+body > section,
+body > footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Superficies translúcidas para dejar ver el fondo 3D */
+.section--alt { background: rgba(17, 20, 31, 0.82); }
+.card, .contact__item, .contact__form { background: rgba(22, 26, 40, 0.86); }
+.about__panel { background: rgba(22, 26, 40, 0.9); }
+.nav { background: rgba(11, 13, 20, 0.78); }
