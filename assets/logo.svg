@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" role="img" aria-label="JMV Consultores">
+  <!-- Espiral de puntos — arco celeste -->
+  <g fill="#2e86c8">
+    <circle cx="392" cy="128" r="30"/>
+    <circle cx="368" cy="82" r="24"/>
+    <circle cx="330" cy="50" r="18"/>
+    <circle cx="286" cy="34" r="13"/>
+    <circle cx="244" cy="36" r="9"/>
+    <circle cx="322" cy="96" r="10"/>
+    <circle cx="298" cy="130" r="7"/>
+  </g>
+  <!-- Espiral de puntos — arco marino -->
+  <g fill="#1e2a5e">
+    <circle cx="128" cy="150" r="32"/>
+    <circle cx="172" cy="188" r="24"/>
+    <circle cx="222" cy="206" r="17"/>
+    <circle cx="268" cy="208" r="11"/>
+    <circle cx="306" cy="196" r="7"/>
+    <circle cx="168" cy="120" r="12"/>
+    <circle cx="212" cy="102" r="8"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="280" y="330" font-family="Sora, Arial, Helvetica, sans-serif" font-size="128" font-weight="800" fill="#1e2a5e" text-anchor="middle" letter-spacing="2">JMV</text>
+  <rect x="84" y="350" width="392" height="8" rx="4" fill="#2e86c8"/>
+  <rect x="84" y="364" width="392" height="3" rx="1.5" fill="#2e86c8"/>
+  <text x="283" y="404" font-family="Inter, Arial, sans-serif" font-size="33" font-weight="500" fill="#8a93a6" text-anchor="middle" letter-spacing="11">CONSULTORES</text>
+</svg>

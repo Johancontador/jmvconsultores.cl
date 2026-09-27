@@ -26,8 +26,8 @@
   resize();
   window.addEventListener("resize", resize);
 
-  /* ── Colores de la marca ── */
-  const COLORS = ["46, 230, 255", "124, 92, 255", "255, 92, 240"];
+  /* ── Colores de la marca (logo JMV: celestes y azul marino) ── */
+  const COLORS = ["143, 199, 238", "46, 134, 200", "70, 105, 180"];
 
   /* ── Utilidades 3D ── */
   function rotXY(p, a) { const c = Math.cos(a), s = Math.sin(a); return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z }; }
@@ -123,13 +123,13 @@
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (d < LINK) {
           const o = (1 - d / LINK) * 0.14 * a.z;
-          ctx.strokeStyle = `rgba(124, 92, 255, ${o})`;
+          ctx.strokeStyle = `rgba(46, 134, 200, ${o})`;
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
       }
     }
     for (const p of parts) {
-      ctx.fillStyle = `rgba(46, 230, 255, ${0.16 + p.z * 0.22})`;
+      ctx.fillStyle = `rgba(143, 199, 238, ${0.16 + p.z * 0.22})`;
       ctx.beginPath(); ctx.arc(p.x, p.y, 1.1 + p.z * 1.6, 0, Math.PI * 2); ctx.fill();
     }
 
