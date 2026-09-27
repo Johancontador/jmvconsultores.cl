@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* ── Formulario → WhatsApp (conversión única de la landing) ── */
   const form = document.getElementById("contactForm");
-  form.addEventListener("submit", (e) => {
+  if (form) form.addEventListener("submit", (e) => {
     e.preventDefault();
 
     const nombre = form.nombre.value.trim();
@@ -99,5 +99,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ── Año actual en el footer ── */
-  document.getElementById("year").textContent = new Date().getFullYear();
+  const year = document.getElementById("year");
+  if (year) year.textContent = new Date().getFullYear();
 });
