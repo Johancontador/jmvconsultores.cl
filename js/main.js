@@ -1,5 +1,6 @@
 /* ══════════════════════════════════════════
    JMV CONSULTORES — JavaScript principal
+   Landing de un solo objetivo (sin menú)
    ══════════════════════════════════════════ */
 
 /* ⚙️ CONFIGURACIÓN — EDITA AQUÍ TUS DATOS REALES */
@@ -9,22 +10,6 @@ const CONFIG = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
-  /* ── Menú móvil ── */
-  const toggle = document.getElementById("navToggle");
-  const links = document.getElementById("navLinks");
-
-  toggle.addEventListener("click", () => {
-    const isOpen = links.classList.toggle("open");
-    toggle.setAttribute("aria-expanded", String(isOpen));
-  });
-
-  links.querySelectorAll("a").forEach((a) =>
-    a.addEventListener("click", () => {
-      links.classList.remove("open");
-      toggle.setAttribute("aria-expanded", "false");
-    })
-  );
-
   /* ── Animaciones reveal on scroll ── */
   const observer = new IntersectionObserver(
     (entries) => {
@@ -62,7 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   counters.forEach((c) => counterObserver.observe(c));
 
-  /* ── Formulario → WhatsApp ── */
+  /* ── Formulario → WhatsApp (conversión única de la landing) ── */
   const form = document.getElementById("contactForm");
   form.addEventListener("submit", (e) => {
     e.preventDefault();

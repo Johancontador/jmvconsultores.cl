@@ -181,5 +181,24 @@
     requestAnimationFrame(frame);
   }
 
-  if (!reduced) requestAnimationFrame(frame);
+  /* Regla 3 (velocidad/batería): pausar el render si la pestaña no es visible */
+  let rafId = null;
+  function startLoop() {
+    if (rafId === null && !reduced) rafId = requestAnimationFrame(frame);
+  }
+  function stopLoop() {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopLoop();
+    } else {
+      startLoop();
+    }
+  });
+
+  startLoop();
 })();

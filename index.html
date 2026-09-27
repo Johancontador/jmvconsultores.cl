@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JMV Consultores — Contabilidad y Remuneraciones | Chile</title>
-  <meta name="description" content="Servicios completos de contabilidad, remuneraciones y acompañamiento contable en Chile. Modernidad, digitalización y confianza para tu empresa. Agenda tu consulta gratis." />
+  <meta name="description" content="Contabilidad, remuneraciones y obligaciones tributarias al día, 100% en línea. Agenda tu consulta gratis y responde un contador en menos de 24 hrs." />
   <meta name="keywords" content="contabilidad chile, remuneraciones, contador, consultora contable, jmv consultores" />
   <meta name="author" content="JMV Consultores" />
+  <meta name="theme-color" content="#0a0e1a" />
   <link rel="canonical" href="https://jmvconsultores.cl/" />
 
   <!-- Open Graph -->
@@ -17,36 +18,34 @@
   <meta property="og:locale" content="es_CL" />
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+
+  <!-- Fuentes asíncronas y solo los pesos usados (Regla 3: velocidad) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" media="print" onload="this.media='all'" />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
+  </noscript>
+
   <link rel="stylesheet" href="css/styles.css" />
+  <script defer src="js/bg3d.js"></script>
+  <script defer src="js/main.js"></script>
 </head>
 <body>
 
   <!-- ══════════ FONDO 3D ══════════ -->
   <canvas id="bg3d" aria-hidden="true"></canvas>
 
-  <!-- ══════════ NAVEGACIÓN ══════════ -->
-  <header class="nav" id="inicio">
-    <nav class="container nav__inner">
-      <a href="#inicio" class="nav__logo" aria-label="JMV Consultores — inicio">
-        <img src="assets/logo-light.svg" alt="JMV Consultores" class="nav__logo-img" />
-      </a>
-      <button class="nav__toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
-      <ul class="nav__links" id="navLinks">
-        <li><a href="#servicios">Servicios</a></li>
-        <li><a href="#nosotros">Nosotros</a></li>
-        <li><a href="#proceso">Proceso</a></li>
-        <li><a href="#contacto">Contacto</a></li>
-        <li><a href="#contacto" class="btn btn--sm btn--primary">Consulta gratis</a></li>
-      </ul>
-    </nav>
+  <!-- ══════════ BARRA SUPERIOR — Regla 1: sin menú, solo logo + 1 CTA ══════════ -->
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
+    </div>
   </header>
 
-  <!-- ══════════ HERO ══════════ -->
+  <!-- ══════════ HERO — Regla 4: jerarquía Z, un solo CTA primario ══════════ -->
   <section class="hero">
     <div class="hero__blob hero__blob--1" aria-hidden="true"></div>
     <div class="hero__blob hero__blob--2" aria-hidden="true"></div>
@@ -62,7 +61,6 @@
       </p>
       <div class="hero__actions reveal">
         <a href="#contacto" class="btn btn--primary btn--lg">Agenda tu consulta gratis →</a>
-        <a href="#servicios" class="btn btn--ghost btn--lg">Ver servicios</a>
       </div>
       <ul class="hero__stats reveal">
         <li><strong data-counter="100">0</strong><span>% digital</span></li>
@@ -197,7 +195,7 @@
         <form class="contact__form reveal" id="contactForm" novalidate>
           <div class="form__row">
             <label for="f-nombre">Nombre</label>
-            <input type="text" id="f-nombre" name="nombre" placeholder="Tu nombre" required />
+            <input type="text" id="f-nombre" name="nombre" placeholder="Tu nombre" required autocomplete="name" />
           </div>
           <div class="form__row">
             <label for="f-negocio">Tu negocio o rubro</label>
@@ -226,30 +224,21 @@
     </div>
   </section>
 
-  <!-- ══════════ FOOTER ══════════ -->
+  <!-- ══════════ FOOTER mínimo — Regla 1: sin enlaces que distraigan ══════════ -->
   <footer class="footer">
     <div class="container footer__inner">
-      <div class="footer__brand">
-        <img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" />
-        <p class="footer__legal" id="razonSocial">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
-      </div>
-      <ul class="footer__links">
-        <li><a href="#servicios">Servicios</a></li>
-        <li><a href="#nosotros">Nosotros</a></li>
-        <li><a href="#contacto">Contacto</a></li>
-      </ul>
+      <img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" />
+      <p class="footer__legal" id="razonSocial">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
       <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · Hecho con ☕ y precisión contable</p>
     </div>
   </footer>
 
-  <!-- Botón flotante WhatsApp -->
+  <!-- Botón flotante WhatsApp (canal de conversión, no distracción) -->
   <a id="waFloat" class="wa-float" href="https://wa.me/56975752213" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
     <svg viewBox="0 0 32 32" width="28" height="28" fill="currentColor" aria-hidden="true">
       <path d="M16 2.7C8.7 2.7 2.8 8.6 2.8 15.9c0 2.3.6 4.6 1.8 6.6L2.7 29.3l7-1.8c1.9 1 4.1 1.6 6.3 1.6 7.3 0 13.2-5.9 13.2-13.2S23.3 2.7 16 2.7zm0 24.1c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4c-1.1-1.7-1.7-3.7-1.7-5.8 0-6.1 4.9-11 11-11s11 4.9 11 11-4.9 10.8-11 10.8zm6-8.2c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1.1-1 1.3-.2.2-.4.3-.7.1-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7l.5-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.6-.1-.2-.7-1.8-1-2.4-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1.1 1-1.1 2.5s1.1 2.9 1.3 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.3-.7.3-1.3.2-1.4-.1-.2-.3-.2-.6-.4z"/>
     </svg>
   </a>
 
-  <script src="js/bg3d.js"></script>
-  <script src="js/main.js"></script>
 </body>
 </html>
