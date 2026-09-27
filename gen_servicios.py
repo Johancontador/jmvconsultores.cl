@@ -334,6 +334,21 @@ RESPALDO = [
     ("Confidencialidad perpetua post-contrato", "Tu información sigue protegida aunque terminemos la relación."),
 ]
 
+# ── 07 · PREVENCIÓN DE RIESGOS Y CUMPLIMIENTO DOCUMENTAL ──
+PREVENCION = [
+    ("Revisión y actualización de RIOHS", "Tu Reglamento Interno de Orden, Higiene y Seguridad vigente y ajustado a tu operación."),
+    ("Elaboración o actualización de PTS", "Procedimientos de Trabajo Seguro para cada puesto y proceso crítico."),
+    ("Levantamiento y actualización de MIPER", "Matriz de riesgos por puesto y proceso, levantada en terreno y actualizada."),
+    ("Mapa de riesgos", "Visualización clara de dónde se concentra el riesgo en tu operación."),
+    ("Programas preventivos derivados de la evaluación", "Plan de trabajo preventivo construido a partir de tu matriz de riesgos."),
+    ("Revisión de obligaciones del D.S. 44", "Revisión de obligaciones y documentación asociada al nuevo reglamento."),
+    ("Preparación de IRL / información de riesgos laborales", "Información de riesgos laborales lista para mutuales, contratos y licitaciones."),
+    ("Procedimientos de EPP", "Entrega, uso, mantención y reposición de elementos de protección personal, con registros."),
+    ("Registros y respaldos de capacitaciones e inducciones", "Toda la evidencia documentada y disponible ante fiscalización."),
+    ("Revisión documental de brechas preventivas", "Detectamos qué falta, qué está desactualizado y armamos tu plan de regularización."),
+    ("Coordinación de visita técnica en terreno", "Cuando es necesario levantar correctamente los riesgos de cada puesto y proceso."),
+]
+
 PAGES = [
     dict(
         file="contabilidad-completa.html",
@@ -349,8 +364,7 @@ PAGES = [
             "Todo en regla, todo a tiempo, todo explicado en tu idioma."
         ),
         lead=(
-            "Estos son los 50 servicios contables más solicitados y buscados por "
-            "empresas y emprendedores en Google Chile, ordenados por frecuencia de búsqueda:"
+            "Estos son algunos de los servicios contables en los que te podemos ayudar:"
         ),
         services=CONTABILIDAD,
     ),
@@ -368,8 +382,7 @@ PAGES = [
             "cada trabajador contento. Cero juicios, cero sobresaltos."
         ),
         lead=(
-            "Los 50 servicios de remuneraciones más buscados por empresas en Google Chile, "
-            "ordenados según frecuencia de búsqueda:"
+            "Estos son algunos de los servicios de remuneraciones en los que te podemos ayudar:"
         ),
         services=REMUNERACIONES,
     ),
@@ -387,8 +400,7 @@ PAGES = [
             "Tu contador, tu socio estratégico."
         ),
         lead=(
-            "Los 50 servicios de acompañamiento y asesoría financiera más buscados en "
-            "Google Chile, ordenados según frecuencia de búsqueda:"
+            "Estos son algunos de los servicios de acompañamiento en los que te podemos ayudar:"
         ),
         services=ACOMPANAMIENTO,
     ),
@@ -406,8 +418,7 @@ PAGES = [
             "es gratis y podría ahorrarte millones."
         ),
         lead=(
-            "Los 50 servicios tributarios más buscados por contribuyentes en Google Chile, "
-            "ordenados según frecuencia de búsqueda:"
+            "Estos son algunos de los servicios tributarios en los que te podemos ayudar:"
         ),
         services=TRIBUTARIA,
     ),
@@ -425,8 +436,7 @@ PAGES = [
             "postulados a tiempo. Emprender ordenado es crecer más rápido."
         ),
         lead=(
-            "Los 50 servicios para emprendedores y pymes más buscados en Google Chile, "
-            "ordenados según frecuencia de búsqueda:"
+            "Estos son algunos de los servicios para emprendedores y pymes en los que te podemos ayudar:"
         ),
         services=PYMES,
     ),
@@ -444,10 +454,27 @@ PAGES = [
             "Tranquilidad total para tu negocio."
         ),
         lead=(
-            "Los 50 servicios de respaldo, seguridad y confidencialidad más buscados en "
-            "Google Chile, ordenados según frecuencia de búsqueda:"
+            "Estos son algunos de los servicios de respaldo y confidencialidad en los que te podemos ayudar:"
         ),
         services=RESPALDO,
+    ),
+    dict(
+        file="prevencion-riesgos",
+        num="07",
+        slug="prevencion-riesgos",
+        title="Prevención de riesgos",
+        eyebrow="Servicio 07 · Prevención de riesgos",
+        h1="Prevención de riesgos y cumplimiento documental",
+        persuasive=(
+            "Apoyamos a pequeñas y medianas empresas en materias de prevención de "
+            "riesgos y cumplimiento documental. La idea no es solamente preparar "
+            "documentos: revisamos qué necesita realmente tu empresa y dejamos un "
+            "sistema preventivo coherente con sus actividades y sus riesgos."
+        ),
+        lead=(
+            "Dentro de los servicios de prevención en los que podemos trabajar están:"
+        ),
+        services=PREVENCION,
     ),
 ]
 
