@@ -96,11 +96,28 @@ git push -u origin main
 
 ### 4.2 Túnel Cloudflare (servidor detrás de NAT)
 
-1. En el servidor: instalar `nginx` + `cloudflared`
-2. En Cloudflare Zero Trust → **Networks → Tunnels → Create tunnel** → copiar el TOKEN
-3. En el servidor: `sudo cloudflared service install <TOKEN>`
-4. En el túnel → **Public hostname** → `jmvconsultores.cl` → HTTP → `localhost:8080`
-   (y `www` → igual). SSL queda resuelto por Cloudflare, sin certbot.
+> ⚡ **Automatizado**: usa `deploy/setup-tunnel.sh` y hace todo solo
+> (instala nginx + cloudflared, publica el sitio en el puerto 8080 y registra el túnel).
+
+```bash
+bash deploy/setup-tunnel.sh <TOKEN>
+```
+
+El TOKEN se copia en Cloudflare Zero Trust → **Networks → Tunnels → Create tunnel**
+(usa el comando que sugiere Cloudflare, solo la parte después de `service install`).
+
+**Requisito previo en el túnel**: crear el **Public hostname**
+`jmvconsultores.cl` → HTTP → `localhost:8080` (repite la entrada para `www`).
+SSL queda resuelto por Cloudflare, sin certbot.
+
+Comandos útiles una vez instalado:
+
+```bash
+journalctl -u cloudflared -f      # logs del túnel
+systemctl status cloudflared      # estado del servicio
+# Re-publicar cambios del sitio:
+sudo cp -r index.html css js assets /var/www/jmvconsultores.cl/
+```
 
 ### 4.3 Correo con tu dominio
 
