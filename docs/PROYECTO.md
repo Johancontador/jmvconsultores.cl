@@ -35,7 +35,9 @@ asesoria-tributaria.html       → 50 servicios
 emprendedores-pymes.html       → 50 servicios
 respaldo-confidencialidad.html → 50 servicios
 prevencion-riesgos.html        → 50 servicios (RIOHS, PTS, MIPER, D.S. 44/594/76, EPP…)
-preguntas-frecuentes.html      → 20 Q&A agrupadas + schema FAQPage
+preguntas-frecuentes.html      → 350 Q&A (28 destacadas + buscador + 7 bloques) — GENERADA
+data/faq_*.py                   → ⚙️ DATOS de las 350 FAQ (50 por servicio, editables)
+gen_faq_central.py             → ⚙️ genera preguntas-frecuentes.html desde data/
 robots.txt · sitemap.xml       → SEO técnico (8 URLs)
 gen_servicios.py               → ⚙️ GENERADOR: edita las listas y corre `python3 gen_servicios.py`
 css/styles.css · js/main.js · js/bg3d.js · assets/
@@ -51,6 +53,16 @@ deploy/share-link.sh           → enlace temporal trycloudflare (systemd --user
 5. **PROHIBIDO usar iconos o emojis** — diseño 100% tipográfico (números editoriales, gradiente, color).
 
 ---
+
+## 2b. Sistema FAQ (350 preguntas, creado 27-sep-2026)
+
+- **50 FAQ por servicio** en `data/faq_*.py` (7 archivos). Editar ahí y regenerar:
+  `python3 gen_servicios.py && python3 gen_faq_central.py`
+- **Cada página de servicio** muestra sus 50 FAQ en acordeón numerado + badge "50 preguntas respondidas".
+- **FAQ central**: buscador en vivo (filtra por texto), portada de 28 destacadas + bloques por servicio.
+- **Home**: 6 tarjetas FAQ persuasivas (F22, finiquito, Papito Corazón, devolución Renta, prevención, Instagram) + CTA a FAQ central.
+- **Schema JSON-LD**: máx. 25 preguntas por página de servicio; 350 en la FAQ central (límite práctico de Google respetado).
+- **Respuesta F22 verificada legalmente**: art. 97 N°6 CT (1 UTA / 10%+2% mensual tope 30% + cobranza Tesorería).
 
 ## 3. Auditoría legal de remuneraciones (27-sep-2026)
 

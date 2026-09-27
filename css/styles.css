@@ -445,6 +445,75 @@ body > footer { position: relative; z-index: 1; }
 .faq__more a { color: var(--blue-light); font-weight: 600; text-decoration: none; }
 .faq__more a:hover { text-decoration: underline; }
 
+/* ── FAQ del home: tarjetas grandes desplegables ── */
+.faq-home__count { font-family: var(--font-head); font-size: 1.35em; color: var(--blue-light); }
+.faq-grid { display: grid; gap: 14px; max-width: 880px; margin-inline: auto; }
+.faq-card {
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid rgba(46, 134, 200, 0.55);
+  border-radius: 16px;
+  padding: 20px 22px;
+}
+.faq-card summary {
+  cursor: pointer;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.08rem;
+  list-style: none;
+  position: relative;
+  padding-right: 38px;
+  min-height: 28px;
+}
+.faq-card summary::-webkit-details-marker { display: none; }
+.faq-card summary::after {
+  content: "+";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--blue-light);
+  transition: transform 0.2s;
+}
+.faq-card[open] summary::after { content: "–"; }
+.faq-card p { color: var(--text-muted); font-size: 0.97rem; margin-top: 12px; }
+.faq-home__cta { text-align: center; margin-top: 30px; }
+
+/* Número dentro de FAQ de servicio */
+.faq__num {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-right: 12px;
+}
+.faq__badge {
+  text-align: center;
+  color: var(--blue-light);
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+/* Buscador de la FAQ central */
+.faq-search { max-width: 640px; margin: 26px auto 10px; }
+.faq-search input {
+  width: 100%;
+  min-height: 52px;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 14px 24px;
+}
+.faq-search input:focus { outline: none; border-color: var(--blue); }
+.faq-search input::placeholder { color: var(--text-muted); }
+.faq-search__hint { text-align: center; color: var(--text-muted); font-size: 0.88rem; }
+.faq__blocknav { max-width: 880px; margin: 12px auto 0; display: flex; }
+
 /* ══════════════════════════════════════════
    TABLET ≥ 700px
    ══════════════════════════════════════════ */
@@ -456,6 +525,7 @@ body > footer { position: relative; z-index: 1; }
   .svc__row { padding: 26px 28px; }
   .svc__num { font-size: 1.8rem; }
   .steps { grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .faq-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
 }
 
 /* ══════════════════════════════════════════

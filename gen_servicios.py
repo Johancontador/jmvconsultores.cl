@@ -6,9 +6,29 @@ Cada página: mensaje persuasivo del brand + 50 servicios numerados
 ordenados por las búsquedas más recurrentes en Google (Chile).
 """
 import html as H
+import json
+import os
+import sys
 from urllib.parse import quote as UQ
 
+# FAQ por servicio (50 preguntas cada una, en data/)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
+import faq_contabilidad, faq_remuneraciones, faq_acompanamiento
+import faq_tributaria, faq_pymes, faq_respaldo, faq_prevencion
+
+FAQ_DATA = {
+    "contabilidad-completa": faq_contabilidad.FAQS,
+    "remuneraciones": faq_remuneraciones.FAQS,
+    "acompanamiento-contable": faq_acompanamiento.FAQS,
+    "asesoria-tributaria": faq_tributaria.FAQS,
+    "emprendedores-pymes": faq_pymes.FAQS,
+    "respaldo-confidencialidad": faq_respaldo.FAQS,
+    "prevencion-riesgos": faq_prevencion.FAQS,
+}
+
 WA = "56975752213"
+WA_URL = f"https://wa.me/{WA}"
+WA_MSG_CONSULTA = UQ("Hola, tengo una consulta")
 
 # ── 01 · CONTABILIDAD COMPLETA (ordenado por volumen de búsqueda en Google CL) ──
 CONTABILIDAD = [
@@ -604,10 +624,11 @@ TEMPLATE = """<!DOCTYPE html>
     <div class="container">
       <p class="section__eyebrow reveal">Preguntas frecuentes</p>
       <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">{faq_topic}</span></h2>
+      <p class="faq__badge reveal">{faq_count} preguntas respondidas · respuestas directas, sin letra chica</p>
       <div class="faq__list reveal">
 {faq_items}
       </div>
-      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html#{slug}">Ver todas las {faq_count} preguntas frecuentes</a></p>
     </div>
   </section>
 
@@ -741,21 +762,23 @@ def related_for(slug):
         links.append(f'          <a href="{s}" class="related__link">{t} <span class="svc__hint-arrow">→</span></a>')
     return "\n".join(links)
 
-def faq_for(slug):
-    faqs = FAQS.get(slug, [])
+def faq_for(slug, limit=None):
+    faqs = FAQ_DATA.get(slug, [])
+    if limit:
+        faqs = faqs[:limit]
     items = []
-    for q, a in faqs:
+    for i, (q, a) in enumerate(faqs, 1):
+        num = f"{i:02d}"
         items.append(
             '        <details class="faq__item">\n'
-            f'          <summary>{H.escape(q)}</summary>\n'
+            f'          <summary><span class="faq__num gradient-text">{num}</span>{H.escape(q)}</summary>\n'
             f'          <p>{H.escape(a)}</p>\n'
             '        </details>'
         )
     return "\n".join(items)
 
 def jsonld_for(page):
-    import json
-    faqs = FAQS.get(page["slug"], [])
+    faqs = FAQ_DATA.get(page["slug"], [])[:25]
     data = {
         "@context": "https://schema.org",
         "@graph": [
@@ -812,11 +835,15 @@ def build():
             rows=rows_html,
             related_links=related_for(page["slug"] + ".html"),
             faq_topic=page["title"].lower(),
+            faq_count=len(FAQ_DATA.get(page["slug"], [])),
             faq_items=faq_for(page["slug"]),
+            faq_full_items=faq_for(page["slug"]),
             jsonld=jsonld_for(page),
             cta_topic=page["title"].lower(),
             wa=WA,
             wa_msg=wa_msg,
+            wa_url=WA_URL,
+            wa_consulta=WA_MSG_CONSULTA,
         )
         fname = page["file"] if page["file"].endswith(".html") else page["file"] + ".html"
         with open(fname, "w", encoding="utf-8") as f:
