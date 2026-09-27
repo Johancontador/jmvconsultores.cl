@@ -19,7 +19,7 @@
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
 
-  <!-- Fuentes asíncronas y solo los pesos usados (Regla 3: velocidad) -->
+  <!-- Fuentes asíncronas, solo pesos usados -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
@@ -37,7 +37,7 @@
   <!-- ══════════ FONDO 3D ══════════ -->
   <canvas id="bg3d" aria-hidden="true"></canvas>
 
-  <!-- ══════════ BARRA SUPERIOR — Regla 1: sin menú, solo logo + 1 CTA ══════════ -->
+  <!-- ══════════ BARRA SUPERIOR ══════════ -->
   <header class="topbar">
     <div class="container topbar__inner">
       <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
@@ -45,12 +45,12 @@
     </div>
   </header>
 
-  <!-- ══════════ HERO — Regla 4: jerarquía Z, un solo CTA primario ══════════ -->
+  <!-- ══════════ HERO ══════════ -->
   <section class="hero">
     <div class="hero__blob hero__blob--1" aria-hidden="true"></div>
     <div class="hero__blob hero__blob--2" aria-hidden="true"></div>
     <div class="container hero__content">
-      <p class="hero__badge reveal">✦ Contabilidad moderna, sin complicaciones</p>
+      <p class="hero__eyebrow reveal">Contabilidad · Remuneraciones · Tributario</p>
       <h1 class="hero__title reveal">
         Tu contabilidad al día,<br />
         <span class="gradient-text">tu negocio en foco.</span>
@@ -60,7 +60,7 @@
         para que tú dediques tu tiempo a hacer crecer tu empresa.
       </p>
       <div class="hero__actions reveal">
-        <a href="#contacto" class="btn btn--primary btn--lg">Agenda tu consulta gratis →</a>
+        <a href="#contacto" class="btn btn--primary btn--lg">Agenda tu consulta gratis</a>
       </div>
       <ul class="hero__stats reveal">
         <li><strong data-counter="100">0</strong><span>% digital</span></li>
@@ -70,43 +70,55 @@
     </div>
   </section>
 
-  <!-- ══════════ SERVICIOS ══════════ -->
+  <!-- ══════════ SERVICIOS — filas editoriales numeradas, sin iconos ══════════ -->
   <section class="section" id="servicios">
     <div class="container">
       <p class="section__eyebrow reveal">Servicios</p>
       <h2 class="section__title reveal">Todo lo que tu empresa necesita, <span class="gradient-text">en un solo lugar</span></h2>
       <p class="section__lead reveal">Cobertura completa en contabilidad y remuneraciones, con tecnología y trato cercano.</p>
 
-      <div class="grid grid--3">
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">📊</div>
-          <h3>Contabilidad completa</h3>
-          <p>Registro de operaciones, balance general, estados financieros y declaración mensual de impuestos (F29, F22), todo en regla y a tiempo.</p>
+      <div class="svc">
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">01</span>
+          <div class="svc__body">
+            <h3>Contabilidad completa</h3>
+            <p>Registro de operaciones, balance general, estados financieros y declaración mensual de impuestos (F29, F22), todo en regla y a tiempo.</p>
+          </div>
         </article>
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">💼</div>
-          <h3>Remuneraciones</h3>
-          <p>Liquidaciones de sueldo, libro de remuneraciones electrónico, finiquitos, contratos y cálculo de imposiciones previsionales.</p>
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">02</span>
+          <div class="svc__body">
+            <h3>Remuneraciones</h3>
+            <p>Liquidaciones de sueldo, libro de remuneraciones electrónico, finiquitos, contratos y cálculo de imposiciones previsionales.</p>
+          </div>
         </article>
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">🤝</div>
-          <h3>Acompañamiento contable</h3>
-          <p>Asesoría continua para dueños de negocio: interpretamos tus números y te ayudamos a tomar mejores decisiones.</p>
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">03</span>
+          <div class="svc__body">
+            <h3>Acompañamiento contable</h3>
+            <p>Asesoría continua para dueños de negocio: interpretamos tus números y te ayudamos a tomar mejores decisiones.</p>
+          </div>
         </article>
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">🧾</div>
-          <h3>Asesoría tributaria</h3>
-          <p>Optimización de carga tributaria, Renta anual, boletas de honorarios y cumplimiento SII sin sorpresas.</p>
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">04</span>
+          <div class="svc__body">
+            <h3>Asesoría tributaria</h3>
+            <p>Optimización de carga tributaria, Renta anual, boletas de honorarios y cumplimiento SII sin sorpresas.</p>
+          </div>
         </article>
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">🚀</div>
-          <h3>Emprendedores y Pymes</h3>
-          <p>Iniciación de actividades, cambios de régimen tributario y digitalización de tus procesos desde el primer día.</p>
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">05</span>
+          <div class="svc__body">
+            <h3>Emprendedores y Pymes</h3>
+            <p>Iniciación de actividades, cambios de régimen tributario y digitalización de tus procesos desde el primer día.</p>
+          </div>
         </article>
-        <article class="card reveal">
-          <div class="card__icon" aria-hidden="true">🔒</div>
-          <h3>Respaldo y confidencialidad</h3>
-          <p>Tu información protegida con plataformas cloud y comunicación directa con tu contador, siempre disponible.</p>
+        <article class="svc__row reveal">
+          <span class="svc__num gradient-text">06</span>
+          <div class="svc__body">
+            <h3>Respaldo y confidencialidad</h3>
+            <p>Tu información protegida con plataformas cloud y comunicación directa con tu contador, siempre disponible.</p>
+          </div>
         </article>
       </div>
     </div>
@@ -128,18 +140,17 @@
           información al día, en línea y explicada de forma simple.
         </p>
         <ul class="about__list reveal">
-          <li>✔ Atención personalizada y directa</li>
-          <li>✔ 100% digital, sin papeleo innecesario</li>
-          <li>✔ Cumplimiento garantizado con SII y previred</li>
+          <li>Atención personalizada y directa</li>
+          <li>100% digital, sin papeleo innecesario</li>
+          <li>Cumplimiento garantizado con SII y Previred</li>
         </ul>
       </div>
       <div class="about__visual reveal" aria-hidden="true">
         <div class="about__panel">
-          <div class="about__panel-row"><span class="dot dot--red"></span><span class="dot dot--yellow"></span><span class="dot dot--green"></span></div>
-          <p class="about__panel-title">julio 2026 · resumen</p>
+          <p class="about__panel-title">Resumen mensual · ejemplo</p>
           <div class="about__panel-stat"><span>Ingresos</span><strong class="gradient-text">$ 12.450.000</strong></div>
-          <div class="about__panel-stat"><span>Impuestos F29</span><strong class="gradient-text">Declarado ✓</strong></div>
-          <div class="about__panel-stat"><span>Remuneraciones</span><strong class="gradient-text">Pagadas ✓</strong></div>
+          <div class="about__panel-stat"><span>Impuestos F29</span><strong class="gradient-text">Declarado</strong></div>
+          <div class="about__panel-stat"><span>Remuneraciones</span><strong class="gradient-text">Pagadas</strong></div>
           <div class="about__panel-bar"></div>
           <p class="about__panel-note">Todo al día. Sin estrés.</p>
         </div>
@@ -152,10 +163,22 @@
     <div class="container">
       <p class="section__eyebrow reveal">Cómo trabajamos</p>
       <h2 class="section__title reveal">Tres pasos para la <span class="gradient-text">tranquilidad</span></h2>
-      <div class="grid grid--3 steps">
-        <div class="step reveal"><span class="step__num">01</span><h3>Hablemos</h3><p>Escríbenos por WhatsApp o al formulario. Conversamos sobre tu negocio y tus necesidades sin costo.</p></div>
-        <div class="step reveal"><span class="step__num">02</span><h3>Te organizamos</h3><p>Diagnóstico contable completo, ponemos al día tus obligaciones y definimos un plan a tu medida.</p></div>
-        <div class="step reveal"><span class="step__num">03</span><h3>Relajate</h3><p>Nosotros gestionamos todo mensualmente. Tú recibes reportes claros y te enfocas en crecer.</p></div>
+      <div class="steps">
+        <div class="step reveal">
+          <span class="step__num gradient-text">01</span>
+          <h3>Hablemos</h3>
+          <p>Escríbenos por WhatsApp o al formulario. Conversamos sobre tu negocio y tus necesidades sin costo.</p>
+        </div>
+        <div class="step reveal">
+          <span class="step__num gradient-text">02</span>
+          <h3>Te organizamos</h3>
+          <p>Diagnóstico contable completo, ponemos al día tus obligaciones y definimos un plan a tu medida.</p>
+        </div>
+        <div class="step reveal">
+          <span class="step__num gradient-text">03</span>
+          <h3>Relájate</h3>
+          <p>Nosotros gestionamos todo mensualmente. Tú recibes reportes claros y te enfocas en crecer.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -169,7 +192,7 @@
     </div>
   </section>
 
-  <!-- ══════════ CONTACTO ══════════ -->
+  <!-- ══════════ CONTACTO — filas tipográficas, sin iconos ══════════ -->
   <section class="section" id="contacto">
     <div class="container">
       <p class="section__eyebrow reveal">Contacto</p>
@@ -179,16 +202,18 @@
       <div class="contact">
         <div class="contact__info reveal">
           <a class="contact__item" id="whatsappLink" href="https://wa.me/56975752213?text=Hola%2C%20quisiera%20una%20consulta%20contable%20gratis" target="_blank" rel="noopener">
-            <span class="contact__icon" aria-hidden="true">💬</span>
-            <span><strong>WhatsApp</strong><br /><span id="whatsappNumber">+56 9 7575 2213</span></span>
+            <span class="contact__label">WhatsApp</span>
+            <span class="contact__value" id="whatsappNumber">+56 9 7575 2213</span>
+            <span class="contact__arrow">→</span>
           </a>
           <a class="contact__item" id="emailLink" href="mailto:contacto@jmvconsultores.cl">
-            <span class="contact__icon" aria-hidden="true">✉️</span>
-            <span><strong>Correo</strong><br /><span id="emailText">contacto@jmvconsultores.cl</span></span>
+            <span class="contact__label">Correo</span>
+            <span class="contact__value" id="emailText">contacto@jmvconsultores.cl</span>
+            <span class="contact__arrow">→</span>
           </a>
           <div class="contact__item">
-            <span class="contact__icon" aria-hidden="true">📍</span>
-            <span><strong>Zona de atención</strong><br /><span id="zonaText">Chile · Atención 100% en línea</span></span>
+            <span class="contact__label">Zona de atención</span>
+            <span class="contact__value" id="zonaText">Chile · Atención 100% en línea</span>
           </div>
         </div>
 
@@ -217,27 +242,26 @@
             <label for="f-mensaje">Cuéntanos qué necesitas</label>
             <textarea id="f-mensaje" name="mensaje" rows="4" placeholder="Ej: tengo una empresa desde 2023 y necesito poner mis impuestos al día" required></textarea>
           </div>
-          <button type="submit" class="btn btn--primary btn--full">Enviar por WhatsApp →</button>
+          <button type="submit" class="btn btn--primary btn--full">Enviar por WhatsApp</button>
           <p class="form__note">Al enviar, se abrirá WhatsApp con tu mensaje listo. Así te respondemos más rápido.</p>
         </form>
       </div>
     </div>
   </section>
 
-  <!-- ══════════ FOOTER mínimo — Regla 1: sin enlaces que distraigan ══════════ -->
+  <!-- ══════════ FOOTER mínimo ══════════ -->
   <footer class="footer">
     <div class="container footer__inner">
       <img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" />
       <p class="footer__legal" id="razonSocial">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
-      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · Hecho con ☕ y precisión contable</p>
+      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · Hecho con precisión contable</p>
     </div>
   </footer>
 
-  <!-- Botón flotante WhatsApp (canal de conversión, no distracción) -->
-  <a id="waFloat" class="wa-float" href="https://wa.me/56975752213" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
-    <svg viewBox="0 0 32 32" width="28" height="28" fill="currentColor" aria-hidden="true">
-      <path d="M16 2.7C8.7 2.7 2.8 8.6 2.8 15.9c0 2.3.6 4.6 1.8 6.6L2.7 29.3l7-1.8c1.9 1 4.1 1.6 6.3 1.6 7.3 0 13.2-5.9 13.2-13.2S23.3 2.7 16 2.7zm0 24.1c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4c-1.1-1.7-1.7-3.7-1.7-5.8 0-6.1 4.9-11 11-11s11 4.9 11 11-4.9 10.8-11 10.8zm6-8.2c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.7.2-.2.3-.8 1.1-1 1.3-.2.2-.4.3-.7.1-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.7l.5-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.6-.1-.2-.7-1.8-1-2.4-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1.1 1-1.1 2.5s1.1 2.9 1.3 3.1c.2.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.3-.7.3-1.3.2-1.4-.1-.2-.3-.2-.6-.4z"/>
-    </svg>
+  <!-- WhatsApp flotante: píldora tipográfica, sin icono -->
+  <a id="waFloat" class="wa-float" href="https://wa.me/56975752213" target="_blank" rel="noopener">
+    <span class="wa-float__text">WhatsApp</span>
+    <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
 
 </body>
