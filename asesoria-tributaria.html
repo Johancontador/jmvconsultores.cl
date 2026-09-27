@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="contabilidad-completa.html" class="related__link">Contabilidad completa <span class="svc__hint-arrow">→</span></a>
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="acompanamiento-contable.html" class="related__link">Acompañamiento contable <span class="svc__hint-arrow">→</span></a>
+          <a href="emprendedores-pymes.html" class="related__link">Emprendedores y Pymes <span class="svc__hint-arrow">→</span></a>
+          <a href="respaldo-confidencialidad.html" class="related__link">Respaldo y confidencialidad <span class="svc__hint-arrow">→</span></a>
+          <a href="prevencion-riesgos.html" class="related__link">Prevención de riesgos <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">asesoría tributaria</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿Es legal la planificación tributaria?</summary>
+          <p>Sí. Planificar es usar las reglas que la propia ley ofrece (regímenes, créditos, beneficios) para pagar lo justo. Lo que no es legal es ocultar ingresos o falsear información. Nosotros solo usamos el camino legal.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Me pueden ayudar si ya tengo multas o deudas?</summary>
+          <p>Sí. Evaluamos convenios de pago, condonaciones y rectificatorias. Mientras más rápido actúas, más opciones tienes de reducir el costo total.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué me conviene: Pro Pyme o régimen general?</summary>
+          <p>Depende de tus ventas, tus utilidades y tus planes de inversión. Lo analizamos con tus números reales y te mostramos la comparación antes de decidir.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Cuándo es la Operación Renta?</summary>
+          <p>Entre abril y junio de cada año, según el rol que asigna el SII. Pero la preparación ideal parte en diciembre: una buena planificación de fin de año ahorra impuestos en abril.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Asesoría tributaria",
+      "description": "El SII no perdona el desconocimiento, pero la ley permite pagar menos cuando sabes cómo. Planificamos tus impuestos legalmente, te defendemos en fiscalizaciones y recuperamos lo que te deben. La primera consulta es gratis y podría ahorrarte millones.",
+      "url": "https://jmvconsultores.cl/asesoria-tributaria.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Es legal la planificación tributaria?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sí. Planificar es usar las reglas que la propia ley ofrece (regímenes, créditos, beneficios) para pagar lo justo. Lo que no es legal es ocultar ingresos o falsear información. Nosotros solo usamos el camino legal."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Me pueden ayudar si ya tengo multas o deudas?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sí. Evaluamos convenios de pago, condonaciones y rectificatorias. Mientras más rápido actúas, más opciones tienes de reducir el costo total."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué me conviene: Pro Pyme o régimen general?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Depende de tus ventas, tus utilidades y tus planes de inversión. Lo analizamos con tus números reales y te mostramos la comparación antes de decidir."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cuándo es la Operación Renta?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Entre abril y junio de cada año, según el rol que asigna el SII. Pero la preparación ideal parte en diciembre: una buena planificación de fin de año ahorra impuestos en abril."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

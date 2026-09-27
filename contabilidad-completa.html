@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="acompanamiento-contable.html" class="related__link">Acompañamiento contable <span class="svc__hint-arrow">→</span></a>
+          <a href="asesoria-tributaria.html" class="related__link">Asesoría tributaria <span class="svc__hint-arrow">→</span></a>
+          <a href="emprendedores-pymes.html" class="related__link">Emprendedores y Pymes <span class="svc__hint-arrow">→</span></a>
+          <a href="respaldo-confidencialidad.html" class="related__link">Respaldo y confidencialidad <span class="svc__hint-arrow">→</span></a>
+          <a href="prevencion-riesgos.html" class="related__link">Prevención de riesgos <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">contabilidad completa</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿Qué necesito para partir con mi contabilidad?</summary>
+          <p>Solo tu RUT, clave SII y acceso a tus documentos (facturas, cartolas, boletas). Nosotros nos encargamos del resto, incluso si llevas meses atrasados.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué pasa si tengo impuestos atrasados?</summary>
+          <p>Lo revisamos y regularizamos. El SII permite rectificar declaraciones y en muchos casos las multas se reducen o condonan. La clave es partir antes, no después.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Cada cuánto me informan cómo va mi empresa?</summary>
+          <p>Mensualmente: recibes un reporte claro con tus resultados, impuestos a pagar y alertas. Y puedes consultar a tu contador cuando lo necesites.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Trabajan con mi rubro?</summary>
+          <p>Trabajamos con pymes de todos los rubros: comercio, servicios, restaurants, construcción, salud, e-commerce y más. Pregúntanos por tu caso específico, la primera consulta es gratis.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Contabilidad completa",
+      "description": "Deja de perseguir papeles, multas y vencimientos. En JMV Consultores tomamos tu contabilidad de principio a fin: cada factura, cada impuesto, cada balance. Tú solo miras los números claros y tomas decisiones. Todo en regla, todo a tiempo, todo explic",
+      "url": "https://jmvconsultores.cl/contabilidad-completa.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Qué necesito para partir con mi contabilidad?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Solo tu RUT, clave SII y acceso a tus documentos (facturas, cartolas, boletas). Nosotros nos encargamos del resto, incluso si llevas meses atrasados."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué pasa si tengo impuestos atrasados?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Lo revisamos y regularizamos. El SII permite rectificar declaraciones y en muchos casos las multas se reducen o condonan. La clave es partir antes, no después."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cada cuánto me informan cómo va mi empresa?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Mensualmente: recibes un reporte claro con tus resultados, impuestos a pagar y alertas. Y puedes consultar a tu contador cuando lo necesites."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Trabajan con mi rubro?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Trabajamos con pymes de todos los rubros: comercio, servicios, restaurants, construcción, salud, e-commerce y más. Pregúntanos por tu caso específico, la primera consulta es gratis."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

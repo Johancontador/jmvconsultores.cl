@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="contabilidad-completa.html" class="related__link">Contabilidad completa <span class="svc__hint-arrow">→</span></a>
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="acompanamiento-contable.html" class="related__link">Acompañamiento contable <span class="svc__hint-arrow">→</span></a>
+          <a href="asesoria-tributaria.html" class="related__link">Asesoría tributaria <span class="svc__hint-arrow">→</span></a>
+          <a href="emprendedores-pymes.html" class="related__link">Emprendedores y Pymes <span class="svc__hint-arrow">→</span></a>
+          <a href="respaldo-confidencialidad.html" class="related__link">Respaldo y confidencialidad <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">prevención de riesgos</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿Mi empresa necesita experto en prevención aunque sea pequeña?</summary>
+          <p>Toda empresa con trabajadores debe cumplir la ley 16.744: RIOHS, inducciones, EPP y documentación básica. Si tienes 25 o más trabajadores, además necesitas comité paritario y experto. Te ayudamos a cumplir según tu tamaño real.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué es el MIPER y por qué es importante?</summary>
+          <p>Es la matriz de identificación de peligros y evaluación de riesgos: la base de todo tu sistema preventivo. Sin MIPER bien levantado en terreno, los procedimientos y capacitaciones no apuntan a los riesgos reales.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué me exige el D.S. 44?</summary>
+          <p>Es el nuevo reglamento que moderniza la gestión preventiva: obliga a revisar y actualizar periódicamente tu documentación, evaluar riesgos por puesto y mantener evidencia de todo. Lo revisamos completo y te dejamos un plan de regularización.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Sirve para postular a licitaciones?</summary>
+          <p>Sí: preparamos tu carpeta de prevención completa (IRL, MIPER, PTS, capacitaciones, EPP) para homologación, licitaciones públicas y de ingreso a faenas de grandes empresas.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Prevención de riesgos",
+      "description": "Apoyamos a pequeñas y medianas empresas en materias de prevención de riesgos y cumplimiento documental. La idea no es solamente preparar documentos: revisamos qué necesita realmente tu empresa y dejamos un sistema preventivo coherente con sus activid",
+      "url": "https://jmvconsultores.cl/prevencion-riesgos.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Mi empresa necesita experto en prevención aunque sea pequeña?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Toda empresa con trabajadores debe cumplir la ley 16.744: RIOHS, inducciones, EPP y documentación básica. Si tienes 25 o más trabajadores, además necesitas comité paritario y experto. Te ayudamos a cumplir según tu tamaño real."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué es el MIPER y por qué es importante?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Es la matriz de identificación de peligros y evaluación de riesgos: la base de todo tu sistema preventivo. Sin MIPER bien levantado en terreno, los procedimientos y capacitaciones no apuntan a los riesgos reales."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué me exige el D.S. 44?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Es el nuevo reglamento que moderniza la gestión preventiva: obliga a revisar y actualizar periódicamente tu documentación, evaluar riesgos por puesto y mantener evidencia de todo. Lo revisamos completo y te dejamos un plan de regularización."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Sirve para postular a licitaciones?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sí: preparamos tu carpeta de prevención completa (IRL, MIPER, PTS, capacitaciones, EPP) para homologación, licitaciones públicas y de ingreso a faenas de grandes empresas."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="contabilidad-completa.html" class="related__link">Contabilidad completa <span class="svc__hint-arrow">→</span></a>
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="acompanamiento-contable.html" class="related__link">Acompañamiento contable <span class="svc__hint-arrow">→</span></a>
+          <a href="asesoria-tributaria.html" class="related__link">Asesoría tributaria <span class="svc__hint-arrow">→</span></a>
+          <a href="emprendedores-pymes.html" class="related__link">Emprendedores y Pymes <span class="svc__hint-arrow">→</span></a>
+          <a href="prevencion-riesgos.html" class="related__link">Prevención de riesgos <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">respaldo y confidencialidad</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿Quién puede ver mi información?</summary>
+          <p>Solo tu contador asignado. Los accesos son por rol, con registro de auditoría: queda trazado quién vio o modificó qué, y cuándo.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué pasa con mi información si terminamos el servicio?</summary>
+          <p>La entregamos completa y de forma segura al contador que elijas, y el compromiso de confidencialidad continúa indefinidamente después de terminar la relación.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Qué pasa si se pierde un documento?</summary>
+          <p>Los respaldos son diarios y están verificados con pruebas de restauración periódicas. Cualquier documento de los últimos años se recupera del historial de versiones.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Firman acuerdo de confidencialidad?</summary>
+          <p>Sí, antes de partir y por escrito. Además trabajamos con plataformas cifradas, doble factor de autenticación y contratos con cláusulas de indemnidad.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Respaldo y confidencialidad",
+      "description": "Tu información contable y tributaria es tan sensible como tu cuenta bancaria. La protegemos con cifrado, accesos controlados, contratos de confidencialidad y respaldos verificados. Si algo falla, hay plan. Si alguien pregunta, hay silencio. Tranquili",
+      "url": "https://jmvconsultores.cl/respaldo-confidencialidad.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Quién puede ver mi información?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Solo tu contador asignado. Los accesos son por rol, con registro de auditoría: queda trazado quién vio o modificó qué, y cuándo."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué pasa con mi información si terminamos el servicio?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "La entregamos completa y de forma segura al contador que elijas, y el compromiso de confidencialidad continúa indefinidamente después de terminar la relación."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué pasa si se pierde un documento?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Los respaldos son diarios y están verificados con pruebas de restauración periódicas. Cualquier documento de los últimos años se recupera del historial de versiones."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Firman acuerdo de confidencialidad?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sí, antes de partir y por escrito. Además trabajamos con plataformas cifradas, doble factor de autenticación y contratos con cláusulas de indemnidad."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

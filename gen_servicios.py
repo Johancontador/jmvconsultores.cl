@@ -108,6 +108,21 @@ REMUNERACIONES = [
     ("Declaración y pago de SIS", "Seguro social gestionado para tus trabajadores."),
     ("Conciliación de remuneraciones con contabilidad", "Tus sueldos cuadrados con el libro contable cada mes."),
     ("Gestión de licencias médicas", "Trámite, pago y descansos según ley de licencias."),
+    ("Ley Papito Corazón (descuento 50% caps. 3 y 4)", "Solicitud, cálculo y vigencia del descuento por deudas de pensión de alimentos según la ley 21.478."),
+    ("Retiros del 10% de AFP y su impacto en finiquitos", "Cómo afectan los retiros a tu seguro de cesantía y a los cálculos de término (ley 21.389 y modificaciones)."),
+    ("Reajuste y reajustabilidad de remuneraciones", "Reajustes pactados, legales (ley 21.611: jornadas y suelos) y cláusulas de reajustabilidad."),
+    ("Reforma previsional 2025 (ley 21.735)", "Nuevo aporte del empleador y Seguro Social: preparación de tu nómina para la transición 2025-2032."),
+    ("Descuentos judiciales por alimentos", "Tratamiento de descuentos directos por órdenes judiciales sobre la remuneración (art. 58 del Código del Trabajo)."),
+    ("Embargos y retenciones legales de sueldo", "Cálculo correcto de retenciones por embargo, pensión de alimentos y deudas fiscales."),
+    ("Impuesto Único del Trabajo en liquidaciones", "Cálculo de la SEGUNDA CATEGORÍA en finiquitos: rebajas, tramos y devoluciones (art. 174 CT)."),
+    ("Gratificación en finiquitos (proporcional)", "Gratificación proporcional al tiempo trabajado, con tope de 4,75 IMA bien calculado."),
+    ("Vacaciones pendientes y proporcionales", "Compensación de feriado no tomado, proporcionalidad y valor diario correcto (ley 20.823)."),
+    ("Indemnización por años de servicio", "Un mes por cada año, tope de 11 años: cálculo exacto y situaciones especiales (art. 163 CT)."),
+    ("Indemnización convencional y pactada", "Indemnizaciones a convenir, su tratamiento tributario y previsión en contratos."),
+    ("Feriado colectivo y días feriados", "Manejo de feriados legales (ley 20.215, 2 de octubre) en turnos y jornadas especiales."),
+    ("Sala cuna y derechos de lactancia", "Provisión de sala cuna o pago de directo según SENCE para madres trabajadoras (art. 203 CT)."),
+    ("Descanso diurno y compensatorios", "Descansos mínimos, compensación de días festivos trabajados y documentación (arts. 22 a 40 CT)."),
+    ("Seguro escolar y beneficios para cargas", "Matrícula de cargas, seguro escolar (ley 16.744) y asignaciones familiares actualizadas."),
     ("Subsidio de incapacidad laboral (SIL)", "Cálculo y reposición de remuneraciones durante licencias."),
     ("Permiso postnatal y parental", "Gestión de permisos y prórrogas según ley 21.361."),
     ("Trabajo adolescente y aprendices", "Contratación y cotización de menores de edad permitidos."),
@@ -421,7 +436,8 @@ PAGES = [
             "cada trabajador contento. Cero juicios, cero sobresaltos."
         ),
         lead=(
-            "Estos son algunos de los servicios de remuneraciones en los que te podemos ayudar:"
+            "Más de 60 servicios de remuneraciones en los que te podemos ayudar, "
+            "incluyendo todas las leyes vigentes que afectan sueldos, finiquitos y descuentos legales:"
         ),
         services=REMUNERACIONES,
     ),
@@ -553,7 +569,7 @@ TEMPLATE = """<!DOCTYPE html>
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -574,8 +590,26 @@ TEMPLATE = """<!DOCTYPE html>
       <div class="svc">
 {rows}
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+{related_links}
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">{faq_topic}</span></h2>
+      <div class="faq__list reveal">
+{faq_items}
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -625,9 +659,128 @@ TEMPLATE = """<!DOCTYPE html>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
 
+  <script type="application/ld+json">
+{jsonld}
+  </script>
+
 </body>
 </html>
 """
+
+# ── FAQ por página de servicio (4 preguntas + schema FAQPage) ──
+FAQS = {
+    "contabilidad-completa": [
+        ("¿Qué necesito para partir con mi contabilidad?", "Solo tu RUT, clave SII y acceso a tus documentos (facturas, cartolas, boletas). Nosotros nos encargamos del resto, incluso si llevas meses atrasados."),
+        ("¿Qué pasa si tengo impuestos atrasados?", "Lo revisamos y regularizamos. El SII permite rectificar declaraciones y en muchos casos las multas se reducen o condonan. La clave es partir antes, no después."),
+        ("¿Cada cuánto me informan cómo va mi empresa?", "Mensualmente: recibes un reporte claro con tus resultados, impuestos a pagar y alertas. Y puedes consultar a tu contador cuando lo necesites."),
+        ("¿Trabajan con mi rubro?", "Trabajamos con pymes de todos los rubros: comercio, servicios, restaurants, construcción, salud, e-commerce y más. Pregúntanos por tu caso específico, la primera consulta es gratis."),
+    ],
+    "remuneraciones": [
+        ("¿Qué es la Ley Papito Corazón?", "Es la ley 21.478. Si un trabajador tiene deudas de pensión de alimentos y lo solicita, se descuenta el 50% de las cotizaciones de los capítulos 3 (salud) y 4 (leyes sociales) de su sueldo para pagar la deuda. El empleador debe aplicarlo si el juzgado lo ordena y notificar al trabajador."),
+        ("¿Cuánto me descuentan de un finiquito por impuestos?", "El finiquito tributa como remuneración (art. 174 del Código del Trabajo). Si sumado a tus otras rentas del año no supera los 13,5 UTA, puedes solicitar la devolución con la Operación Renta. Calculamos todo para que no pierdas plata."),
+        ("¿Cuánto me corresponde de indemnización por años de servicio?", "Un mes de remuneración por cada año trabajado, con tope de 11 remuneraciones (art. 163 CT). Los retiros del 10% de AFP pueden reducir lo que recibe el trabajador, porque el empleador puede rebajar hasta el 50% con cargo al seguro de cesantía."),
+        ("¿Qué leyes nuevas debo cumplir con mis trabajadores?", "Ley Karin (acoso laboral, obligatoria desde agosto 2024), sala cuna universal para todas las trabajadoras (2026), reducción de jornada a 44 horas (transición hasta 2028) y la reforma previsional con aporte del empleador (desde 2025). Te mantenemos al día en todo."),
+    ],
+    "acompanamiento-contable": [
+        ("¿En qué se diferencia de la contabilidad mensual?", "La contabilidad te dice qué pasó; el acompañamiento te ayuda a decidir qué hacer. Incluye reuniones mensuales, análisis de tus números y apoyo directo en decisiones de inversión, precios y crecimiento."),
+        ("¿Tengo que cambiar mi contador actual?", "No necesariamente. Podemos trabajar en conjunto o darte una segunda opinión. Si quieres cambiarte, gestionamos la transferencia de toda tu información de forma segura y sin baches."),
+        ("¿Cómo es la primera reunión?", "Sin costo y sin compromiso. Revisamos tu situación actual, identificamos riesgos y oportunidades, y te proponemos un plan. Tú decides si avanzamos."),
+        ("¿Trabajan con empresas en crecimiento?", "Es justo nuestro foco: pymes que están creciendo y necesitan orden contable que escale con ellas, desde la primera contratación hasta la segunda sucursal."),
+    ],
+    "asesoria-tributaria": [
+        ("¿Es legal la planificación tributaria?", "Sí. Planificar es usar las reglas que la propia ley ofrece (regímenes, créditos, beneficios) para pagar lo justo. Lo que no es legal es ocultar ingresos o falsear información. Nosotros solo usamos el camino legal."),
+        ("¿Me pueden ayudar si ya tengo multas o deudas?", "Sí. Evaluamos convenios de pago, condonaciones y rectificatorias. Mientras más rápido actúas, más opciones tienes de reducir el costo total."),
+        ("¿Qué me conviene: Pro Pyme o régimen general?", "Depende de tus ventas, tus utilidades y tus planes de inversión. Lo analizamos con tus números reales y te mostramos la comparación antes de decidir."),
+        ("¿Cuándo es la Operación Renta?", "Entre abril y junio de cada año, según el rol que asigna el SII. Pero la preparación ideal parte en diciembre: una buena planificación de fin de año ahorra impuestos en abril."),
+    ],
+    "emprendedores-pymes": [
+        ("¿Cuánto demora la iniciación de actividades?", "En el SII puede ser el mismo día. Lo importante es partir con el régimen tributario correcto y la facturación configurada, para no arrastrar errores que después cuestan."),
+        ("¿Convictorio o boletas? ¿SpA o empresa individual?", "Depende de tu rubro, tus ventas proyectadas y si tienes socios. En la consulta gratuita analizamos tu caso y te recomendamos la estructura que menos impuestos y menos problemas te dé."),
+        ("¿Puedo formalizarme si tengo deudas o castigos?", "En la mayoría de los casos sí. Hay regímenes y herramientas para partir limpio. Lo revisamos juntos en la primera conversación."),
+        ("¿Me ayudan a postular a fondos como Sercotec o CORFO?", "Sí: preparamos los números, el presupuesto y la documentación contable que exigen las postulaciones. Un expediente financiero sólido aumenta mucho las probabilidades."),
+    ],
+    "respaldo-confidencialidad": [
+        ("¿Quién puede ver mi información?", "Solo tu contador asignado. Los accesos son por rol, con registro de auditoría: queda trazado quién vio o modificó qué, y cuándo."),
+        ("¿Qué pasa con mi información si terminamos el servicio?", "La entregamos completa y de forma segura al contador que elijas, y el compromiso de confidencialidad continúa indefinidamente después de terminar la relación."),
+        ("¿Qué pasa si se pierde un documento?", "Los respaldos son diarios y están verificados con pruebas de restauración periódicas. Cualquier documento de los últimos años se recupera del historial de versiones."),
+        ("¿Firman acuerdo de confidencialidad?", "Sí, antes de partir y por escrito. Además trabajamos con plataformas cifradas, doble factor de autenticación y contratos con cláusulas de indemnidad."),
+    ],
+    "prevencion-riesgos": [
+        ("¿Mi empresa necesita experto en prevención aunque sea pequeña?", "Toda empresa con trabajadores debe cumplir la ley 16.744: RIOHS, inducciones, EPP y documentación básica. Si tienes 25 o más trabajadores, además necesitas comité paritario y experto. Te ayudamos a cumplir según tu tamaño real."),
+        ("¿Qué es el MIPER y por qué es importante?", "Es la matriz de identificación de peligros y evaluación de riesgos: la base de todo tu sistema preventivo. Sin MIPER bien levantado en terreno, los procedimientos y capacitaciones no apuntan a los riesgos reales."),
+        ("¿Qué me exige el D.S. 44?", "Es el nuevo reglamento que moderniza la gestión preventiva: obliga a revisar y actualizar periódicamente tu documentación, evaluar riesgos por puesto y mantener evidencia de todo. Lo revisamos completo y te dejamos un plan de regularización."),
+        ("¿Sirve para postular a licitaciones?", "Sí: preparamos tu carpeta de prevención completa (IRL, MIPER, PTS, capacitaciones, EPP) para homologación, licitaciones públicas y de ingreso a faenas de grandes empresas."),
+    ],
+}
+
+# Servicios relacionados por página (excluye la propia)
+SLUGS_ALL = [p["slug"] for p in [
+    dict(slug="contabilidad-completa.html", title="Contabilidad completa"),
+    dict(slug="remuneraciones.html", title="Remuneraciones"),
+    dict(slug="acompanamiento-contable.html", title="Acompañamiento contable"),
+    dict(slug="asesoria-tributaria.html", title="Asesoría tributaria"),
+    dict(slug="emprendedores-pymes.html", title="Emprendedores y Pymes"),
+    dict(slug="respaldo-confidencialidad.html", title="Respaldo y confidencialidad"),
+    dict(slug="prevencion-riesgos.html", title="Prevención de riesgos"),
+]]
+RELATED_TITLES = {
+    "contabilidad-completa.html": "Contabilidad completa",
+    "remuneraciones.html": "Remuneraciones",
+    "acompanamiento-contable.html": "Acompañamiento contable",
+    "asesoria-tributaria.html": "Asesoría tributaria",
+    "emprendedores-pymes.html": "Emprendedores y Pymes",
+    "respaldo-confidencialidad.html": "Respaldo y confidencialidad",
+    "prevencion-riesgos.html": "Prevención de riesgos",
+}
+
+def related_for(slug):
+    others = [s for s in SLUGS_ALL if s != slug]
+    links = []
+    for s in others:
+        t = RELATED_TITLES[s]
+        links.append(f'          <a href="{s}" class="related__link">{t} <span class="svc__hint-arrow">→</span></a>')
+    return "\n".join(links)
+
+def faq_for(slug):
+    faqs = FAQS.get(slug, [])
+    items = []
+    for q, a in faqs:
+        items.append(
+            '        <details class="faq__item">\n'
+            f'          <summary>{H.escape(q)}</summary>\n'
+            f'          <p>{H.escape(a)}</p>\n'
+            '        </details>'
+        )
+    return "\n".join(items)
+
+def jsonld_for(page):
+    import json
+    faqs = FAQS.get(page["slug"], [])
+    data = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "ProfessionalService",
+                "name": f"JMV Consultores — {page['title']}",
+                "description": page["persuasive"][:250],
+                "url": f"https://jmvconsultores.cl/{page['slug']}.html",
+                "areaServed": "Chile",
+                "priceRange": "$$",
+            },
+            {
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {
+                        "@type": "Question",
+                        "name": q,
+                        "acceptedAnswer": {"@type": "Answer", "text": a},
+                    }
+                    for q, a in faqs
+                ],
+            },
+        ],
+    }
+    return json.dumps(data, ensure_ascii=False, indent=2)
 
 def build():
     for page in PAGES:
@@ -657,6 +810,10 @@ def build():
             persuasive=page["persuasive"],
             lead=page["lead"],
             rows=rows_html,
+            related_links=related_for(page["slug"] + ".html"),
+            faq_topic=page["title"].lower(),
+            faq_items=faq_for(page["slug"]),
+            jsonld=jsonld_for(page),
             cta_topic=page["title"].lower(),
             wa=WA,
             wa_msg=wa_msg,

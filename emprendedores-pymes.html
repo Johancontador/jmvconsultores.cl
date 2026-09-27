@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="contabilidad-completa.html" class="related__link">Contabilidad completa <span class="svc__hint-arrow">→</span></a>
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="acompanamiento-contable.html" class="related__link">Acompañamiento contable <span class="svc__hint-arrow">→</span></a>
+          <a href="asesoria-tributaria.html" class="related__link">Asesoría tributaria <span class="svc__hint-arrow">→</span></a>
+          <a href="respaldo-confidencialidad.html" class="related__link">Respaldo y confidencialidad <span class="svc__hint-arrow">→</span></a>
+          <a href="prevencion-riesgos.html" class="related__link">Prevención de riesgos <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">emprendedores y pymes</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿Cuánto demora la iniciación de actividades?</summary>
+          <p>En el SII puede ser el mismo día. Lo importante es partir con el régimen tributario correcto y la facturación configurada, para no arrastrar errores que después cuestan.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Convictorio o boletas? ¿SpA o empresa individual?</summary>
+          <p>Depende de tu rubro, tus ventas proyectadas y si tienes socios. En la consulta gratuita analizamos tu caso y te recomendamos la estructura que menos impuestos y menos problemas te dé.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Puedo formalizarme si tengo deudas o castigos?</summary>
+          <p>En la mayoría de los casos sí. Hay regímenes y herramientas para partir limpio. Lo revisamos juntos en la primera conversación.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Me ayudan a postular a fondos como Sercotec o CORFO?</summary>
+          <p>Sí: preparamos los números, el presupuesto y la documentación contable que exigen las postulaciones. Un expediente financiero sólido aumenta mucho las probabilidades.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Emprendedores y Pymes",
+      "description": "Cada gran empresa empezó siendo una idea con un RUT. Te acompañamos desde la iniciación de actividades hasta tu expansión: régimen tributario correcto, facturación lista, primeros trabajadores contratados bien y fondos públicos postulados a tiempo. E",
+      "url": "https://jmvconsultores.cl/emprendedores-pymes.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Cuánto demora la iniciación de actividades?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "En el SII puede ser el mismo día. Lo importante es partir con el régimen tributario correcto y la facturación configurada, para no arrastrar errores que después cuestan."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Convictorio o boletas? ¿SpA o empresa individual?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Depende de tu rubro, tus ventas proyectadas y si tienes socios. En la consulta gratuita analizamos tu caso y te recomendamos la estructura que menos impuestos y menos problemas te dé."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Puedo formalizarme si tengo deudas o castigos?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "En la mayoría de los casos sí. Hay regímenes y herramientas para partir limpio. Lo revisamos juntos en la primera conversación."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Me ayudan a postular a fondos como Sercotec o CORFO?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sí: preparamos los números, el presupuesto y la documentación contable que exigen las postulaciones. Un expediente financiero sólido aumenta mucho las probabilidades."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

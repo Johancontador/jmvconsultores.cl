@@ -34,7 +34,7 @@
 
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -404,8 +404,46 @@
           </div>
         </article>
       </div>
+
+      <div class="related reveal">
+        <p class="related__title">Otros servicios que podrían interesarte</p>
+        <div class="related__links">
+          <a href="contabilidad-completa.html" class="related__link">Contabilidad completa <span class="svc__hint-arrow">→</span></a>
+          <a href="remuneraciones.html" class="related__link">Remuneraciones <span class="svc__hint-arrow">→</span></a>
+          <a href="asesoria-tributaria.html" class="related__link">Asesoría tributaria <span class="svc__hint-arrow">→</span></a>
+          <a href="emprendedores-pymes.html" class="related__link">Emprendedores y Pymes <span class="svc__hint-arrow">→</span></a>
+          <a href="respaldo-confidencialidad.html" class="related__link">Respaldo y confidencialidad <span class="svc__hint-arrow">→</span></a>
+          <a href="prevencion-riesgos.html" class="related__link">Prevención de riesgos <span class="svc__hint-arrow">→</span></a>
+        </div>
+      </div>
     </div>
   </main>
+
+  <section class="faq">
+    <div class="container">
+      <p class="section__eyebrow reveal">Preguntas frecuentes</p>
+      <h2 class="section__title reveal">Dudas típicas sobre <span class="gradient-text">acompañamiento contable</span></h2>
+      <div class="faq__list reveal">
+        <details class="faq__item">
+          <summary>¿En qué se diferencia de la contabilidad mensual?</summary>
+          <p>La contabilidad te dice qué pasó; el acompañamiento te ayuda a decidir qué hacer. Incluye reuniones mensuales, análisis de tus números y apoyo directo en decisiones de inversión, precios y crecimiento.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Tengo que cambiar mi contador actual?</summary>
+          <p>No necesariamente. Podemos trabajar en conjunto o darte una segunda opinión. Si quieres cambiarte, gestionamos la transferencia de toda tu información de forma segura y sin baches.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Cómo es la primera reunión?</summary>
+          <p>Sin costo y sin compromiso. Revisamos tu situación actual, identificamos riesgos y oportunidades, y te proponemos un plan. Tú decides si avanzamos.</p>
+        </details>
+        <details class="faq__item">
+          <summary>¿Trabajan con empresas en crecimiento?</summary>
+          <p>Es justo nuestro foco: pymes que están creciendo y necesitan orden contable que escale con ellas, desde la primera contratación hasta la segunda sucursal.</p>
+        </details>
+      </div>
+      <p class="faq__more reveal">¿Tienes otra duda? <a href="preguntas-frecuentes.html">Ver todas las preguntas frecuentes</a></p>
+    </div>
+  </section>
 
   <section class="cta reveal">
     <div class="container cta__inner">
@@ -454,6 +492,59 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ProfessionalService",
+      "name": "JMV Consultores — Acompañamiento contable",
+      "description": "Un contador que solo te dice cuánto debes pagar se quedó en el siglo pasado. Nosotros nos sentamos contigo cada mes, interpretamos tus números juntos y te ayudamos a decidir: dónde invertir, qué recortar, cuándo crecer. Tu contador, tu socio estratég",
+      "url": "https://jmvconsultores.cl/acompanamiento-contable.html",
+      "areaServed": "Chile",
+      "priceRange": "$$"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿En qué se diferencia de la contabilidad mensual?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "La contabilidad te dice qué pasó; el acompañamiento te ayuda a decidir qué hacer. Incluye reuniones mensuales, análisis de tus números y apoyo directo en decisiones de inversión, precios y crecimiento."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Tengo que cambiar mi contador actual?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No necesariamente. Podemos trabajar en conjunto o darte una segunda opinión. Si quieres cambiarte, gestionamos la transferencia de toda tu información de forma segura y sin baches."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Cómo es la primera reunión?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sin costo y sin compromiso. Revisamos tu situación actual, identificamos riesgos y oportunidades, y te proponemos un plan. Tú decides si avanzamos."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Trabajan con empresas en crecimiento?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Es justo nuestro foco: pymes que están creciendo y necesitan orden contable que escale con ellas, desde la primera contratación hasta la segunda sucursal."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
 
 </body>
 </html>

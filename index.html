@@ -40,7 +40,7 @@
   <!-- ══════════ BARRA SUPERIOR ══════════ -->
   <header class="topbar">
     <div class="container topbar__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" />
+      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -267,9 +267,9 @@
   <!-- ══════════ FOOTER mínimo ══════════ -->
   <footer class="footer">
     <div class="container footer__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" />
+      <a href="index.html" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" /></a>
       <p class="footer__legal" id="razonSocial">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
-      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · Hecho con precisión contable</p>
+      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · <a class="footer__faq-link" href="preguntas-frecuentes.html">Preguntas frecuentes</a></p>
     </div>
   </footer>
 
@@ -278,6 +278,33 @@
     <span class="wa-float__text">WhatsApp</span>
     <span class="wa-float__dot" aria-hidden="true"></span>
   </a>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "JMV Consultores",
+    "description": "Contabilidad, remuneraciones, asesoría tributaria y prevención de riesgos para pymes chilenas. Atención 100% en línea.",
+    "url": "https://jmvconsultores.cl/",
+    "logo": "https://jmvconsultores.cl/assets/logo-light.svg",
+    "areaServed": "Chile",
+    "priceRange": "$$",
+    "email": "contacto@jmvconsultores.cl",
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Servicios",
+      "itemListElement": [
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Contabilidad completa", "url": "https://jmvconsultores.cl/contabilidad-completa.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Remuneraciones", "url": "https://jmvconsultores.cl/remuneraciones.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Acompañamiento contable", "url": "https://jmvconsultores.cl/acompanamiento-contable.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Asesoría tributaria", "url": "https://jmvconsultores.cl/asesoria-tributaria.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Emprendedores y Pymes", "url": "https://jmvconsultores.cl/emprendedores-pymes.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Respaldo y confidencialidad", "url": "https://jmvconsultores.cl/respaldo-confidencialidad.html"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Prevención de riesgos y cumplimiento documental", "url": "https://jmvconsultores.cl/prevencion-riesgos.html"}}
+      ]
+    }
+  }
+  </script>
 
 </body>
 </html>
