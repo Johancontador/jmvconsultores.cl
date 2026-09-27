@@ -85,7 +85,9 @@ git push -u origin main
 >   - `ethan.ns.cloudflare.com`
 >   - `tessa.ns.cloudflare.com`
 > - ⏳ Pendiente: renovar dominio en NIC Chile (límite: 02/03-oct-2026) y cambiar nameservers.
-> - Despliegue elegido: **Cloudflare Tunnel** (el servidor está detrás de NAT, sin IP pública).
+> - **Arquitectura elegida**: GitHub Pages como hosting principal (`jmvconsultores.cl` →
+>   `johancontador.github.io`) **+ Cloudflare Tunnel** en esta máquina como respaldo/estaging
+>   en `pc.jmvconsultores.cl` (nginx ya sirve el sitio en localhost:8080, túnel activo).
 
 ### 4.1 Mover el dominio a Cloudflare
 
@@ -93,6 +95,12 @@ git push -u origin main
 2. Cloudflare mostrará los 2 nameservers de arriba
 3. En NIC Chile ([gestiondecorreos.nic.cl](https://gestiondecorreos.nic.cl)) → dominio → **Nameservers** → reemplazar `ns01/ns02.v2nets.com` por los de Cloudflare
 4. Esperar propagación (minutos a horas). Cloudflare marcará el sitio como **Active**
+5. Una vez **Active**, crear en **DNS → Records**:
+   - `@` → CNAME → `Johancontador.github.io` (producción, GitHub Pages)
+   - `www` → CNAME → `Johancontador.github.io`
+   - `pc` → CNAME → `<ID-DEL-TUNNEL>.cfargotunnel.com` (estaging vía túnel)
+6. En GitHub: **Settings → Pages → Custom domain** → `jmvconsultores.cl` → activar
+   **Enforce HTTPS** (la opción aparece tras validar el dominio)
 
 ### 4.2 Túnel Cloudflare (servidor detrás de NAT)
 
@@ -107,7 +115,8 @@ El TOKEN se copia en Cloudflare Zero Trust → **Networks → Tunnels → Create
 (usa el comando que sugiere Cloudflare, solo la parte después de `service install`).
 
 **Requisito previo en el túnel**: crear el **Public hostname**
-`jmvconsultores.cl` → HTTP → `localhost:8080` (repite la entrada para `www`).
+`pc.jmvconsultores.cl` → HTTP → `localhost:8080` (así el túnel queda como
+respaldo/estaging sin chocar con el dominio principal de GitHub Pages).
 SSL queda resuelto por Cloudflare, sin certbot.
 
 Comandos útiles una vez instalado:
