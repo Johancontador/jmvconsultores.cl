@@ -80,25 +80,27 @@ git push -u origin main
 
 ## ☁️ PASO 4 — Cloudflare (DNS + SSL + correo)
 
+> **Estado real del proyecto (27-sep-2026):**
+> - Sitio agregado a Cloudflare. Nameservers asignados:
+>   - `ethan.ns.cloudflare.com`
+>   - `tessa.ns.cloudflare.com`
+> - ⏳ Pendiente: renovar dominio en NIC Chile (límite: 02/03-oct-2026) y cambiar nameservers.
+> - Despliegue elegido: **Cloudflare Tunnel** (el servidor está detrás de NAT, sin IP pública).
+
 ### 4.1 Mover el dominio a Cloudflare
 
-1. Entra a [dash.cloudflare.com](https://dash.cloudflare.com) → **Add a site** → escribe `jmvconsultores.cl`
-2. Elige el plan **Free**
-3. Cloudflare detecta tus registros DNS actuales → confirma
-4. Cloudflare te dará **2 nameservers** (ej: `ana.ns.cloudflare.com`, `bob.ns.cloudflare.com`)
-5. Ve a tu registrador del dominio `.cl` (Nic Chile) → cambia los nameservers por los de Cloudflare
-6. Espera la propagación (de minutos a 24h)
-7. En Cloudflare → **SSL/TLS** → modo **Full (strict)** si tu servidor tiene certificado, o **Flexible** si aún no (recomendado instalar luego certificado de origen)
+1. Entra a [dash.cloudflare.com](https://dash.cloudflare.com) → sitio `jmvconsultores.cl`
+2. Cloudflare mostrará los 2 nameservers de arriba
+3. En NIC Chile ([gestiondecorreos.nic.cl](https://gestiondecorreos.nic.cl)) → dominio → **Nameservers** → reemplazar `ns01/ns02.v2nets.com` por los de Cloudflare
+4. Esperar propagación (minutos a horas). Cloudflare marcará el sitio como **Active**
 
-### 4.2 Registros DNS recomendados (en Cloudflare → DNS)
+### 4.2 Túnel Cloudflare (servidor detrás de NAT)
 
-| Tipo  | Nombre | Contenido                | Proxy (nube) |
-|-------|--------|--------------------------|--------------|
-| A     | `@`    | IP pública de tu servidor | 🟠 Activado  |
-| A     | `www`  | IP pública de tu servidor | 🟠 Activado  |
-| MX    | `@`    | según tu proveedor de correo | —         |
-
-> Con la nube naranja activada, Cloudflare entrega **HTTPS gratis** y oculta la IP de tu servidor.
+1. En el servidor: instalar `nginx` + `cloudflared`
+2. En Cloudflare Zero Trust → **Networks → Tunnels → Create tunnel** → copiar el TOKEN
+3. En el servidor: `sudo cloudflared service install <TOKEN>`
+4. En el túnel → **Public hostname** → `jmvconsultores.cl` → HTTP → `localhost:8080`
+   (y `www` → igual). SSL queda resuelto por Cloudflare, sin certbot.
 
 ### 4.3 Correo con tu dominio
 
