@@ -22,9 +22,33 @@
       <div class="page-header">
         <div>
           <h1 class="page-title">Dashboard</h1>
-          <p class="page-subtitle">Ventas, compras y margen — vista comparativa por período</p>
+          <p class="page-subtitle" id="dash-subtitulo">Ventas, compras y margen — vista comparativa por período</p>
         </div>
       </div>
+
+      <!-- Portafolio multi-cliente: la landing ya no queda vacía sin cliente
+           seleccionado — muestra el estado de TODAS las empresas al instante. -->
+      <section id="portafolio" hidden>
+        <div class="page-header">
+          <div>
+            <h2 class="section-title">Portafolio de clientes</h2>
+            <p class="page-subtitle">Estado de sincronización y vencimientos de todas tus empresas — haz clic en una para entrar a su dashboard</p>
+          </div>
+        </div>
+        <section class="kpi-grid" id="porta-kpis"></section>
+        <div class="dash-grid" style="margin-bottom:1.5rem">
+          <div class="dash-card dash-card-wide">
+            <h3>⏰ Próximos vencimientos F29</h3>
+            <div id="porta-vencimientos"></div>
+          </div>
+          <div class="dash-card dash-card-wide">
+            <h3>⚡ Accesos rápidos</h3>
+            <div class="porta-acciones" id="porta-acciones"></div>
+          </div>
+        </div>
+        <h3 class="section-title">Empresas</h3>
+        <div class="dash-grid" id="porta-clientes"></div>
+      </section>
 
       <section class="progress-section" id="progress-section-dashboard" hidden>
         <div class="progress-header"><span id="progress-label-dashboard">Consultando SII...</span></div>
@@ -32,7 +56,13 @@
       </section>
 
       <div id="dash-empty" class="empty-state">
-        <p>Selecciona una empresa en la barra superior y presiona "Conectar".</p>
+        <div class="empty-state-icon">📊</div>
+        <h2 class="empty-state-title" id="dash-empty-titulo">Conecta con el SII</h2>
+        <p class="empty-state-desc" id="dash-empty-desc">Selecciona una empresa en la barra superior para ver sus cifras.</p>
+        <div class="empty-state-cta" id="dash-empty-cta" hidden>
+          <button type="button" class="btn btn-primary" id="btn-conectar-empty">⚡ Sincronizar con el SII</button>
+          <p class="empty-state-hint">Consulta los libros de compra y venta del período — los meses cerrados quedan en caché.</p>
+        </div>
       </div>
 
       <div id="dash-content" hidden>
@@ -57,6 +87,7 @@
 
     <div id="vista-reporte" hidden>
       <h2 id="reporte-titulo">Selecciona un reporte</h2>
+      <div class="reporte-chips" id="reporte-chips" hidden></div>
       <section class="informe-controls" id="reporte-controles"></section>
       <section class="progress-section" id="progress-section" hidden>
         <div class="progress-header"><span id="progress-label">Consultando...</span></div>
@@ -79,6 +110,9 @@
   <script src="/shared/layout.js"></script>
   <script src="/js/dashboard.js"></script>
   <script src="/js/reportes.js"></script>
+  <script src="/js/tributario.js"></script>
+  <script src="/js/herramientas.js"></script>
+  <script src="/js/portafolio.js"></script>
   <script src="/shared/shell-router.js"></script>
   <script>
     initLayout('inicio').then(() => window.ShellRouter.init())

@@ -15,7 +15,7 @@ const {
 const informes = new Map()
 
 // Columns fetched by listarInformesDeBD
-const INFORME_LISTA_COLUMNS = 'id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado, total_meses, consultas_estimadas, resumen_json, creado_en'
+const INFORME_LISTA_COLUMNS = 'id, cliente_id, cliente_nombre, cliente_rut, anio_inicio, anio_fin, mes_inicio, mes_fin, modo, estado, total_meses, consultas_estimadas, resumen_json, creado_en'
 
 function crearInformeId() {
   return `inf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -66,7 +66,37 @@ function guardarInformeEnBD(informe) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
+  // Detalle documento a documento: la tabla informe_documentos existía en el
+  // esquema pero nunca se escribía — cargarInformeDeBD intentaba reconstruir
+  // los documentos desde detalle_*_json (que guarda un resumen por categorías,
+  // un OBJETO, no un array) y revientaba con "docs is not iterable" al cargar
+  // cualquier informe en modo detalle. Aquí se persiste la fuente de verdad.
+  const stmtDoc = db.prepare(`
+    INSERT INTO informe_documentos (informe_id, tipo, periodo, anio, mes, mes_nombre, folio, rut_doc, razon_social, monto_exento, monto_neto, monto_iva, monto_total, tipo_doc, fecha_docto, fecha_reclamo, estado_documento, montos_json, detalle_sii_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const insertarDocs = (tipo, docs) => {
+    for (const d of docs || []) {
+      // mes/anio se derivan del periodo (AAAAMM) si el documento no los trae —
+      // la tabla exige NOT NULL y hay rutas que solo etiquetan periodo.
+      const periodo = d.periodo || null
+      const anio = d.anio ?? (periodo ? Number(String(periodo).slice(0, 4)) : null)
+      const mes = d.mes ?? (periodo ? Number(String(periodo).slice(4, 6)) : null)
+      stmtDoc.run(
+        informe.id, tipo, periodo, anio, mes, d.mes_nombre || null,
+        String(d.folio ?? ''), d.rutDoc || null, d.razonSocial || null,
+        d.montoExento || 0, d.montoNeto || 0, d.montoIVA || 0, d.montoTotal || 0,
+        d.tipoDoc || 0, d.fechaDocto || null, d.fechaReclamo || null,
+        d.estadoDocumento || 'REGISTRO',
+        JSON.stringify(d.montos || {}), JSON.stringify(d.detalleSII || {})
+      )
+    }
+  }
+
   const tx = db.transaction(() => {
+    // El detalle se reescribe completo en cada guardado (el informe puede
+    // regenerarse con rango distinto) — sin delete, se acumularían duplicados.
+    db.prepare(`DELETE FROM informe_documentos WHERE informe_id = ?`).run(informe.id)
     stmtInforme.run(
       informe.id,
       informe.userId,
@@ -116,6 +146,9 @@ function guardarInformeEnBD(informe) {
         stmtRecl.run(informe.id, r.mes_nombre, r.anio, r.periodo, r.folio, r.razonSocial, r.rutDoc, r.fechaDocto, r.montoNeto, r.montoIVA, r.montoTotal, r.fechaReclamo)
       }
     }
+
+    insertarDocs('ventas', informe.documentos_ventas)
+    insertarDocs('compras', informe.documentos_compras)
   })()
 }
 
@@ -133,23 +166,21 @@ function cargarInformeDeBD(informeId, userId) {
     FROM informe_reclamadas WHERE informe_id = ? ORDER BY anio, periodo
   `).all(informeId)
 
-  // Reconstruir documentos_ventas y documentos_compras desde los meses
-  let documentos_ventas = []
-  let documentos_compras = []
-  for (const m of meses) {
-    if (m.detalle_ventas_json) {
-      const docs = JSON.parse(m.detalle_ventas_json)
-      for (const d of docs) {
-        documentos_ventas.push({ ...d, periodo: m.periodo, mes_nombre: m.mes_nombre, anio: m.anio })
-      }
-    }
-    if (m.detalle_compras_json) {
-      const docs = JSON.parse(m.detalle_compras_json)
-      for (const d of docs) {
-        documentos_compras.push({ ...d, periodo: m.periodo, mes_nombre: m.mes_nombre, anio: m.anio })
-      }
-    }
-  }
+  // Documentos del rango: fuente de verdad es informe_documentos (escrita en
+  // guardarInformeEnBD). Antes se intentaba reconstruirlos desde detalle_*_json
+  // de informe_meses, que guarda un resumen por categorías (objeto), no un
+  // array — reventaba con "docs is not iterable".
+  const mapearDoc = (fila) => ({
+    folio: fila.folio, rutDoc: fila.rut_doc, razonSocial: fila.razon_social,
+    montoExento: fila.monto_exento, montoNeto: fila.monto_neto, montoIVA: fila.monto_iva,
+    montoTotal: fila.monto_total, tipoDoc: fila.tipo_doc, fechaDocto: fila.fecha_docto,
+    fechaReclamo: fila.fecha_reclamo || '', estadoDocumento: fila.estado_documento || 'REGISTRO',
+    montos: fila.montos_json ? JSON.parse(fila.montos_json) : {},
+    detalleSII: fila.detalle_sii_json ? JSON.parse(fila.detalle_sii_json) : {},
+    periodo: fila.periodo, mes_nombre: fila.mes_nombre, anio: fila.anio,
+  })
+  const documentos_ventas = db.prepare(`SELECT * FROM informe_documentos WHERE informe_id = ? AND tipo = 'ventas' ORDER BY anio, mes, folio`).all(informeId).map(mapearDoc)
+  const documentos_compras = db.prepare(`SELECT * FROM informe_documentos WHERE informe_id = ? AND tipo = 'compras' ORDER BY anio, mes, folio`).all(informeId).map(mapearDoc)
 
   return {
     id: row.id,
@@ -294,7 +325,7 @@ async function generarInforme(informeId, clienteId, anioInicio, anioFin, modo, m
 
       // Se etiqueta cada documento con su período para poder agrupar/mostrar
       // "Mes" en el Centro de Reportes cuando se pide un rango de varios meses.
-      const tag = (docs) => docs.map((d) => ({ ...d, periodo: p.periodo, mes_nombre: nombreMes(p.mes), anio: p.anio }))
+      const tag = (docs) => docs.map((d) => ({ ...d, periodo: p.periodo, mes: p.mes, mes_nombre: nombreMes(p.mes), anio: p.anio }))
       todosVentasDocs.push(...tag(ventasDocs))
       todosComprasDocs.push(...tag(comprasDocs))
 

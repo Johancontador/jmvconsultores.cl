@@ -60,6 +60,25 @@ const NAV_ITEMS = [
       { key: 'informe-gestion', label: 'Informe de Gestión', tipo: 'informe-gestion' },
     ],
   },
+  {
+    key: 'centro-tributario', label: 'Centro Tributario', icon: '🛡️', hijos: [
+      { key: 'validador-iva', label: 'Validador IVA', tipo: 'validador-iva' },
+      { key: 'calculadora-ppm', label: 'Calculadora PPM', tipo: 'calculadora-ppm' },
+      { key: 'calendario-tributario', label: 'Calendario', tipo: 'calendario-tributario' },
+      { key: 'pendientes', label: 'Pendientes', tipo: 'pendientes' },
+      { key: 'duplicadas', label: 'Duplicadas', tipo: 'duplicadas' },
+      { key: 'comparador-f29', label: 'Comparador F29', tipo: 'comparador-f29' },
+      { key: 'intereses', label: 'Interés penal', tipo: 'intereses' },
+      { key: 'checklist-cierre', label: 'Checklist cierre', tipo: 'checklist-cierre' },
+      { key: 'observaciones', label: 'Observaciones', tipo: 'observaciones' },
+    ],
+  },
+  {
+    key: 'herramientas', label: 'Herramientas', icon: '🧰', hijos: [
+      { key: 'cobranza', label: 'Cobranza WhatsApp', tipo: 'cobranza' },
+      { key: 'conversor-dte', label: 'Conversor DTE', tipo: 'conversor-dte' },
+    ],
+  },
 ]
 
 let _activeTipo = null
@@ -189,6 +208,13 @@ async function initLayout(activeKey) {
     <div class="topbar-progress" id="topbar-progress" hidden><div class="topbar-progress-fill" id="topbar-progress-fill"></div></div>
     <section class="filtro-global-bar">
       ${rangoMesAnioHtml('filtro-global')}
+      <div class="filtro-presets" id="filtro-presets" role="group" aria-label="Períodos rápidos">
+        <button type="button" class="filtro-preset" data-preset="mes-actual">Este mes</button>
+        <button type="button" class="filtro-preset" data-preset="trim">Últimos 3 meses</button>
+        <button type="button" class="filtro-preset" data-preset="anio">Año actual</button>
+        <button type="button" class="filtro-preset" data-preset="anio-anterior">Año anterior</button>
+        <button type="button" class="filtro-preset" data-preset="12m">Últimos 12 meses</button>
+      </div>
       <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-csv">⬇ CSV</button>
       <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-excel">⬇ Excel</button>
       <button type="button" class="btn btn-secondary btn-sm" id="filtro-global-btn-export-pdf">⬇ PDF</button>
@@ -248,6 +274,30 @@ async function _cargarClientesEnTopbar() {
   }
 }
 
+// Resalta el preset cuyo rango coincide exactamente con el rango activo —
+// feedback visual de "dónde estoy" sin leer los cuatro selects.
+function _marcarPresetActivo(r) {
+  document.querySelectorAll('#filtro-presets .filtro-preset').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.preset === _presetQueCoincide(r))
+  })
+}
+
+function _presetQueCoincide(r) {
+  if (!r) return null
+  const ahora = new Date()
+  const y = ahora.getFullYear()
+  const m = ahora.getMonth() + 1
+  const eq = (o) => o.anioInicio === r.anioInicio && o.mesInicio === r.mesInicio && o.anioFin === r.anioFin && o.mesFin === r.mesFin
+  if (eq({ anioInicio: y, mesInicio: m, anioFin: y, mesFin: m })) return 'mes-actual'
+  if (r.anioInicio === y && r.mesInicio === 1 && r.anioFin === y && r.mesFin === 12) return 'anio'
+  if (r.anioInicio === y - 1 && r.mesInicio === 1 && r.anioFin === y - 1 && r.mesFin === 12) return 'anio-anterior'
+  // 12 meses: mes siguiente del año pasado (en diciembre cae en enero del año
+  // actual y coincide con el preset "Año actual", que ya se evaluó antes).
+  const m12 = m === 12 ? 1 : m + 1
+  if (r.anioInicio === (m === 12 ? y : y - 1) && r.mesInicio === m12 && r.anioFin === y && r.mesFin === m) return '12m'
+  return null
+}
+
 const LayoutHeader = {
   setBadge(estado) {
     const $badge = document.getElementById('topbar-badge')
@@ -289,10 +339,70 @@ async function _initHeader() {
       const error = validarRangoMesAnio(r)
       if (error) { showToast(error, 'error'); return }
       window.ShellState.setRango(r)
+      _marcarPresetActivo(r)
+    })
+  })
+
+  _marcarPresetActivo(rangoGuardado)
+
+  // Presets de período: un clic en vez de cuatro selects. El select de "Año
+  // inicio" solo llega hasta el año actual, así que para "Año anterior" se
+  // agrega la opción si falta antes de asignar valores.
+  const PRESETS = {
+    'mes-actual': () => {
+      const h = new Date()
+      return { anioInicio: h.getFullYear(), mesInicio: h.getMonth() + 1, anioFin: h.getFullYear(), mesFin: h.getMonth() + 1 }
+    },
+    trim: () => {
+      const h = new Date()
+      let m = h.getMonth() + 1 - 2, a = h.getFullYear()
+      if (m < 1) { m += 12; a -= 1 }
+      return { anioInicio: a, mesInicio: m, anioFin: h.getFullYear(), mesFin: h.getMonth() + 1 }
+    },
+    anio: () => ({ anioInicio: new Date().getFullYear(), mesInicio: 1, anioFin: new Date().getFullYear(), mesFin: 12 }),
+    'anio-anterior': () => {
+      const y = new Date().getFullYear() - 1
+      return { anioInicio: y, mesInicio: 1, anioFin: y, mesFin: 12 }
+    },
+    '12m': () => {
+      const h = new Date()
+      let m = h.getMonth() + 2, a = h.getFullYear() - 1 // mes siguiente del año pasado
+      if (m > 12) { m = 1; a += 1 } // en diciembre: enero del año actual (== "Año actual")
+      return { anioInicio: a, mesInicio: m, anioFin: h.getFullYear(), mesFin: h.getMonth() + 1 }
+    },
+  }
+  document.querySelectorAll('#filtro-presets .filtro-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const r = PRESETS[btn.dataset.preset]?.()
+      if (!r) return
+      const $anioInicio = document.getElementById('filtro-global-anio-inicio')
+      const $anioFin = document.getElementById('filtro-global-anio-fin')
+      for (const [$sel, val] of [[$anioInicio, r.anioInicio], [$anioFin, r.anioFin]]) {
+        if (![...$sel.options].some((o) => o.value === String(val))) {
+          $sel.add(new Option(String(val), String(val)), $sel.options[0] ? 0 : null)
+        }
+      }
+      document.getElementById('filtro-global-mes-inicio').value = String(r.mesInicio)
+      $anioInicio.value = String(r.anioInicio)
+      document.getElementById('filtro-global-mes-fin').value = String(r.mesFin)
+      $anioFin.value = String(r.anioFin)
+      window.ShellState.setRango(r)
+      _marcarPresetActivo(r)
     })
   })
 
   document.getElementById('topbar-btn-conectar').addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('shell:conectar'))
   })
+
+  const exportar = (formato) => {
+    if (typeof window.ReportesEngine?.exportar === 'function') {
+      window.ReportesEngine.exportar(formato)
+      return
+    }
+    showToast('Abre un reporte para exportar a CSV, Excel o PDF', 'info')
+  }
+  document.getElementById('filtro-global-btn-export-csv')?.addEventListener('click', () => exportar('csv'))
+  document.getElementById('filtro-global-btn-export-excel')?.addEventListener('click', () => exportar('excel'))
+  document.getElementById('filtro-global-btn-export-pdf')?.addEventListener('click', () => exportar('pdf'))
 }

@@ -277,6 +277,18 @@ if (clientesSchema && /rut\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(clientesSchema.sq
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_rut_activo ON clientes(rut) WHERE activo = 1;`)
 
+// Migración: BDs creadas por versiones anteriores del esquema no tienen las
+// columnas de timestamp en informe_meses — guardarInformeEnBD las referencia en
+// su INSERT y fallaba con "table informe_meses has no column named creado_en"
+// DESPUÉS de descargar todo el rango al SII: el informe se marcaba error, no
+// se persistía nada, y cada reintento repetía la descarga completa. Idempotente.
+const informeMesesSchema = db.prepare(`PRAGMA table_info(informe_meses)`).all()
+if (informeMesesSchema.length > 0) {
+  const tiene = (n) => informeMesesSchema.some((c) => c.name === n)
+  if (!tiene('creado_en')) db.exec(`ALTER TABLE informe_meses ADD COLUMN creado_en TEXT DEFAULT (datetime('now'))`)
+  if (!tiene('actualizado_en')) db.exec(`ALTER TABLE informe_meses ADD COLUMN actualizado_en TEXT DEFAULT (datetime('now'))`)
+}
+
 // Migración: reparar la FK de "procesos". SQLite reescribe automáticamente las
 // referencias FK de OTRAS tablas cuando se hace "ALTER TABLE ... RENAME TO"
 // (desde SQLite 3.25+) — al renombrar clientes -> clientes_old_migracion en la

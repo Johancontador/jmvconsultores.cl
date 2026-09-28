@@ -78,6 +78,16 @@ function periodoDesde(anio, mes) {
   return `${anio}${String(mes).padStart(2, '0')}`
 }
 
+/** Etiqueta legible de un rango {anioInicio, mesInicio, anioFin, mesFin} —
+ *  "Enero 2026 — Septiembre 2026", o "Septiembre 2026" si es un solo mes.
+ *  Compartida por dashboard.js y reportes.js para que ambos nombren el
+ *  período exactamente igual (congruencia entre pantallas). */
+function etiquetaRangoMesAnio(r) {
+  if (!r) return ''
+  if (r.anioInicio === r.anioFin && r.mesInicio === r.mesFin) return `${MESES[r.mesInicio - 1]} ${r.anioInicio}`
+  return `${MESES[r.mesInicio - 1]} ${r.anioInicio} — ${MESES[r.mesFin - 1]} ${r.anioFin}`
+}
+
 function nombreTipoDoc(tipoDoc) {
   return NOMBRES_TIPO_DOC[Number(tipoDoc)] || `Tipo ${tipoDoc}`
 }
@@ -104,6 +114,44 @@ function conSignoNC(doc) {
     montoTotal: signo * (doc.montoTotal || 0),
     montos,
   }
+}
+
+// Columnas canónicas de un DTE. La fecha del documento (fechaDocto / "Fecha
+// Docto" del SII) va siempre, para que grilla y export CSV/Excel/PDF coincidan.
+function columnasDocumento(opciones = {}) {
+  const cols = []
+  if (opciones.conLibro) cols.push({ key: 'libro', label: 'Libro' })
+  if (opciones.conPeriodo) {
+    cols.push({
+      key: 'periodo',
+      label: 'Mes',
+      congelar: true,
+      format: (v) => periodoDisplay(v),
+      exportFormat: (v) => periodoDisplay(v),
+    })
+  }
+  cols.push(
+    { key: 'folio', label: 'Folio' },
+    { key: 'tipoDoc', label: 'Tipo', format: (v) => nombreTipoDoc(v), exportFormat: (v) => nombreTipoDoc(v) },
+    { key: 'fechaDocto', label: 'Fecha', format: (v) => v || '—', exportFormat: (v) => v || '' },
+    { key: 'rutDoc', label: 'RUT', format: (v) => formatRut(v), exportFormat: (v) => formatRut(v) },
+    { key: 'razonSocial', label: 'Razón Social' },
+    { key: 'montoExento', label: 'Exento', align: 'right', format: fmt },
+    { key: 'montoNeto', label: 'Neto', align: 'right', format: fmt },
+    { key: 'montoIVA', label: 'IVA', align: 'right', format: fmt },
+    { key: 'montoTotal', label: 'Total', align: 'right', format: fmt },
+  )
+  if (opciones.conReclamo) {
+    cols.push({ key: 'fechaReclamo', label: 'Fecha Reclamo', format: (v) => v || '—', exportFormat: (v) => v || '' })
+  }
+  return cols
+}
+
+function documentosDeInforme(data) {
+  if (!data) return []
+  const compras = (data.documentos_compras || []).map((d) => ({ ...conSignoNC(d), libro: 'Compras' }))
+  const ventas = (data.documentos_ventas || []).map((d) => ({ ...conSignoNC(d), libro: 'Ventas' }))
+  return [...compras, ...ventas]
 }
 
 function escapeHtml(str) {

@@ -25,7 +25,14 @@ const { requireAuth } = require('./middleware/requireAuth')
 const app = express()
 const PORT = process.env.PORT || 3500
 
-app.use(express.json())
+// Límite de tamaño del JSON: las rutas de esta app reciben parámetros de
+// consulta (cliente_id, rango), no payloads grandes — 100 KB es generoso y
+// evita que un body gigante consuma memoria del servidor.
+app.use(express.json({ limit: '100kb' }))
+
+// Confiar en el proxy de nginx (docker-compose): req.ip refleja X-Forwarded-For
+// y el rate-limit del login no trata a todo Internet como una sola IP.
+app.set('trust proxy', 1)
 
 // Headers de seguridad básicos (defensa en profundidad — no hay ningún dato
 // de terceros embebido ni se necesita CSP elaborada, solo cerrar los vectores
@@ -34,10 +41,21 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('X-DNS-Prefetch-Control', 'off')
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   next()
 })
 
 app.use('/api/auth', require('./routes/auth'))
+
+// La raíz es la landing pública (marketing + login embebido). El resto de
+// páginas se sirve por static; /index.html sigue siendo la pantalla de
+// Clientes (referencia legacy del nav) — nadie enlaza "href=/" internamente.
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/landing.html'))
+})
+
 app.use(express.static(path.join(__dirname, '../frontend')))
 
 app.use('/api/clientes', requireAuth, require('./routes/clientes'))

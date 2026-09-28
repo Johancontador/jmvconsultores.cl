@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IVA Mensual — El copiloto tributario del contador chileno</title>
+  <meta name="description" content="Conecta el SII, sincroniza libros de compra y venta, calcula IVA y PPM, y revisa la salud tributaria de todas tus empresas desde un solo panel.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    /* Estilos propios de la landing (no tocan el design system de la app) */
+    .lp { min-height: 100vh; background: var(--bg-canvas); }
+    .lp-nav {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-4) var(--space-6);
+      background: rgba(2,6,23,0.8); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .lp-logo { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
+    .lp-logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--accent-soft); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: 18px; }
+    .lp-links { display: flex; align-items: center; gap: var(--space-5); }
+    .lp-links a { font-size: var(--fs-sm); color: var(--fg-secondary); transition: color var(--dur-fast); }
+    .lp-links a:hover { color: var(--fg-primary); }
+    @media (max-width: 720px) { .lp-links a.lp-hide-m { display: none; } }
+
+    .lp-hero { max-width: 1160px; margin: 0 auto; padding: var(--space-16) var(--space-6) var(--space-12); text-align: center; }
+    .lp-kicker {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-1) var(--space-4); border-radius: var(--radius-full);
+      background: var(--accent-soft); color: var(--accent);
+      font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.04em; text-transform: uppercase;
+      margin-bottom: var(--space-5);
+    }
+    .lp-hero h1 {
+      font-family: var(--font-display); font-size: clamp(2.2rem, 5.5vw, 3.8rem);
+      line-height: 1.08; letter-spacing: -0.02em; font-weight: 700;
+      max-width: 820px; margin: 0 auto var(--space-5);
+    }
+    .lp-hero h1 em { font-style: normal; color: var(--accent); }
+    .lp-hero p.lead { font-size: var(--fs-lg); color: var(--fg-secondary); max-width: 640px; margin: 0 auto var(--space-8); line-height: var(--lh-relaxed); }
+    .lp-cta-row { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+
+    /* Mock del dashboard (estilo Power BI) */
+    .lp-mock {
+      max-width: 980px; margin: var(--space-12) auto 0; padding: 0 var(--space-4);
+      border: 1px solid var(--border-default); border-radius: var(--radius-2xl);
+      background: linear-gradient(180deg, rgba(99,102,241,0.08), rgba(2,6,23,0) 40%), var(--bg-surface);
+      box-shadow: var(--shadow-xl); overflow: hidden; text-align: left;
+    }
+    .lp-mock-bar { display: flex; gap: 6px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+    .lp-mock-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--c-slate-700); }
+    .lp-mock-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); padding: var(--space-6); }
+    .lp-mock-kpi { background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
+    .lp-mock-kpi small { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); margin-bottom: var(--space-1); }
+    .lp-mock-kpi strong { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 600; }
+    .lp-mock-kpi.up strong { color: var(--success); }
+    .lp-mock-kpi.acc strong { color: var(--accent); }
+    .lp-mock-bars { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: var(--space-2); height: 140px; padding: var(--space-4); background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
+    .lp-mock-bars i { flex: 1; background: linear-gradient(180deg, var(--accent), rgba(99,102,241,0.25)); border-radius: 4px 4px 0 0; min-height: 12%; }
+    .lp-mock-bars i:nth-child(even) { background: linear-gradient(180deg, var(--c-slate-500), rgba(100,116,139,0.2)); }
+    @media (prefers-reduced-motion: no-preference) {
+      .lp-mock-bars i { animation: lp-grow 0.9s var(--ease-out) backwards; }
+      .lp-mock-bars i:nth-child(2) { animation-delay: 60ms; } .lp-mock-bars i:nth-child(3) { animation-delay: 120ms; }
+      .lp-mock-bars i:nth-child(4) { animation-delay: 180ms; } .lp-mock-bars i:nth-child(5) { animation-delay: 240ms; }
+      .lp-mock-bars i:nth-child(6) { animation-delay: 300ms; } .lp-mock-bars i:nth-child(7) { animation-delay: 360ms; }
+      .lp-mock-bars i:nth-child(8) { animation-delay: 420ms; }
+      @keyframes lp-grow { from { transform: scaleY(0); } }
+    }
+
+    .lp-section { max-width: 1160px; margin: 0 auto; padding: var(--space-16) var(--space-6); }
+    .lp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-5); margin-top: var(--space-8); }
+    .lp-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: var(--space-6); transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base); }
+    .lp-card:hover { transform: translateY(-4px); border-color: var(--border-strong); }
+    .lp-card .ico { font-size: 28px; margin-bottom: var(--space-3); }
+    .lp-card h3 { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 600; margin-bottom: var(--space-2); }
+    .lp-card p { color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
+    .lp-h2 { font-family: var(--font-display); font-size: clamp(1.6rem, 3.4vw, 2.3rem); font-weight: 700; letter-spacing: -0.01em; }
+    .lp-center { text-align: center; max-width: 720px; margin: 0 auto; }
+    .lp-center p { color: var(--fg-secondary); margin-top: var(--space-3); line-height: var(--lh-relaxed); }
+
+    .lp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-6); text-align: center; }
+    .lp-stats strong { display: block; font-family: var(--font-display); font-size: var(--fs-4xl); color: var(--accent); }
+    .lp-stats span { color: var(--fg-secondary); font-size: var(--fs-sm); }
+
+    .lp-final { text-align: center; border-top: 1px solid var(--border-subtle); }
+    .lp-footer { padding: var(--space-8) var(--space-6); text-align: center; color: var(--fg-muted); font-size: var(--fs-sm); border-top: 1px solid var(--border-subtle); }
+
+    /* Login embebido */
+    .lp-login-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-10); align-items: center; max-width: 980px; margin: 0 auto; }
+    @media (max-width: 860px) { .lp-login-wrap { grid-template-columns: 1fr; } }
+    .lp-login-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); padding: var(--space-8); }
+    .lp-login-card h2 { font-family: var(--font-display); font-size: var(--fs-2xl); margin-bottom: var(--space-2); }
+    .lp-login-card .sub { color: var(--fg-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-6); }
+    .lp-error { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
+    .lp-benefits li { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
+    .lp-benefits li b { color: var(--fg-primary); }
+    .lp-benefits .ico { flex-shrink: 0; }
+    #lp-toast { position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%); background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-full); padding: var(--space-3) var(--space-6); font-size: var(--fs-sm); box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity var(--dur-base); z-index: 100; }
+    #lp-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="lp">
+    <nav class="lp-nav">
+      <div class="lp-logo"><span class="lp-logo-badge">💼</span> IVA Mensual</div>
+      <div class="lp-links">
+        <a href="#producto" class="lp-hide-m">Producto</a>
+        <a href="#herramientas" class="lp-hide-m">Herramientas</a>
+        <a href="#ingresar" class="lp-hide-m">Ingresar</a>
+        <a href="/login.html" class="btn btn-primary btn-sm">Ingresar al panel</a>
+      </div>
+    </nav>
+
+    <header class="lp-hero">
+      <span class="lp-kicker">⚡ Conexión directa al SII</span>
+      <h1>El copiloto tributario del <em>contador chileno</em></h1>
+      <p class="lead">Sincroniza los libros de compra y venta del SII, calcula IVA, PPM y F29, y controla la salud tributaria de <strong>todas tus empresas</strong> desde un solo panel — con caché inteligente y alertas automáticas.</p>
+      <div class="lp-cta-row">
+        <a href="#ingresar" class="btn btn-primary">Ver mis empresas →</a>
+        <a href="#producto" class="btn btn-secondary">Conocer el producto</a>
+      </div>
+
+      <div class="lp-mock" aria-hidden="true">
+        <div class="lp-mock-bar"><span></span><span></span><span></span></div>
+        <div class="lp-mock-body">
+          <div class="lp-mock-kpi"><small>Ventas del mes</small><strong class="text-mono">$505.371.188</strong></div>
+          <div class="lp-mock-kpi"><small>Compras</small><strong class="text-mono">$290.354.588</strong></div>
+          <div class="lp-mock-kpi up"><small>Margen</small><strong>42,5%</strong></div>
+          <div class="lp-mock-kpi acc"><small>IVA a pagar</small><strong class="text-mono">$40.853.179</strong></div>
+          <div class="lp-mock-bars"><i style="height:38%"></i><i style="height:52%"></i><i style="height:44%"></i><i style="height:66%"></i><i style="height:58%"></i><i style="height:79%"></i><i style="height:71%"></i><i style="height:92%"></i></div>
+        </div>
+      </div>
+    </header>
+
+    <section class="lp-section" id="producto">
+      <div class="lp-center">
+        <h2 class="lp-h2">Todo el ciclo tributario, en un solo lugar</h2>
+        <p>Deja de abrir 4 pestañas del SII y copiar números a mano. IVA Mensual habla directo con el SII, guarda todo en caché y te muestra lo que importa.</p>
+      </div>
+      <div class="lp-grid">
+        <div class="lp-card">
+          <div class="ico">🔌</div>
+          <h3>Sincronización SII real</h3>
+          <p>Login directo con la clave tributaria, descarga de RCV compra/venta y caché de meses cerrados: re-sincronizar cuesta segundos, no minutos.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">📊</div>
+          <h3>Portafolio multi-empresa</h3>
+          <p>KPIs agregados de todos tus clientes, vencimientos F29 con cuenta regresiva y estado de sincronización por empresa — al abrir la app.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">🛡️</div>
+          <h3>Centro Tributario</h3>
+          <p>Validador de IVA que concilia a $0, detector de duplicadas y documentos pendientes, calendario tributario y checklist de cierre mensual.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">🧾</div>
+          <h3>18+ reportes exportables</h3>
+          <p>IVA mensual/anual, comparativos, rankings, desgloses de gestión y Libros completos — todos a CSV, Excel y PDF con un clic.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">💬</div>
+          <h3>WhatsApp integrado</h3>
+          <p>Resumen de IVA por cliente listo para enviar, y generador de cobranza con tono cordial, formal o firme.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">🔒</div>
+          <h3>Multipusuario seguro</h3>
+          <p>Cada usuario ve solo sus empresas, sesiones httpOnly con expiración, rate-limit en login y auditoría de accesos.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-section" id="herramientas" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+      <div class="lp-center">
+        <h2 class="lp-h2">Herramientas que nacieron del trabajo real</h2>
+        <p>Cada una existe porque un contador la necesitó — no son features de relleno.</p>
+      </div>
+      <div class="lp-grid">
+        <div class="lp-card"><div class="ico">🔍</div><h3>Detección de duplicadas</h3><p>Encuentra facturas con folio repetido y el monto involucrado antes de que sea un problema en la declaración.</p></div>
+        <div class="lp-card"><div class="ico">🧮</div><h3>Interés penal art. 53</h3><p>Calcula el recargo por atraso del F29 con la tasa vigente y los días exactos de mora.</p></div>
+        <div class="lp-card"><div class="ico">☑️</div><h3>Checklist de cierre</h3><p>10 pasos de cierre mensual por empresa, persistidos mes a mes. Nada se olvida fin de mes.</p></div>
+        <div class="lp-card"><div class="ico">📥</div><h3>Conversor DTE</h3><p>XML de DTE → Excel al instante, procesado 100% en tu navegador: los documentos nunca salen de tu computador.</p></div>
+      </div>
+    </section>
+
+    <section class="lp-section" id="numeros">
+      <div class="lp-stats">
+        <div><strong>28+</strong><span>vistas y reportes</span></div>
+        <div><strong>$0</strong><span>costo de infraestructura base</span></div>
+        <div><strong>100%</strong><span>de tus datos en tu servidor</span></div>
+        <div><strong>1 clic</strong><span>para sincronizar el SII</span></div>
+      </div>
+    </section>
+
+    <section class="lp-section lp-final" id="ingresar">
+      <div class="lp-login-wrap">
+        <div>
+          <h2 class="lp-h2">Tu panel te está esperando</h2>
+          <ul class="lp-benefits" style="margin-top: var(--space-6); list-style: none; padding: 0;">
+            <li><span class="ico">🏢</span><span><b>Todas tus empresas en una pantalla</b> — estado, ventas, IVA y vencimientos al instante.</span></li>
+            <li><span class="ico">⚡</span><span><b>Sincronización con caché</b> — los meses cerrados nunca se vuelven a descargar.</span></li>
+            <li><span class="ico">🛡️</span><span><b>Centro Tributario completo</b> — validador, pendientes, duplicadas y calendario.</span></li>
+            <li><span class="ico">🔐</span><span><b>Tus datos son tuyos</b> — self-hosted, sin terceros, sin vendor lock-in.</span></li>
+          </ul>
+        </div>
+        <div class="lp-login-card">
+          <h2>Ingresar</h2>
+          <p class="sub">Con tus credenciales del panel IVA Mensual</p>
+          <div class="lp-error" id="lp-error" hidden></div>
+          <form id="lp-form">
+            <div class="form-group">
+              <label class="form-label" for="lp-user">Usuario</label>
+              <input type="text" id="lp-user" class="form-input" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="lp-pass">Contraseña</label>
+              <input type="password" id="lp-pass" class="form-input" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="lp-btn" style="width:100%">Entrar al panel →</button>
+          </form>
+          <p class="sub" style="margin-top: var(--space-4); margin-bottom: 0; text-align: center;">¿Problemas para entrar? Contacta a tu contador.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="lp-footer">
+      IVA Mensual — Software tributario para contadores chilenos · Los cálculos son referenciales y no reemplazan la declaración oficial en sii.cl
+    </footer>
+  </div>
+
+  <div id="lp-toast" role="status"></div>
+
+  <script>
+    // Login embebido: mismo endpoint que login.html — al éxito entra directo al panel.
+    const form = document.getElementById('lp-form')
+    const errorBox = document.getElementById('lp-error')
+    const btn = document.getElementById('lp-btn')
+    const toast = document.getElementById('lp-toast')
+
+    function avisar(msg) {
+      toast.textContent = msg
+      toast.classList.add('show')
+      setTimeout(() => toast.classList.remove('show'), 2500)
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      errorBox.hidden = true
+      btn.disabled = true
+      btn.textContent = 'Verificando…'
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('lp-user').value.trim(),
+            password: document.getElementById('lp-pass').value,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data.ok === false) throw new Error(data.error || 'Credenciales inválidas')
+        avisar('Bienvenido — cargando tu panel…')
+        setTimeout(() => { window.location.href = '/dashboard.html' }, 600)
+      } catch (err) {
+        errorBox.textContent = err.message
+        errorBox.hidden = false
+        btn.disabled = false
+        btn.textContent = 'Entrar al panel →'
+      }
+    })
+
+    // Si ya tiene sesión activa, ofrecer entrar directo
+    fetch('/api/auth/me').then((r) => { if (r.ok) avisar('Ya tienes sesión activa — usa "Ingresar al panel" arriba') }).catch(() => {})
+  </script>
+</body>
+</html>

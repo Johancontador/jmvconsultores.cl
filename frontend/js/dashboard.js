@@ -130,23 +130,48 @@ async function _pintar(data) {
   _ultimoDato = data
   document.getElementById('dash-empty').hidden = true
   document.getElementById('dash-content').hidden = false
+  // Subtítulo con contexto: qué empresa y qué período se está mirando —
+  // así el usuario nunca duda de qué está viendo el dashboard.
+  const rango = window.ShellState.getRango()
+  document.getElementById('dash-subtitulo').textContent = data.cliente?.nombre
+    ? `${data.cliente.nombre} · ${etiquetaRangoMesAnio(rango)} — cifras netas en CLP`
+    : 'Ventas, compras y margen — vista comparativa por período'
   _renderKPIs(data)
   _renderGraficos(data)
 }
 
-function _mostrarVacio(mensaje) {
+function _mostrarVacio(mensaje, { conCta = false } = {}) {
   document.getElementById('dash-empty').hidden = false
   document.getElementById('dash-content').hidden = true
-  document.getElementById('dash-empty').querySelector('p').textContent = mensaje
+  document.getElementById('dash-empty-desc').textContent = mensaje
+  document.getElementById('dash-empty-cta').hidden = !conCta
+  document.getElementById('dash-subtitulo').textContent = 'Ventas, compras y margen — vista comparativa por período'
 }
+
+// El CTA del empty state dispara la misma sincronización que "Conectar" del header —
+// dos entradas, una sola acción, sin duplicar lógica.
+document.getElementById('btn-conectar-empty')?.addEventListener('click', () => conectar())
 
 async function mostrar() {
   const clienteId = window.ShellState.getClienteId()
+  const $porta = document.getElementById('portafolio')
   if (!clienteId) {
-    _mostrarVacio('Selecciona una empresa en la barra superior.')
+    // Landing con portafolio: si hay empresas registradas, mostrar el estado
+    // de todas en vez de un empty state vacío.
+    try {
+      const clientes = await apiGet('/api/clientes')
+      if (clientes.length > 0 && window.Portafolio) {
+        window.Portafolio.mostrar()
+        window.LayoutHeader.setBadge('sin-datos')
+        return
+      }
+    } catch { /* sin sesión o error: cae al empty state */ }
+    if ($porta) $porta.hidden = true
+    _mostrarVacio('Selecciona una empresa en la barra superior para ver sus cifras.')
     window.LayoutHeader.setBadge('sin-datos')
     return
   }
+  if ($porta) $porta.hidden = true
   const r = window.ShellState.getRango()
   try {
     const lista = await apiGet(`/api/informe?cliente_id=${clienteId}&limit=1`)
@@ -156,11 +181,11 @@ async function mostrar() {
       await _pintar(data)
       window.LayoutHeader.setBadge('conectado')
     } else {
-      _mostrarVacio('Sin datos sincronizados para este cliente y período — presiona "Conectar".')
+      _mostrarVacio(`No hay datos sincronizados para ${etiquetaRangoMesAnio(r)} — tráelos del SII con un clic.`, { conCta: true })
       window.LayoutHeader.setBadge('sin-datos')
     }
   } catch (err) {
-    _mostrarVacio('Sin datos todavía — presiona "Conectar" para sincronizar con el SII.')
+    _mostrarVacio('Sin datos todavía — sincroniza con el SII para poblar el dashboard.', { conCta: true })
     window.LayoutHeader.setBadge('sin-datos')
   }
 }
@@ -177,7 +202,7 @@ async function conectar() {
   try {
     const data = await apiPost('/api/informe/generar', {
       cliente_id: clienteId, anio_inicio: r.anioInicio, anio_fin: r.anioFin,
-      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'resumen',
+      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'detalle',
     })
     iniciarPolling(
       () => apiGet(`/api/informe/${data.informe_id}/estado`),

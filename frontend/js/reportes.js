@@ -246,6 +246,41 @@ const CATALOGO = {
   'exportaciones': {
     titulo: 'Exportaciones', esInfo: true,
   },
+  // ===== Centro Tributario (render vía window.Tributario, frontend/js/tributario.js) =====
+  'validador-iva': {
+    titulo: 'Validador de IVA (docs vs informe)', fuente: 'informe', esValidadorIva: true,
+  },
+  'calculadora-ppm': {
+    titulo: 'Calculadora de PPM y F29', fuente: 'informe', esCalculadoraPpm: true,
+  },
+  'calendario-tributario': {
+    titulo: 'Calendario tributario', fuente: 'informe', esCalendario: true,
+  },
+  'pendientes': {
+    titulo: 'Documentos pendientes de revisión', fuente: 'informe', esPendientes: true,
+  },
+  'observaciones': {
+    titulo: '¿Mi empresa tiene observaciones?', fuente: 'informe', esObservaciones: true,
+  },
+  // ===== Herramientas (render vía window.Herramientas, frontend/js/herramientas.js) =====
+  'duplicadas': {
+    titulo: 'Detector de facturas duplicadas', fuente: 'informe', esDuplicadas: true,
+  },
+  'comparador-f29': {
+    titulo: 'Comparador F29 histórico', fuente: 'informe', esComparadorF29: true,
+  },
+  'intereses': {
+    titulo: 'Calculadora de interés penal SII', fuente: 'informe', esIntereses: true,
+  },
+  'checklist-cierre': {
+    titulo: 'Checklist de cierre mensual', fuente: 'informe', esChecklist: true,
+  },
+  'cobranza': {
+    titulo: 'Generador de mensaje de cobranza', fuente: 'informe', esCobranza: true,
+  },
+  'conversor-dte': {
+    titulo: 'Conversor XML DTE → Excel', fuente: 'informe', esConversorDte: true,
+  },
   'libro-compras-rango': {
     titulo: 'Libro Compra (rango de meses/años)', fuente: 'informe', esLibroRango: true, tipoLibro: 'compras',
   },
@@ -264,6 +299,7 @@ const CATALOGO = {
 }
 
 const $titulo = document.getElementById('reporte-titulo')
+const $chips = document.getElementById('reporte-chips')
 const $controles = document.getElementById('reporte-controles')
 const $progress = document.getElementById('progress-section')
 const $progressLabel = document.getElementById('progress-label')
@@ -273,12 +309,92 @@ let tipo = null
 let reporte = null
 let ultimoDato = null
 let chartInstancia = null
+let exportActual = null
+
+function registrarExport(opts) {
+  exportActual = { nombre: tipo, ...opts }
+}
+
+function dispararExport(formato) {
+  if (!exportActual) {
+    showToast('Abre un reporte y espera a que cargue para exportar', 'info')
+    return
+  }
+  try {
+    exportarConDocumentos(formato, exportActual)
+  } catch (err) {
+    showToast(err.message, 'error')
+  }
+}
+
+function botonesExportHtml() {
+  return `
+    <div class="reporte-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv">⬇ CSV</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">⬇ Excel</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-pdf">⬇ PDF</button>
+    </div>`
+}
+
+function enlazarBotonesExport() {
+  document.getElementById('btn-export-csv')?.addEventListener('click', () => dispararExport('csv'))
+  document.getElementById('btn-export-excel')?.addEventListener('click', () => dispararExport('excel'))
+  document.getElementById('btn-export-pdf')?.addEventListener('click', () => dispararExport('pdf'))
+}
+
+// Chips de contexto bajo el título: qué empresa, qué RUT, qué período y de
+// dónde salen los datos. Responde en pantalla las 3 preguntas que antes había
+// que adivinar: ¿de quién es esto?, ¿de cuándo?, ¿se puede confiar?
+function renderChips(data) {
+  if (!$chips) return
+  if (!reporte || reporte.esInfo) { $chips.hidden = true; return }
+  const chips = []
+  if (reporte.fuente === 'proceso') {
+    chips.push('🏢 Todos los clientes')
+    if (data?.periodo) chips.push(`📅 ${periodoDisplay(data.periodo)}`)
+    chips.push('🗂 Fuente: Proceso mensual')
+  } else {
+    const cliente = data?.cliente
+    if (cliente?.nombre) chips.push(`🏢 ${escapeHtml(cliente.nombre)}`)
+    if (cliente?.rut) chips.push(`🆔 ${formatRut(cliente.rut)}`)
+    chips.push(`📅 ${etiquetaRangoMesAnio(window.ShellState.getRango())}`)
+    chips.push('🗂 Fuente: Informe SII')
+  }
+  $chips.innerHTML = chips.map((c) => `<span class="reporte-chip">${c}</span>`).join('')
+  $chips.hidden = false
+}
+
+// Empty state accionable: en vez de un texto muerto que obliga a buscar el
+// botón "Conectar" arriba, la sincronización está a un clic de donde está el
+// usuario — mismo POST que dispara el header.
+function emptySinDatosConCta(mensaje) {
+  $resultado.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">📡</div>
+      <h3 class="empty-state-title">Sin datos sincronizados</h3>
+      <p class="empty-state-desc">${escapeHtml(mensaje)}</p>
+      <div class="empty-state-cta">
+        <button type="button" class="btn btn-primary" id="btn-sincronizar-reporte">⚡ Sincronizar con el SII</button>
+        <p class="empty-state-hint">Trae los libros de compra y venta del rango seleccionado — los meses cerrados quedan en caché.</p>
+      </div>
+    </div>`
+  document.getElementById('btn-sincronizar-reporte').addEventListener('click', () => {
+    const clienteId = window.ShellState.getClienteId()
+    if (!clienteId) { showToast('Selecciona una empresa primero', 'error'); return }
+    ejecutarInformeReal(clienteId, window.ShellState.getRango())
+  })
+}
 
 function renderControlesInforme() {
   $controles.innerHTML = ''
   const clienteId = window.ShellState.getClienteId()
   if (!clienteId) {
-    $resultado.innerHTML = `<div class="empty-state"><p>Selecciona un cliente en la barra superior para ver este reporte.</p></div>`
+    $resultado.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">👆</div>
+        <h3 class="empty-state-title">Elige una empresa arriba</h3>
+        <p class="empty-state-desc">Este reporte se calcula sobre los datos sincronizados de una empresa. Selecciónala en la barra superior; si aún no hay datos, podrás sincronizarlos con un clic.</p>
+      </div>`
     return
   }
   cargarInformeCacheado(clienteId, window.ShellState.getRango())
@@ -294,10 +410,10 @@ async function cargarInformeCacheado(clienteId, r) {
       ultimoDato = data
       renderReporte(data)
     } else {
-      $resultado.innerHTML = `<div class="empty-state"><p>Sin datos sincronizados para este cliente y período — presiona "Conectar" en la barra superior.</p></div>`
+      emptySinDatosConCta(`No hay un informe que cubra ${etiquetaRangoMesAnio(r)} para esta empresa.`)
     }
   } catch (err) {
-    $resultado.innerHTML = `<div class="empty-state"><p>Sin datos todavía — presiona "Conectar" en la barra superior.</p></div>`
+    emptySinDatosConCta('Todavía no se ha sincronizado nada para esta empresa.')
   }
 }
 
@@ -308,7 +424,7 @@ async function ejecutarInformeReal(clienteId, r) {
   try {
     const data = await apiPost('/api/informe/generar', {
       cliente_id: Number(clienteId), anio_inicio: r.anioInicio, anio_fin: r.anioFin,
-      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'resumen',
+      mes_inicio: r.mesInicio, mes_fin: r.mesFin, modo: 'detalle',
     })
     iniciarPolling(
       () => apiGet(`/api/informe/${data.informe_id}/estado`),
@@ -504,6 +620,7 @@ function bannerErroresHtml(errores) {
 }
 
 function renderReporte(data) {
+  renderChips(data)
   const bannerErrores = bannerErroresHtml(calcularErroresParciales(data, reporte))
 
   if (reporte.esKpi) return renderKpis(data, bannerErrores)
@@ -513,6 +630,13 @@ function renderReporte(data) {
   if (reporte.esLibroRango) return renderLibroRango(data, reporte, bannerErrores)
   if (reporte.esDesgloseGestion) return renderDesgloseGestion(data, reporte, bannerErrores)
   if (reporte.esInformeGestion) return renderInformeGestion(data, bannerErrores)
+  // Vistas del Centro Tributario — módulos aparte para no inflar reportes.js
+  if (window.Tributario && (reporte.esValidadorIva || reporte.esCalculadoraPpm || reporte.esCalendario || reporte.esPendientes || reporte.esObservaciones)) {
+    return window.Tributario.render(reporte, data, bannerErrores)
+  }
+  if (window.Herramientas && (reporte.esDuplicadas || reporte.esComparadorF29 || reporte.esIntereses || reporte.esChecklist || reporte.esCobranza || reporte.esConversorDte)) {
+    return window.Herramientas.render(reporte, data, bannerErrores)
+  }
 
   const filasCompletas = reporte.filas(data)
   const tieneFiltros = reporte.filtroTexto || reporte.filtroMonto || reporte.filtroEstado
@@ -520,19 +644,26 @@ function renderReporte(data) {
   $resultado.innerHTML = `
     ${bannerErrores}
     ${tieneFiltros ? '<div id="reporte-filtros"></div>' : ''}
-    <div class="reporte-actions">
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv">⬇ CSV</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">⬇ Excel</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-pdf">⬇ PDF</button>
-    </div>
+    ${botonesExportHtml()}
     ${reporte.chart ? `<div class="dash-card"><div class="chart-wrap"><canvas id="reporte-chart"></canvas></div></div>` : ''}
     <div id="reporte-tabla"></div>`
 
   let filasActuales = filasCompletas
 
+  function actualizarExport() {
+    registrarExport({
+      columnas: reporte.columnas,
+      filas: filasActuales,
+      titulo: reporte.titulo,
+      data,
+      esDetalleDocumentos: false,
+    })
+  }
+
   function repintar() {
     renderTabla(document.getElementById('reporte-tabla'), reporte.columnas, filasActuales, { vacio: 'Sin datos con estos filtros' })
     if (reporte.chart) dibujarChart(reporte.chart, filasActuales)
+    actualizarExport()
   }
 
   if (tieneFiltros) {
@@ -543,14 +674,7 @@ function renderReporte(data) {
   }
 
   repintar()
-
-  document.getElementById('btn-export-csv').addEventListener('click', () => exportarCSV(reporte.columnas, filasActuales, tipo))
-  document.getElementById('btn-export-excel').addEventListener('click', () => {
-    try { exportarExcel(reporte.columnas, filasActuales, tipo) } catch (err) { showToast(err.message, 'error') }
-  })
-  document.getElementById('btn-export-pdf').addEventListener('click', () => {
-    try { exportarPDF(reporte.columnas, filasActuales, tipo, reporte.titulo) } catch (err) { showToast(err.message, 'error') }
-  })
+  enlazarBotonesExport()
 }
 
 // Libro Compra/Venta como reporte de RANGO: documento a documento, a través
@@ -571,11 +695,7 @@ function renderLibroRango(data, reporte, bannerErrores) {
 
   $resultado.innerHTML = `
     ${bannerErrores}
-    <div class="reporte-actions">
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv">⬇ CSV</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">⬇ Excel</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-pdf">⬇ PDF</button>
-    </div>
+    ${botonesExportHtml()}
     <div class="kpi-grid" style="margin-bottom:1.5rem">
       <div class="kpi-card"><div class="kpi-label">Documentos</div><div class="kpi-valor">${docs.length}</div></div>
       <div class="kpi-card"><div class="kpi-label">Exento</div><div class="kpi-valor">${fmt(totalExento)}</div></div>
@@ -586,20 +706,10 @@ function renderLibroRango(data, reporte, bannerErrores) {
     <div id="reporte-grid"></div>`
 
   const columnas = [
-    { key: 'periodo', label: 'Mes', congelar: true, format: (v) => periodoDisplay(v) },
-    { key: 'folio', label: 'Folio' },
-    { key: 'tipoDoc', label: 'Tipo', format: (v) => nombreTipoDoc(v) },
-    { key: 'rutDoc', label: 'RUT', format: (v) => formatRut(v) },
-    { key: 'razonSocial', label: 'Razón Social' },
-    { key: 'montoExento', label: 'Exento', align: 'right', format: fmt },
-    { key: 'montoNeto', label: 'Neto', align: 'right', format: fmt },
-    { key: 'montoIVA', label: 'IVA', align: 'right', format: fmt },
-    { key: 'montoTotal', label: 'Total', align: 'right', format: fmt },
+    ...columnasDocumento({ conPeriodo: true, conReclamo: esVentas }),
+    ...columnasGestion,
   ]
-  if (esVentas) columnas.push({ key: 'fechaReclamo', label: 'Fecha Reclamo', format: (v) => v || '—' })
-  columnas.push(...columnasGestion)
-
-  const columnasExport = columnas.map(({ key, label }) => ({ key, label }))
+  const columnasExport = columnas.map(({ key, label, exportFormat }) => ({ key, label, exportFormat }))
 
   renderDataGrid(document.getElementById('reporte-grid'), {
     columnas,
@@ -631,13 +741,14 @@ function renderLibroRango(data, reporte, bannerErrores) {
     ],
   })
 
-  document.getElementById('btn-export-csv').addEventListener('click', () => exportarCSV(columnasExport, docs, tipo))
-  document.getElementById('btn-export-excel').addEventListener('click', () => {
-    try { exportarExcel(columnasExport, docs, tipo) } catch (err) { showToast(err.message, 'error') }
+  registrarExport({
+    columnas: columnasExport,
+    filas: docs,
+    titulo: reporte.titulo,
+    data,
+    esDetalleDocumentos: true,
   })
-  document.getElementById('btn-export-pdf').addEventListener('click', () => {
-    try { exportarPDF(columnasExport, docs, tipo, reporte.titulo) } catch (err) { showToast(err.message, 'error') }
-  })
+  enlazarBotonesExport()
 }
 
 // Desglose de Gestión: a diferencia del Libro (documento a documento), esto
@@ -677,31 +788,30 @@ function renderDesgloseGestion(data, reporte, bannerErrores) {
 
   $resultado.innerHTML = `
     ${bannerErrores}
-    ${filas.length === 0 ? '' : `
-    <div class="reporte-actions">
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-csv">⬇ CSV</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-excel">⬇ Excel</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-export-pdf">⬇ PDF</button>
-    </div>`}
+    ${filas.length === 0 ? '' : botonesExportHtml()}
     <div id="reporte-tabla"></div>`
 
   renderTabla(document.getElementById('reporte-tabla'), columnas, filas, { vacio: 'Sin documentos en este rango' })
 
   if (filas.length === 0) return
 
-  document.getElementById('btn-export-csv').addEventListener('click', () => exportarCSV(columnas, filas, tipo))
-  document.getElementById('btn-export-excel').addEventListener('click', () => {
-    try { exportarExcel(columnas, filas, tipo) } catch (err) { showToast(err.message, 'error') }
+  registrarExport({
+    columnas,
+    filas,
+    titulo: reporte.titulo,
+    data: reporte.tipoLibro === 'compras'
+      ? { documentos_compras: crudos, documentos_ventas: [] }
+      : { documentos_compras: [], documentos_ventas: crudos },
+    esDetalleDocumentos: false,
   })
-  document.getElementById('btn-export-pdf').addEventListener('click', () => {
-    try { exportarPDF(columnas, filas, tipo, reporte.titulo) } catch (err) { showToast(err.message, 'error') }
-  })
+  enlazarBotonesExport()
 }
 
 function renderKpis(data, bannerErrores = '') {
   const r = data.resumen
   $resultado.innerHTML = `
     ${bannerErrores}
+    ${botonesExportHtml()}
     <section class="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Ventas Netas</div><div class="kpi-valor" style="color:var(--accent)">${fmt(r.ventas_neto)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Compras Netas</div><div class="kpi-valor">${fmt(r.compras_neto)}</div></div>
@@ -711,6 +821,14 @@ function renderKpis(data, bannerErrores = '') {
       <div class="kpi-card"><div class="kpi-label">Crédito Fiscal</div><div class="kpi-valor">${fmt(r.credito_fiscal)}</div></div>
       <div class="kpi-card"><div class="kpi-label">IVA a Pagar / Remanente</div><div class="kpi-valor" style="color:var(--warning)">${fmt(r.iva_pagar)}</div></div>
     </section>`
+  registrarExport({
+    columnas: columnasDocumento({ conLibro: true, conPeriodo: true, conReclamo: true }),
+    filas: documentosDeInforme(data),
+    titulo: 'KPIs — Documentos',
+    data,
+    esDetalleDocumentos: true,
+  })
+  enlazarBotonesExport()
 }
 
 // Detección automática de inconsistencias a partir de los mismos datos que ya
@@ -816,7 +934,26 @@ function renderAlertas(data) {
       </table>
     </details>`
 
-  $resultado.innerHTML = listaHtml + tablaReclamadasHtml
+  $resultado.innerHTML = botonesExportHtml() + listaHtml + tablaReclamadasHtml
+
+  const columnasReclamadas = [
+    { key: 'mes_nombre', label: 'Mes', exportFormat: (v, fila) => `${v || ''} ${fila.anio || ''}`.trim() },
+    { key: 'fechaDocto', label: 'Fecha', exportFormat: (v) => v || '' },
+    { key: 'razonSocial', label: 'Cliente' },
+    { key: 'folio', label: 'N° Factura' },
+    { key: 'montoNeto', label: 'Neto' },
+    { key: 'montoIVA', label: 'IVA' },
+    { key: 'montoTotal', label: 'Total' },
+    { key: 'fechaReclamo', label: 'Fecha Reclamo', exportFormat: (v) => v || '' },
+  ]
+  registrarExport({
+    columnas: columnasReclamadas,
+    filas: reclamadas,
+    titulo: 'Alertas',
+    data,
+    esDetalleDocumentos: false,
+  })
+  enlazarBotonesExport()
 }
 
 function renderInfoExportaciones() {
@@ -931,11 +1068,13 @@ function seleccionarReporte(nuevoTipo) {
   if (!CATALOGO[nuevoTipo]) return
   tipo = nuevoTipo
   reporte = CATALOGO[tipo]
+  exportActual = null
 
   document.title = `${reporte.titulo} — IVA Mensual`
   $titulo.textContent = reporte.titulo
   $progress.hidden = true
   $resultado.innerHTML = ''
+  if ($chips) $chips.hidden = true // se repintan con datos frescos en renderReporte
 
   if (reporte.esInfo) {
     $controles.innerHTML = ''
@@ -1068,12 +1207,28 @@ function renderInformeGestion(data, bannerErrores = '') {
       </p>
     </section>
     <div class="informe-actions">
+      ${botonesExportHtml()}
       <button type="button" class="btn btn-primary" id="btn-print-informe"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5"/><path d="M18 18h2a2 2 0 0 0 2-2v-5"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimir / PDF</button>
       <button type="button" class="btn btn-secondary" id="btn-export-pdf-informe"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Exportar PDF (jsPDF)</button>
     </div>`
 
   $resultado.innerHTML = html
   $resultado.hidden = false
+
+  registrarExport({
+    columnas: [
+      { key: 'mes_nombre', label: 'Mes', exportFormat: (v, fila) => `${v || ''} ${fila.anio || ''}`.trim() },
+      { key: 'ventas_neto', label: 'Ventas Netas' },
+      { key: 'compras_neto', label: 'Compras Netas' },
+      { key: 'margen', label: 'Margen Bruto' },
+      { key: 'pct_margen', label: '% Margen' },
+    ],
+    filas: meses.filter((m) => m.estado === 'ok'),
+    titulo: 'Informe de Gestión',
+    data,
+    esDetalleDocumentos: false,
+  })
+  enlazarBotonesExport()
 
   // Botón imprimir (usa estilos @media print del CSS)
   document.getElementById('btn-print-informe').addEventListener('click', () => window.print())
@@ -1264,6 +1419,27 @@ async function exportarInformeGestionPDF(data) {
     const splitNota = doc.splitTextToSize(notaText, pageW - 2 * margin)
     doc.text(splitNota, margin, y)
 
+    const docs = documentosDeInforme(data)
+    if (docs.length) {
+      doc.addPage('a4', 'landscape')
+      const colsDocs = columnasDocumento({ conLibro: true, conPeriodo: true, conReclamo: true })
+      const { headers, rows } = _filasParaExport(colsDocs, docs)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(15, 23, 42)
+      doc.text('Documentos (con fecha)', 14, 16)
+      doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: 22,
+        styles: { fontSize: 7, overflow: 'linebreak', cellPadding: 1.2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+        columnStyles: _estilosColumnaFecha(headers),
+        horizontalPageBreak: true,
+        showHead: 'everyPage',
+      })
+    }
+
     // Guardar
     const fileName = `Informe_Gestion_${cliente.rut.replace(/[.-]/g, '')}_${periodoLabel.replace(/\s/g, '_')}.pdf`
     doc.save(fileName)
@@ -1278,4 +1454,6 @@ window.ReportesEngine = {
   CATALOGO,
   mostrarReporte: seleccionarReporte,
   ejecutarInformeReal,
+  exportar: dispararExport,
+  limpiarExport: () => { exportActual = null },
 }

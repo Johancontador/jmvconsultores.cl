@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Sintaxis (node --check en backend y frontend JS)
+        run: |
+          find backend -name "*.js" -exec node --check {} \;
+          find frontend/js frontend/shared -name "*.js" -exec node --check {} \;
+
+      - name: Tests (node:test)
+        run: |
+          node --test test/calculos.test.js test/db-schema.test.js test/export-fecha.test.js test/informe-listar.test.js
+
+  seguridad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks — escaneo de secretos en el historial
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verificar que .env no está en el repo
+        run: |
+          if git ls-files | grep -E "^\.env$|^data/|^.*\.db$"; then
+            echo "❌ Archivos sensibles trackeados en git"
+            exit 1
+          else
+            echo "✅ Sin archivos sensibles trackeados"
+          fi

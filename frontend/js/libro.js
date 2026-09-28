@@ -63,20 +63,24 @@ function descargarResumenCSV(libro) {
 }
 
 function descargarDetalleCSV(libro) {
-  const conFechaReclamo = libro.tipo === 'ventas'
-  const encabezado = ['Folio', 'Tipo Doc', 'RUT', 'Razón Social', 'Fecha Documento', 'Monto Exento', 'Monto Neto', 'Monto IVA', 'Monto Total']
-  if (conFechaReclamo) encabezado.push('Fecha Reclamo')
+  exportarCSV(columnasDetalleLibro(libro), libro.detalle.map(conSignoNC), `detalle_${libro.tipo}_${libro.periodo}_${libro.cliente.rut}`)
+}
 
-  const filas = [
-    encabezado,
-    // NC en negativo — sumar la columna en Excel ya da el neto real.
-    ...libro.detalle.map(conSignoNC).map(d => {
-      const fila = [d.folio, d.tipoDoc, d.rutDoc, d.razonSocial, d.fechaDocto || '', d.montoExento || 0, d.montoNeto, d.montoIVA, d.montoTotal]
-      if (conFechaReclamo) fila.push(d.fechaReclamo || '')
-      return fila
-    }),
-  ]
-  csvDescargable(filas, `detalle_${libro.tipo}_${libro.periodo}_${libro.cliente.rut}.csv`)
+function descargarDetalleExcel(libro) {
+  exportarExcel(columnasDetalleLibro(libro), libro.detalle.map(conSignoNC), `detalle_${libro.tipo}_${libro.periodo}_${libro.cliente.rut}`, 'Documentos')
+}
+
+function descargarDetallePDF(libro) {
+  exportarPDF(
+    columnasDetalleLibro(libro),
+    libro.detalle.map(conSignoNC),
+    `detalle_${libro.tipo}_${libro.periodo}_${libro.cliente.rut}`,
+    `${libro.tipo === 'compras' ? 'Libro Compra' : 'Libro Venta'} — ${periodoDisplay(libro.periodo)}`,
+  )
+}
+
+function columnasDetalleLibro(libro) {
+  return columnasDocumento({ conPeriodo: false, conReclamo: libro.tipo === 'ventas' })
 }
 
 function renderAlertaReclamadas(libro) {
@@ -143,6 +147,8 @@ function renderLibro(libro) {
         <div class="libro-block-actions">
           <button type="button" class="btn btn-secondary btn-sm btn-descargar-resumen" data-tipo="${libro.tipo}">⬇ Resumen CSV</button>
           <button type="button" class="btn btn-secondary btn-sm btn-descargar-detalle" data-tipo="${libro.tipo}">⬇ Detalle CSV</button>
+          <button type="button" class="btn btn-secondary btn-sm btn-descargar-detalle-excel" data-tipo="${libro.tipo}">⬇ Detalle Excel</button>
+          <button type="button" class="btn btn-secondary btn-sm btn-descargar-detalle-pdf" data-tipo="${libro.tipo}">⬇ Detalle PDF</button>
         </div>
       </div>
 
@@ -199,16 +205,9 @@ function montarGridDetalle(tipo) {
   const detalleOriginal = detalleConSigno // salva la lista base para resetear filtros
 
   const gridControl = renderDataGrid(contenedor, {
-    columnas: [
-      { key: 'folio', label: 'Folio', congelar: true },
-      { key: 'tipoDoc', label: 'Tipo', format: (v) => nombreTipoDoc(v) },
-      { key: 'rutDoc', label: 'RUT' },
-      { key: 'razonSocial', label: 'Razón Social' },
-      { key: 'montoExento', label: 'Exento', align: 'right', format: fmt },
-      { key: 'montoNeto', label: 'Neto', align: 'right', format: fmt },
-      { key: 'montoIVA', label: 'IVA', align: 'right', format: fmt },
-      { key: 'montoTotal', label: 'Total', align: 'right', format: fmt },
-    ],
+    columnas: columnasDocumento({ conPeriodo: false, conReclamo: tipo === 'ventas' }).map((c, i) => (
+      i === 0 ? { ...c, congelar: true } : c
+    )),
     filas: detalleConSigno,
     agrupar: { key: 'tipoDoc', label: 'tipo de documento' },
     nombreGrupo: (v) => nombreTipoDoc(v),
@@ -234,16 +233,13 @@ function montarGridDetalle(tipo) {
       { label: '👁 Ver detalle', accion: () => mostrarModalDetalle(`Documento ${fila.folio}`, [
         ['Folio', fila.folio], ['Tipo de documento', nombreTipoDoc(fila.tipoDoc)],
         ['RUT contraparte', formatRut(fila.rutDoc)], ['Razón social', fila.razonSocial],
+        ['Fecha documento', fila.fechaDocto || '—'],
         ['Monto neto', fmt(fila.montoNeto)], ['Monto IVA', fmt(fila.montoIVA)], ['Monto total', fmt(fila.montoTotal)],
       ]) },
       { label: '📋 Copiar RUT', accion: () => copiarAlPortapapeles(fila.rutDoc, 'RUT copiado') },
       { label: '📋 Copiar Folio', accion: () => copiarAlPortapapeles(fila.folio, 'Folio copiado') },
       { label: '⬇ Exportar esta fila', accion: () => exportarCSV(
-        [
-          { key: 'folio', label: 'Folio' }, { key: 'tipoDoc', label: 'Tipo Doc' },
-          { key: 'rutDoc', label: 'RUT' }, { key: 'razonSocial', label: 'Razón Social' },
-          { key: 'montoNeto', label: 'Neto' }, { key: 'montoIVA', label: 'IVA' }, { key: 'montoTotal', label: 'Total' },
-        ],
+        columnasDocumento({ conPeriodo: false, conReclamo: tipo === 'ventas' }),
         [fila], `documento_${fila.folio}`
       ) },
     ],
@@ -325,7 +321,19 @@ function activarBotonesResultado() {
     btn.addEventListener('click', () => descargarResumenCSV(librosCargados[btn.dataset.tipo]))
   })
   $result.querySelectorAll('.btn-descargar-detalle').forEach(btn => {
-    btn.addEventListener('click', () => descargarDetalleCSV(librosCargados[btn.dataset.tipo]))
+    btn.addEventListener('click', () => {
+      try { descargarDetalleCSV(librosCargados[btn.dataset.tipo]) } catch (err) { showToast(err.message, 'error') }
+    })
+  })
+  $result.querySelectorAll('.btn-descargar-detalle-excel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      try { descargarDetalleExcel(librosCargados[btn.dataset.tipo]) } catch (err) { showToast(err.message, 'error') }
+    })
+  })
+  $result.querySelectorAll('.btn-descargar-detalle-pdf').forEach(btn => {
+    btn.addEventListener('click', () => {
+      try { descargarDetallePDF(librosCargados[btn.dataset.tipo]) } catch (err) { showToast(err.message, 'error') }
+    })
   })
 }
 

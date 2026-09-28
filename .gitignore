@@ -1,9 +1,30 @@
+# Dependencias
 node_modules/
+
+# Datos locales (BD SQLite con claves SII de clientes — JAMÁS subir)
 data/
+*.db
+*.db-wal
+*.db-shm
+
+# Entorno y secretos
 .env
+.env.*
+!.env.example
+
+# Certificados TLS locales (autofirmados del nginx del VPS)
+nginx/certs/
+
+# Logs y temporales
 *.log
 tmp-*.json
+cookies*.txt
+
+# SO / editor
 .DS_Store
+Thumbs.db
+
+# Worktrees de herramientas de IA
 .claude/worktrees/
 .superpowers/
-nginx/certs/
+.freebuff/

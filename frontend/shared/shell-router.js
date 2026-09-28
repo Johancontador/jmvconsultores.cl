@@ -17,6 +17,7 @@ const ShellRouter = (() => {
     window.LayoutSidebar.render(null)
     _actualizarVisibilidadHeader(null)
     window.DashboardBI.mostrar()
+    window.ReportesEngine?.limpiarExport?.()
   }
 
   // "IVA por Cliente" (fuente: proceso) no depende del cliente/rango del

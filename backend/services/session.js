@@ -1,7 +1,9 @@
 const crypto = require('crypto')
 const db = require('../db')
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 días
+// TTL de sesión configurable (30 días por defecto, antes era fijo). Para
+// exposición pública vía Cloudflare/nginx se recomienda SESSION_DIAS=7.
+const SESSION_TTL_MS = Number(process.env.SESSION_DIAS || 30) * 24 * 60 * 60 * 1000
 
 function crearSesion(userId) {
   const id = crypto.randomBytes(32).toString('hex')

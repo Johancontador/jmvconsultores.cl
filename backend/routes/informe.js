@@ -106,6 +106,7 @@ router.get('/', (req, res) => {
     // Parse resumen_json for display
     const data = informes.map(i => ({
       id: i.id,
+      cliente_id: i.cliente_id,
       cliente_nombre: i.cliente_nombre,
       cliente_rut: i.cliente_rut,
       anio_inicio: i.anio_inicio,

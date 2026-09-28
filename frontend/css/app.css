@@ -1368,3 +1368,60 @@ body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
    puede alcanzar a pintarse más ancho que su tarjeta en el primer frame. */
 .chart-wrap { position: relative; width: 100%; }
 .chart-wrap canvas { max-width: 100%; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   30. PRESETS DE PERÍODO, CHIPS DE CONTEXTO Y ONBOARDING
+   ───────────────────────────────────────────────────────────────────────────── */
+.filtro-presets { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.filtro-preset {
+  padding: var(--space-1) var(--space-3); font-size: var(--fs-xs); font-weight: var(--fw-medium);
+  color: var(--fg-secondary); background: var(--bg-elevated);
+  border: 1px solid var(--border-default); border-radius: var(--radius-full);
+  cursor: pointer; white-space: nowrap;
+  transition: color var(--dur-fast), background var(--dur-fast), border-color var(--dur-fast);
+}
+.filtro-preset:hover { color: var(--fg-primary); border-color: var(--border-strong); }
+.filtro-preset.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.reporte-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0 var(--space-5); }
+.reporte-chips[hidden] { display: none; }
+.reporte-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: var(--fw-medium); white-space: nowrap;
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle); color: var(--fg-secondary);
+}
+
+.empty-state-cta { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
+.empty-state-cta[hidden] { display: none; }
+.empty-state-hint { font-size: var(--fs-xs); color: var(--fg-muted); max-width: 340px; margin: 0; }
+
+/* Centro Tributario: badges de vencimiento del calendario */
+.cal-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px var(--space-2); border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.cal-vencido { background: var(--danger-soft); color: var(--danger); }
+.cal-proximo { background: var(--warning-soft); color: var(--warning); }
+.cal-ok { background: var(--success-soft); color: var(--success); }
+
+/* Portafolio multi-cliente (landing del contador) */
+.porta-cliente { cursor: pointer; transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast), box-shadow var(--dur-fast); }
+.porta-cliente:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.porta-cliente-nombre { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.porta-cliente-sub { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: var(--space-2); }
+.porta-mini-kpis { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--fs-xs); color: var(--fg-secondary); }
+.porta-mini-kpis strong { color: var(--fg-primary); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.porta-acciones { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+/* Checklist de cierre mensual */
+.checklist { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.checklist-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); cursor: pointer; transition: background var(--dur-fast), border-color var(--dur-fast); }
+.checklist-item:hover { background: var(--bg-hover); border-color: var(--border-default); }
+.checklist-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.checklist-item input:checked + span { text-decoration: line-through; color: var(--fg-muted); }
+
+/* Dropzone del conversor DTE */
+.dte-drop { border: 2px dashed var(--border-default); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast); margin-top: var(--space-4); }
+.dte-drop:hover, .dte-drop.drag { border-color: var(--accent); background: var(--accent-soft); }
