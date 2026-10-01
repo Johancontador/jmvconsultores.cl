@@ -14,6 +14,7 @@
  */
 
 const { cifrar } = require('./boveda')
+const { PLANTILLA, clasificar } = require('./plan-cuentas-plantilla')
 
 function migracionesFase1(db) {
   db.exec(`
@@ -139,4 +140,101 @@ function migracionesFase1(db) {
   }
 }
 
-module.exports = { migracionesFase1 }
+/**
+ * FASE 2 — Núcleo contable: plan de cuentas, centros de costo, asientos.
+ * Idempotente; precarga la plantilla PUC en toda empresa que aún no tenga cuentas.
+ */
+function migracionesFase2(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS centros_costo (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      codigo TEXT NOT NULL,
+      nombre TEXT NOT NULL,
+      activo INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(empresa_id, codigo)
+    );
+
+    CREATE TABLE IF NOT EXISTS cuentas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      codigo TEXT NOT NULL,
+      nombre TEXT NOT NULL,
+      clase INTEGER NOT NULL,
+      naturaleza TEXT NOT NULL,
+      es_resumen INTEGER NOT NULL DEFAULT 0,
+      cierre TEXT NOT NULL DEFAULT 'balance',
+      alias TEXT,
+      activa INTEGER NOT NULL DEFAULT 1,
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, codigo)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cuentas_alias ON cuentas(empresa_id, alias) WHERE alias IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_cuentas_empresa ON cuentas(empresa_id);
+
+    CREATE TABLE IF NOT EXISTS asientos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      folio INTEGER NOT NULL,
+      anio INTEGER NOT NULL,
+      fecha TEXT NOT NULL,
+      periodo TEXT NOT NULL,
+      tipo TEXT NOT NULL DEFAULT 'manual',
+      glosa TEXT NOT NULL,
+      usuario_id INTEGER NOT NULL REFERENCES users(id),
+      asiento_revertido_id INTEGER REFERENCES asientos(id),
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, anio, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asientos_empresa_periodo ON asientos(empresa_id, periodo);
+
+    CREATE TABLE IF NOT EXISTS asiento_lineas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      asiento_id INTEGER NOT NULL REFERENCES asientos(id),
+      cuenta_id INTEGER NOT NULL REFERENCES cuentas(id),
+      debe INTEGER NOT NULL DEFAULT 0,
+      haber INTEGER NOT NULL DEFAULT 0,
+      centro_costo_id INTEGER REFERENCES centros_costo(id),
+      glosa TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_lineas_asiento ON asiento_lineas(asiento_id);
+    CREATE INDEX IF NOT EXISTS idx_lineas_empresa_cuenta ON asiento_lineas(empresa_id, cuenta_id);
+  `)
+
+  // Precarga de la plantilla PUC para toda empresa activa sin plan (idempotente)
+  const sinPlan = db.prepare(`
+    SELECT e.id FROM empresas e
+    WHERE e.activo = 1 AND NOT EXISTS (SELECT 1 FROM cuentas c WHERE c.empresa_id = e.id)
+  `).all()
+  if (sinPlan.length) {
+    const insertar = db.prepare(`
+      INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    for (const { id: empresaId } of sinPlan) {
+      seedPlanCuentas(db, empresaId, insertar)
+    }
+  }
+}
+
+/** Inserta la plantilla PUC para una empresa (asume que no tiene cuentas aún). */
+function seedPlanCuentas(db, empresaId, stmtInsertar = null) {
+  const insertar = stmtInsertar || db.prepare(`
+    INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const tx = db.transaction(() => {
+    for (const item of PLANTILLA) {
+      const { clase, naturaleza, cierre } = clasificar(item.codigo)
+      insertar.run(
+        empresaId, item.codigo, item.nombre, clase, naturaleza,
+        item.esResumen ? 1 : 0, cierre, item.alias || null
+      )
+    }
+  })
+  tx()
+  return PLANTILLA.length
+}
+
+module.exports = { migracionesFase1, migracionesFase2, seedPlanCuentas }

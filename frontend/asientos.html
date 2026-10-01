@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asientos y Mayor — IVA Mensual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem }
+    .tab-btn { padding:.5rem 1rem; border:1px solid var(--border,#ddd); border-radius:8px; background:transparent; cursor:pointer; font-weight:600 }
+    .tab-btn.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb) }
+    .linea-row { display:grid; grid-template-columns: 2.2fr 1fr 1fr 1.2fr 2fr auto; gap:.4rem; align-items:end; margin-bottom:.4rem }
+    @media (max-width: 900px) { .linea-row { grid-template-columns: 1fr 1fr; } }
+    .sumas { display:flex; gap:1.2rem; align-items:center; font-weight:600; margin:.6rem 0 }
+    .cuadra { color:#15803d } .descuadre { color:#b91c1c }
+    .badge-tipo { font-size:.72rem; padding:.15rem .5rem; border-radius:6px; background:#e5e7eb; }
+    .badge-tipo.reversion { background:#fee2e2; color:#b91c1c }
+    .badge-tipo.manual { background:#dbeafe; color:#1d4ed8 }
+    .seccion-fila { background:#f8fafc; font-weight:700 }
+    td.num, th.num { text-align:right; font-variant-numeric: tabular-nums }
+  </style>
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container" id="root" hidden>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">📒 Asientos y Mayor</h1>
+        <p class="page-subtitle">Núcleo contable — partida doble, diario, mayor y plan de cuentas</p>
+      </div>
+      <select id="select-empresa" class="form-select" style="min-width:240px"></select>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab-btn active" data-tab="asientos">✍️ Asientos</button>
+      <button type="button" class="tab-btn" data-tab="diario">📖 Diario</button>
+      <button type="button" class="tab-btn" data-tab="mayor">🧮 Mayor</button>
+      <button type="button" class="tab-btn" data-tab="plan">🗂️ Plan de Cuentas</button>
+    </div>
+
+    <!-- ===== ASIENTOS ===== -->
+    <section id="tab-asientos">
+      <div class="informe-controls" id="sec-nuevo-asiento" hidden>
+        <div class="section-header"><div>
+          <h2 class="section-title">Nuevo asiento</h2>
+          <p class="page-subtitle">Partida doble validada en vivo — los montos son en pesos (enteros).</p>
+        </div></div>
+        <form id="form-asiento" class="form-row">
+          <div class="form-group"><label class="form-label" for="a-fecha">Fecha</label>
+            <input type="date" id="a-fecha" class="form-input" required></div>
+          <div class="form-group" style="flex:2"><label class="form-label" for="a-glosa">Glosa</label>
+            <input type="text" id="a-glosa" class="form-input" placeholder="Ej: Factura compra oficina" required></div>
+        </form>
+        <div id="lineas"></div>
+        <div class="sumas">
+          <span>Σ Debe: <span id="sum-debe">$0</span></span>
+          <span>Σ Haber: <span id="sum-haber">$0</span></span>
+          <span id="badge-cuadra" class="cuadra">—</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-add-linea">+ Línea</button>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-guardar-asiento">Registrar asiento</button>
+      </div>
+
+      <div class="informe-controls">
+        <div class="section-header"><div><h2 class="section-title">Últimos asientos</h2></div></div>
+        <table class="table">
+          <thead><tr><th>Folio</th><th>Fecha</th><th>Tipo</th><th>Glosa</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody id="tabla-asientos-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== DIARIO ===== -->
+    <section id="tab-diario" hidden>
+      <div class="informe-controls">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="d-periodo">Período (AAAAMM)</label>
+            <input type="text" id="d-periodo" class="form-input" placeholder="202610"></div>
+          <div class="form-group"><label class="form-label" for="d-cuenta">Cuenta</label>
+            <select id="d-cuenta" class="form-select"><option value="">Todas</option></select></div>
+          <div class="form-group"><label class="form-label" for="d-texto">Texto en glosa</label>
+            <input type="text" id="d-texto" class="form-input"></div>
+          <div class="form-group"><button type="button" class="btn btn-secondary" id="btn-diario">Consultar</button></div>
+        </div>
+        <div id="diario-resumen" class="text-muted"></div>
+        <table class="table" id="tabla-diario">
+          <thead><tr><th>Fecha</th><th>Folio</th><th>Glosa</th><th>Cuenta</th><th>CC</th><th class="num">Debe</th><th class="num">Haber</th></tr></thead>
+          <tbody id="tabla-diario-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== MAYOR ===== -->
+    <section id="tab-mayor" hidden>
+      <div class="informe-controls">
+        <div class="form-row">
+          <div class="form-group" style="flex:2"><label class="form-label" for="m-cuenta">Cuenta</label>
+            <select id="m-cuenta" class="form-select"></select></div>
+          <div class="form-group"><label class="form-label" for="m-desde">Desde</label>
+            <input type="date" id="m-desde" class="form-input"></div>
+          <div class="form-group"><label class="form-label" for="m-hasta">Hasta</label>
+            <input type="date" id="m-hasta" class="form-input"></div>
+          <div class="form-group"><button type="button" class="btn btn-secondary" id="btn-mayor">Consultar mayor</button></div>
+        </div>
+        <div id="mayor-resumen"></div>
+        <table class="table">
+          <thead><tr><th>Fecha</th><th>Folio</th><th>Glosa</th><th class="num">Debe</th><th class="num">Haber</th><th class="num">Saldo</th></tr></thead>
+          <tbody id="tabla-mayor-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== PLAN DE CUENTAS ===== -->
+    <section id="tab-plan" hidden>
+      <div class="informe-controls" id="sec-cc" hidden>
+        <div class="section-header"><div><h2 class="section-title">Centros de costo</h2></div></div>
+        <form id="form-cc" class="form-row">
+          <div class="form-group"><label class="form-label" for="cc-codigo">Código</label>
+            <input type="text" id="cc-codigo" class="form-input" placeholder="ADMIN" required></div>
+          <div class="form-group" style="flex:2"><label class="form-label" for="cc-nombre">Nombre</label>
+            <input type="text" id="cc-nombre" class="form-input" placeholder="Administración" required></div>
+          <div class="form-group"><button type="submit" class="btn btn-primary">Crear</button></div>
+        </form>
+        <table class="table"><thead><tr><th>Código</th><th>Nombre</th><th>Estado</th></tr></thead>
+          <tbody id="tabla-cc-body"></tbody></table>
+      </div>
+
+      <div class="informe-controls">
+        <div class="section-header"><div><h2 class="section-title">Plan de cuentas</h2>
+          <p class="page-subtitle">Plantilla PUC precargada. Solo las cuentas imputables reciben movimientos.</p></div></div>
+        <form id="form-cuenta" class="form-row" hidden>
+          <div class="form-group"><label class="form-label" for="cu-codigo">Código</label>
+            <input type="text" id="cu-codigo" class="form-input" placeholder="6.1.2.07" required></div>
+          <div class="form-group" style="flex:2"><label class="form-label" for="cu-nombre">Nombre</label>
+            <input type="text" id="cu-nombre" class="form-input" required></div>
+          <div class="form-group"><label class="form-label" for="cu-alias">Alias (opcional)</label>
+            <input type="text" id="cu-alias" class="form-input" placeholder="MI_ALIAS"></div>
+          <div class="form-group form-check">
+            <input type="checkbox" id="cu-resumen"> <label for="cu-resumen">Es resumen</label>
+          </div>
+          <div class="form-group"><button type="submit" class="btn btn-primary">Crear cuenta</button></div>
+        </form>
+        <table class="table">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Nat.</th><th>Tipo</th><th>Alias</th></tr></thead>
+          <tbody id="tabla-plan-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script>
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+    }
+    function tiene(permisos, cap) { return (permisos || []).includes(cap) }
+    const peso = (n) => '$' + Math.round(n || 0).toLocaleString('es-CL')
+
+    initLayout('contable').then(async () => {
+      let me
+      try { me = (await apiGet('/api/auth/me')).user } catch (err) { return }
+      const acceso = me.acceso_contable
+      if (!acceso || !acceso.empresas || !acceso.empresas.length) {
+        document.getElementById('root').hidden = false
+        document.getElementById('root').innerHTML = '<div class="page-header"><p class="page-subtitle">No tienes empresas asignadas al módulo contable.</p></div>'
+        return
+      }
+
+      const empresas = acceso.empresas
+      const permisosPorId = new Map(empresas.map((e) => [String(e.id), e.permisos || []]))
+      const $sel = document.getElementById('select-empresa')
+      $sel.innerHTML = empresas.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')
+      const guardada = localStorage.getItem('iva_empresa_activa')
+      if (guardada && empresas.some((e) => String(e.id) === guardada)) $sel.value = guardada
+      $sel.addEventListener('change', () => { localStorage.setItem('iva_empresa_activa', $sel.value); cargarTodo() })
+
+      const empresaId = () => $sel.value
+      const permisos = () => permisosPorId.get(empresaId()) || []
+
+      // ---- Tabs ----
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn))
+          for (const t of ['asientos', 'diario', 'mayor', 'plan']) {
+            document.getElementById('tab-' + t).hidden = t !== btn.dataset.tab
+          }
+          if (btn.dataset.tab === 'diario') cargarDiario()
+          if (btn.dataset.tab === 'mayor') cargarMayor()
+          if (btn.dataset.tab === 'plan') cargarPlan()
+        })
+      })
+
+      // ---- Asientos: form de líneas ----
+      let imputables = []
+      let centros = []
+
+      function lineaHtml(idx) {
+        return `<div class="linea-row" data-idx="${idx}">
+          <div><label class="form-label">Cuenta</label>
+            <select class="form-select l-cuenta">${imputables.map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')}</select></div>
+          <div><label class="form-label">Debe</label><input type="number" class="form-input l-debe" min="0" step="1" placeholder="0"></div>
+          <div><label class="form-label">Haber</label><input type="number" class="form-input l-haber" min="0" step="1" placeholder="0"></div>
+          <div><label class="form-label">Centro de costo</label>
+            <select class="form-select l-cc"><option value="">—</option>${centros.filter((c) => c.activo).map((c) => `<option value="${c.id}">${esc(c.codigo)}</option>`).join('')}</select></div>
+          <div><label class="form-label">Glosa línea</label><input type="text" class="form-input l-glosa"></div>
+          <div><button type="button" class="btn btn-sm btn-secondary" data-del="${idx}" title="Quitar línea">✕</button></div>
+        </div>`
+      }
+
+      function agregarLinea() {
+        document.getElementById('lineas').insertAdjacentHTML('beforeend', lineaHtml(document.querySelectorAll('.linea-row').length))
+        refrescar()
+      }
+
+      function sumas() {
+        let debe = 0, haber = 0
+        document.querySelectorAll('.linea-row').forEach((row) => {
+          debe += Number(row.querySelector('.l-debe').value) || 0
+          haber += Number(row.querySelector('.l-haber').value) || 0
+        })
+        return { debe, haber }
+      }
+
+      function refrescar() {
+        const { debe, haber } = sumas()
+        document.getElementById('sum-debe').textContent = peso(debe)
+        document.getElementById('sum-haber').textContent = peso(haber)
+        const badge = document.getElementById('badge-cuadra')
+        if (debe === 0 && haber === 0) { badge.textContent = '—'; badge.className = '' }
+        else if (debe === haber) { badge.textContent = '✓ Cuadra'; badge.className = 'cuadra' }
+        else { badge.textContent = `✗ Descuadre ${peso(Math.abs(debe - haber))}`; badge.className = 'descuadre' }
+      }
+
+      document.getElementById('lineas').addEventListener('input', refrescar)
+      document.getElementById('lineas').addEventListener('click', (e) => {
+        const del = e.target.closest('[data-del]')
+        if (del) {
+          const rows = document.querySelectorAll('.linea-row')
+          if (rows.length <= 2) { showToast('Un asiento necesita al menos 2 líneas', 'error'); return }
+          del.closest('.linea-row').remove()
+          refrescar()
+        }
+      })
+      document.getElementById('btn-add-linea').addEventListener('click', agregarLinea)
+
+      document.getElementById('btn-guardar-asiento').addEventListener('click', async () => {
+        const lineas = []
+        document.querySelectorAll('.linea-row').forEach((row) => {
+          const debe = Number(row.querySelector('.l-debe').value) || 0
+          const haber = Number(row.querySelector('.l-haber').value) || 0
+          if (!debe && !haber) return
+          const l = {
+            cuenta_id: Number(row.querySelector('.l-cuenta').value),
+            debe, haber,
+            glosa: row.querySelector('.l-glosa').value.trim() || null,
+          }
+          const cc = row.querySelector('.l-cc').value
+          if (cc) l.centro_costo_id = Number(cc)
+          lineas.push(l)
+        })
+        if (lineas.length < 2) { showToast('Necesitas al menos 2 líneas con montos', 'error'); return }
+        try {
+          await apiPost(`/api/contable/empresas/${empresaId()}/asientos`, {
+            fecha: document.getElementById('a-fecha').value,
+            glosa: document.getElementById('a-glosa').value.trim(),
+            lineas,
+          })
+          showToast('Asiento registrado ✓')
+          document.getElementById('a-glosa').value = ''
+          document.querySelectorAll('.linea-row').forEach((row) => {
+            row.querySelector('.l-debe').value = ''; row.querySelector('.l-haber').value = ''
+            row.querySelector('.l-glosa').value = ''
+          })
+          refrescar()
+          cargarAsientos()
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      // ---- Cargas ----
+      async function cargarAsientos() {
+        try {
+          const { asientos } = await apiGet(`/api/contable/empresas/${empresaId()}/asientos?limit=20`)
+          const puedeRevertir = tiene(permisos(), 'asientos:revertir')
+          document.getElementById('tabla-asientos-body').innerHTML = (asientos || []).map((a) => {
+            const total = a.lineas.reduce((s, l) => s + l.debe, 0)
+            const revertida = a.lineas.length && a.asiento_revertido_id
+            return `<tr>
+              <td>${a.folio}/${a.anio}</td><td>${esc(a.fecha)}</td>
+              <td><span class="badge-tipo ${esc(a.tipo)}">${esc(a.tipo)}</span></td>
+              <td>${esc(a.glosa)}</td><td class="num">${peso(total)}</td>
+              <td>${puedeRevertir && a.tipo !== 'reversion' && !revertida
+                ? `<button type="button" class="btn btn-sm btn-secondary" data-revertir="${a.id}" data-folio="${a.folio}/${a.anio}">Revertir</button>` : ''}</td>
+            </tr>`
+          }).join('') || '<tr><td colspan="6" class="text-muted">Sin asientos aún.</td></tr>'
+
+          document.querySelectorAll('[data-revertir]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              if (!confirm(`¿Revertir el asiento ${btn.dataset.folio}? Se crea un asiento inverso fechado hoy.`)) return
+              try {
+                await apiPost(`/api/contable/empresas/${empresaId()}/asientos/${btn.dataset.revertir}/revertir`, {})
+                showToast('Asiento revertido (auditado)')
+                cargarAsientos()
+              } catch (err) { showToast(err.message, 'error') }
+            })
+          })
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      async function cargarDiario() {
+        try {
+          const p = new URLSearchParams()
+          if (document.getElementById('d-periodo').value.trim()) p.set('periodo', document.getElementById('d-periodo').value.trim())
+          if (document.getElementById('d-cuenta').value) p.set('cuenta_id', document.getElementById('d-cuenta').value)
+          if (document.getElementById('d-texto').value.trim()) p.set('texto', document.getElementById('d-texto').value.trim())
+          const { total, asientos } = await apiGet(`/api/contable/empresas/${empresaId()}/asientos?${p.toString()}`)
+          document.getElementById('diario-resumen').textContent = `${total} asiento(s)`
+          const filas = []
+          for (const a of asientos) {
+            for (const l of a.lineas) {
+              filas.push(`<tr>
+                <td>${esc(a.fecha)}</td><td>${a.folio}/${a.anio}</td><td>${esc(a.glosa)}</td>
+                <td>${esc(l.cuenta_codigo)} ${esc(l.cuenta_nombre)}</td>
+                <td>${esc(l.cc_codigo || '—')}</td>
+                <td class="num">${l.debe ? peso(l.debe) : ''}</td>
+                <td class="num">${l.haber ? peso(l.haber) : ''}</td></tr>`)
+            }
+          }
+          document.getElementById('tabla-diario-body').innerHTML = filas.join('') || '<tr><td colspan="7" class="text-muted">Sin resultados.</td></tr>'
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      async function cargarMayor() {
+        const cuentaId = document.getElementById('m-cuenta').value
+        if (!cuentaId) return
+        try {
+          const p = new URLSearchParams({ cuenta_id: cuentaId })
+          if (document.getElementById('m-desde').value) p.set('desde', document.getElementById('m-desde').value)
+          if (document.getElementById('m-hasta').value) p.set('hasta', document.getElementById('m-hasta').value)
+          const m = await apiGet(`/api/contable/empresas/${empresaId()}/mayor?${p.toString()}`)
+          document.getElementById('mayor-resumen').innerHTML = `
+            <strong>${esc(m.cuenta.codigo)} ${esc(m.cuenta.nombre)}</strong> ·
+            Debe ${peso(m.debe)} · Haber ${peso(m.haber)} ·
+            <strong>Saldo ${peso(m.saldo)}</strong> (${esc(m.cuenta.naturaleza)})`
+          document.getElementById('tabla-mayor-body').innerHTML = m.movimientos.map((mv) => `
+            <tr><td>${esc(mv.fecha)}</td><td>${mv.folio}/${mv.anio}</td>
+            <td>${esc(mv.linea_glosa || mv.asiento_glosa)}</td>
+            <td class="num">${mv.debe ? peso(mv.debe) : ''}</td>
+            <td class="num">${mv.haber ? peso(mv.haber) : ''}</td>
+            <td class="num">${peso(mv.saldo)}</td></tr>`).join('') || '<tr><td colspan="6" class="text-muted">Sin movimientos.</td></tr>'
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      async function cargarPlan() {
+        const p = permisos()
+        document.getElementById('form-cuenta').hidden = !tiene(p, 'cuentas:editar')
+        document.getElementById('sec-cc').hidden = !tiene(p, 'cuentas:ver')
+        try {
+          const [{ cuentas: plan }, { centros }] = await Promise.all([
+            apiGet(`/api/contable/empresas/${empresaId()}/cuentas`),
+            apiGet(`/api/contable/empresas/${empresaId()}/centros-costo`),
+          ])
+          imputables = plan.filter((c) => c.activa && !c.es_resumen)
+          centros = centros || []
+
+          document.getElementById('tabla-plan-body').innerHTML = plan.map((c) => `
+            <tr${c.es_resumen ? ' class="seccion-fila"' : ''}>
+              <td>${esc(c.codigo)}</td><td>${esc(c.nombre)}</td>
+              <td>${esc(c.naturaleza)}</td>
+              <td>${c.es_resumen ? 'Resumen' : (c.activa ? 'Imputable' : 'Inactiva')}</td>
+              <td>${esc(c.alias || '')}</td></tr>`).join('')
+
+          document.getElementById('tabla-cc-body').innerHTML = (centros || []).map((c) => `
+            <tr><td>${esc(c.codigo)}</td><td>${esc(c.nombre)}</td>
+            <td>${c.activo ? 'Activo' : 'Inactivo'}</td></tr>`).join('') || '<tr><td colspan="3" class="text-muted">Sin centros de costo.</td></tr>'
+
+          // poblar selects de cuenta
+          const opciones = imputables.map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+          document.getElementById('d-cuenta').innerHTML = '<option value="">Todas</option>' + opciones
+          document.getElementById('m-cuenta').innerHTML = opciones
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      document.getElementById('btn-diario').addEventListener('click', cargarDiario)
+      document.getElementById('btn-mayor').addEventListener('click', cargarMayor)
+
+      document.getElementById('form-cuenta').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        try {
+          await apiPost(`/api/contable/empresas/${empresaId()}/cuentas`, {
+            codigo: document.getElementById('cu-codigo').value.trim(),
+            nombre: document.getElementById('cu-nombre').value.trim(),
+            alias: document.getElementById('cu-alias').value.trim() || null,
+            es_resumen: document.getElementById('cu-resumen').checked,
+          })
+          showToast('Cuenta creada')
+          e.target.reset()
+          cargarPlan()
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      document.getElementById('form-cc').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        try {
+          await apiPost(`/api/contable/empresas/${empresaId()}/centros-costo`, {
+            codigo: document.getElementById('cc-codigo').value.trim(),
+            nombre: document.getElementById('cc-nombre').value.trim(),
+          })
+          showToast('Centro de costo creado')
+          e.target.reset()
+          cargarPlan()
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      function cargarTodo() {
+        Promise.all([
+          apiGet(`/api/contable/empresas/${empresaId()}/cuentas`),
+          apiGet(`/api/contable/empresas/${empresaId()}/centros-costo`),
+        ]).then(([{ cuentas: plan }, { centros: cc }]) => {
+          imputables = plan.filter((c) => c.activa && !c.es_resumen)
+          centros = cc || []
+          const opciones = imputables.map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+          document.getElementById('d-cuenta').innerHTML = '<option value="">Todas</option>' + opciones
+          document.getElementById('m-cuenta').innerHTML = opciones
+
+          document.getElementById('lineas').innerHTML = lineaHtml(1) + lineaHtml(2)
+          refrescar()
+          cargarAsientos()
+          cargarPlan()
+        }).catch((err) => showToast(err.message, 'error'))
+      }
+
+      document.getElementById('root').hidden = false
+      document.getElementById('a-fecha').value = new Date().toISOString().slice(0, 10)
+      cargarTodo()
+    })
+  </script>
+</body>
+</html>

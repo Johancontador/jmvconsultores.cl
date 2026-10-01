@@ -337,5 +337,6 @@ if (procesosSchema && /clientes_old_migracion/i.test(procesosSchema.sql)) {
 // en cada arranque; si ya aplicaron, no hacen nada). No tocan clientes,
 // informes ni rcv_cache: la capa tributaria legada sigue funcionando igual.
 require('./core/migraciones').migracionesFase1(db)
+require('./core/migraciones').migracionesFase2(db)
 
 module.exports = db

@@ -10,7 +10,7 @@
 |---|---|---|
 | 0 | Inspección + documentos de análisis (este set) | **✅ COMPLETADA** |
 | 1 | Fundación: empresas, usuarios, roles, períodos, auditoría, bóveda, backups | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
-| 2 | Núcleo contable: plan de cuentas, asientos, partida doble, diario, mayor | Siguiente |
+| 2 | Núcleo contable: plan de cuentas, asientos, partida doble, diario, mayor | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
 | 3 | Documentos: ingesta SII, bandeja, clasificación, reglas | — |
 | 4 | Automatización: propuestas, contabilización, conciliación | — |
 | 5 | Reportes: balance, resultados, análisis | — |
@@ -40,6 +40,8 @@ Objetivo: que cualquier cosa contable que venga después nazca aislada, con role
 Aceptación FASE 1: con 2 empresas y 2 usuarios con roles distintos, ninguna acción cruzada es posible (probado con tests de permisos); auditoría registra todo; clave SII solo cifrada en disco; backups diarios corriendo.
 
 ## FASE 2 — Núcleo contable
+
+> **✅ IMPLEMENTADA (2026-10-01):** plantilla PUC chilena de 99 cuentas con alias de control precargada por empresa (migración + al crear); CRUD de cuentas/centros de costo con validación de jerarquía y alias únicos; `core/asientos.js` con partida doble atómica (ΣD=ΣH, montos enteros, cuenta imputable de la misma empresa, período abierto con autocreación, folio correlativo por año), reversiones referenciadas no repetibles, libro diario con filtros (período/cuenta/texto) y mayor con saldo corrido según naturaleza. UI `/asientos.html` (asiento con validación en vivo, diario, mayor, plan). **12 tests nuevos** (`test/fase2.test.js`); suite completa: 38 verdes. Verificado en vivo con datos reales: apertura folio 1 → reversión folio 2 → mayor neto $0, todo auditado.
 
 1. **Plan de cuentas**: plantilla PUC simplificada chilena precargada al crear empresa; CRUD con validaciones (ACCOUNTING_DOMAIN §3); alias de control (IVA_CREDITO, PROVEEDORES...).
 2. **Centros de costo**: CRUD simple.

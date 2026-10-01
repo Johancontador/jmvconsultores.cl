@@ -15,7 +15,12 @@
 const NAV_ITEMS = [
   { key: 'inicio', label: 'Inicio', icon: '🏠', tipo: null },
   { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },
-  { key: 'contable', label: 'Contabilidad', icon: '📚', href: '/contable.html' },
+  {
+    key: 'contabilidad', label: 'Contabilidad', icon: '📚', hijos: [
+      { key: 'cont-admin', label: 'Administración', href: '/contable.html' },
+      { key: 'cont-asientos', label: 'Asientos y Mayor', href: '/asientos.html' },
+    ],
+  },
   { key: 'exportacion-masiva', label: 'Reporte Masivo', icon: '📦', href: '/exportacion-masiva.html' },
   {
     key: 'tributarios', label: 'Tributarios', icon: '🧾', hijos: [

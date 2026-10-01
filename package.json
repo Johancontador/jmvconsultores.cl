@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node backend/index.js",
     "dev": "node --watch backend/index.js",
-    "test": "node --test test/calculos.test.js test/db-schema.test.js test/export-fecha.test.js test/informe-listar.test.js test/fase1.test.js"
+    "test": "node --test test/calculos.test.js test/db-schema.test.js test/export-fecha.test.js test/informe-listar.test.js test/fase1.test.js test/fase2.test.js"
   },
   "engines": {
     "node": ">=24.0.0"

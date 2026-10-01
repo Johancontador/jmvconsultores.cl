@@ -9,6 +9,7 @@
 const { registrarAccion } = require('./auditoria')
 const { cifrar, descifrar } = require('./boveda')
 const { esRolValido } = require('./permisos')
+const { seedPlanCuentas } = require('./migraciones')
 
 function validarRut(rut) {
   const clean = String(rut).replace(/[.\-\s]/g, '').toUpperCase()
@@ -129,6 +130,8 @@ function crear(db, { usuarioId, rut, nombre, claveSii, tasaPpm = 0, telefono = '
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(rutNorm, String(nombre).trim(), cifrar(claveSii), tasa, tel || null, exento ? 1 : 0)
     const empresaId = info.lastInsertRowid
+    // Plantilla PUC precargada al crear la empresa (FASE 2)
+    seedPlanCuentas(db, empresaId)
     registrarAccion(db, {
       empresaId, usuarioId, accion: 'empresa.crear', entidad: 'empresas', entidadId: empresaId,
       despues: { rut: rutNorm, nombre: String(nombre).trim(), tasa_ppm: tasa, exento: !!exento }, ip,

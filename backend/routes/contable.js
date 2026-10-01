@@ -11,6 +11,9 @@ const { requirePermiso } = require('../middleware/requirePermiso')
 const empresas = require('../core/empresas')
 const periodos = require('../core/periodos')
 const auditoria = require('../core/auditoria')
+const asientos = require('../core/asientos')
+const cuentas = require('../core/cuentas')
+const centrosCosto = require('../core/centros-costo')
 const { PERMISOS_POR_ROL, CATALOGO_CAPACIDADES } = require('../core/permisos')
 
 const router = express.Router()
@@ -156,6 +159,110 @@ router.post('/empresas/:empresaId/periodos/:periodo/reabrir', requirePermiso('pe
       despues: { estado: 'ABIERTO', motivo: String(req.body.motivo || '').slice(0, 500) }, ip: ip(req),
     })
     res.json({ ok: true, periodo: p })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Plan de cuentas y centros de costo (FASE 2) ----------
+
+router.get('/empresas/:empresaId/cuentas', requirePermiso('cuentas:ver'), (req, res) => {
+  res.json({ ok: true, cuentas: cuentas.listar(db, req.empresaId) })
+})
+
+router.get('/empresas/:empresaId/cuentas-imputables', requirePermiso('cuentas:ver'), (req, res) => {
+  res.json({ ok: true, cuentas: cuentas.listarImputables(db, req.empresaId) })
+})
+
+router.post('/empresas/:empresaId/cuentas', requirePermiso('cuentas:editar'), (req, res) => {
+  try {
+    const c = cuentas.crear(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      codigo: req.body.codigo, nombre: req.body.nombre,
+      esResumen: !!req.body.es_resumen, alias: req.body.alias, ip: ip(req),
+    })
+    res.status(201).json({ ok: true, cuenta: c })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.delete('/empresas/:empresaId/cuentas/:cuentaId', requirePermiso('cuentas:editar'), (req, res) => {
+  try {
+    cuentas.desactivar(db, { empresaId: req.empresaId, usuarioId: req.user.id, cuentaId: Number(req.params.cuentaId), ip: ip(req) })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.get('/empresas/:empresaId/centros-costo', requirePermiso('cuentas:ver'), (req, res) => {
+  res.json({ ok: true, centros: centrosCosto.listar(db, req.empresaId) })
+})
+
+router.post('/empresas/:empresaId/centros-costo', requirePermiso('cuentas:editar'), (req, res) => {
+  try {
+    const cc = centrosCosto.crear(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      codigo: req.body.codigo, nombre: req.body.nombre, ip: ip(req),
+    })
+    res.status(201).json({ ok: true, centro: cc })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Asientos, diario y mayor (FASE 2) ----------
+
+router.post('/empresas/:empresaId/asientos', requirePermiso('asientos:crear'), (req, res) => {
+  try {
+    const a = asientos.crear(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      fecha: req.body.fecha, glosa: req.body.glosa,
+      tipo: req.body.tipo || 'manual', lineas: req.body.lineas, ip: ip(req),
+    })
+    res.status(201).json({ ok: true, asiento: a })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.get('/empresas/:empresaId/asientos', requirePermiso('asientos:ver'), (req, res) => {
+  const d = asientos.diario(db, {
+    empresaId: req.empresaId,
+    periodo: req.query.periodo || null,
+    desde: req.query.desde || null,
+    hasta: req.query.hasta || null,
+    cuentaId: req.query.cuenta_id ? Number(req.query.cuenta_id) : null,
+    centroCostoId: req.query.centro_costo_id ? Number(req.query.centro_costo_id) : null,
+    texto: req.query.texto || null,
+    limit: Math.min(Number(req.query.limit) || 100, 500),
+    offset: Number(req.query.offset) || 0,
+  })
+  res.json({ ok: true, ...d })
+})
+
+router.post('/empresas/:empresaId/asientos/:asientoId/revertir', requirePermiso('asientos:revertir'), (req, res) => {
+  try {
+    const a = asientos.revertir(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      asientoId: Number(req.params.asientoId), glosa: req.body.glosa || null, ip: ip(req),
+    })
+    res.status(201).json({ ok: true, asiento: a })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.get('/empresas/:empresaId/mayor', requirePermiso('asientos:ver'), (req, res) => {
+  try {
+    const m = asientos.mayor(db, {
+      empresaId: req.empresaId,
+      cuentaId: Number(req.query.cuenta_id),
+      desde: req.query.desde || null,
+      hasta: req.query.hasta || null,
+    })
+    res.json({ ok: true, ...m })
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }
