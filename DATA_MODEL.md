@@ -207,7 +207,29 @@ CREATE TABLE conciliaciones (        -- ejecución por empresa+periodo (resultad
 );
 ```
 
-Estados del documento sin tabla de catálogo: constantes en `documentos/bandeja.js` (máquina de estados del dominio, ACCOUNTING_DOMAIN §5).
+Estados del documento sin tabla de catálogo: constantes en `backend/core/documentos.js` (máquina de estados del dominio, ACCOUNTING_DOMAIN §5).
+
+> **✅ Implementado en FASE 3 (2026-10-01)**, con ajustes menores sobre este diseño:
+> - `documentos` usa `UNIQUE(empresa_id, clave_dedupe)` y NOT NULL en montos (DEFAULT 0); guarda además `detalle_sii_json` (fila cruda SII, igual que `informe_documentos`). El estado inicial de ingesta es PENDIENTE (RECIBIDO queda reservado en la máquina de estados). `documento` + lote insertados/auditados en UNA transacción.
+> - `reglas_contables` añade la condición `tipo_flujo` (compra|venta|NULL=ambos): sin ella, una regla de compras calzaría con ventas del mismo tipo_doc. `patron_glosa` se define (condición) aunque el glosado llega en FASE 4 con las propuestas.
+> - Tabla extra `contrapartes` (proveedores/clientes derivados del RCV con `clasificacion` proveedor|cliente|ambos y clasificación recordada) — base para prellenar en FASE 4.
+> - `periodo_ingesta` (no fecha de recepción) es el campo de filtrado principal de la bandeja: es el período tributario consultado al SII.
+> - Dedupe: `clave_dedupe = SHA-256(rut empresa | tipo_flujo | tipo_doc | folio | periodo_ingesta)` truncado a 32 hex; la ingesta es ON CONFLICT DO NOTHING → idempotente.
+>
+> **✅ Implementado en FASE 4 (2026-10-01)**, con ajustes menores sobre este diseño:
+> - `documentos` gana la transición completa §5: PROPUESTO (propuesta PENDIENTE viva) → CONTABILIZADO (con `asiento_id`). Tabla `propuestas` con snapshot congelado `lineas_json` (la confirmación aplica exactamente esas líneas; jamás regenera); estados PENDIENTE|APLICADA|DESCARTADA; índice parcial `UNIQUE(documento_id) WHERE estado='PENDIENTE'` — permite histórico de re-propuestas (el diseño §B.3 con UNIQUE(documento_id) plano lo impediría).
+> - `conciliaciones` usa UNIQUE(empresa_id, periodo) con re-ejecución ON CONFLICT DO UPDATE (reemplaza el resultado; el histórico completo queda en auditoría) y columna `fuente` ('bandeja' | 'sii_resumen'). El asiento sin documento SII NO es diferencia (§9): se lista en `resultado_json.ajustes_sin_documento`.
+> - `asientos.origen` ('propuesta:<id>') agregada por PRAGMA idempotente — trazabilidad asiento ↔ propuesta.
+> - `reglas_contables.cuenta_contraparte_id` entra en acción: precedencia §6 al generar la propuesta (regla > contraparte recordada > alias PROVEEDORES/CLIENTES).
+>
+> **✅ Implementado en FASE 5 (2026-10-01)**, con ajustes menores sobre este diseño:
+> - `periodos_contables` gana la columna `cierre_json TEXT` (migración PRAGMA idempotente, `migracionesFase5`): snapshot del cierre persistido por `ejecutarCierre` en la MISMA transacción que los asientos de cierre y el cambio de estado — contiene `ejecutado_en`, `asientos` (clave/asiento_id/folio/año/total), `checklist` (precondiciones al cerrar, incl. `documentos_pendientes_al_cerrar`), `resultado_periodo` (desglose ingresos/costos/gastos con PPM devengado) y `forzado` (true si se cerró con documentos pendientes, decisión humana explícita). Consultable vía `GET /api/contable/empresas/:id/cierre/:periodo`.
+> - Sin tablas nuevas: los reportes (balance/situación/resultados) son 100% derivados de `asiento_lineas` + `cuentas` (§B.8.4 — sin saldos materializados); los asientos de cierre reutilizan `asientos`/`asiento_lineas` con `tipo='cierre'` y `origen='cierre:<periodo>:<CLAVE>'`.
+>
+> **✅ Implementado en SAAS-1 (2026-10-01)** — acomplamiento comercial (docs/SAAS-ACCESO.md):
+> - Tabla `suscripciones` con `UNIQUE(empresa_id)`: la licencia se ata a la EMPRESA (RUT), una activa por empresa. `plan` PRUEBA|PYME|PRO|DESPACHO; `estado` PRUEBA|ACTIVA|VENCIDA|SUSPENDIDA|CANCELADA (transiciones resueltas al leer por `core/licencias.js`, sin cron, auditadas con el admin semilla como usuario sistema); `fin` de vigencia, `gracia_hasta` (+7 días tras vencer), `monto_clp`, `activada_por/en`, `notas`. Backfill idempotente: empresas activas sin licencia reciben una HEREDADA DESPACHO (clientes de servicio de JMV nunca bloqueados).
+> - `empresas` gana la ficha tributaria para el onboarding autónomo (SAAS-2 la llenará desde el SII): `razon_social_sii`, `inicio_actividades`, `actividades_json`, `regimen_tributario`, `socios_json` y `onboarding_json` (checklist ✓/⚠ por dato). Todas TEXT nullable, agregadas por PRAGMA idempotente.
+> - Registro self-service: `users` (sin is_admin) + `empresas` (clave SII cifrada v1:) + plan PUC + `usuario_empresa` admin_empresa + `suscripciones` PRUEBA 90 días — todo en UNA transacción (`core/registro.js`); credencial SII validada EN VIVO antes de crear nada; tasa_ppm queda 0 (se ajustará con datos SII reales).
 
 ### B.4 Relación con el esquema actual (transición)
 

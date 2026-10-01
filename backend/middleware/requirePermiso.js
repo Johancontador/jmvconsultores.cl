@@ -11,6 +11,7 @@
 const db = require('../db')
 const { rolEnEmpresa } = require('../core/empresas')
 const { permisosDeRol, esCapacidadValida } = require('../core/permisos')
+const licencias = require('../core/licencias')
 
 function requirePermiso(capacidad) {
   if (!esCapacidadValida(capacidad)) {
@@ -35,6 +36,21 @@ function requirePermiso(capacidad) {
 
     req.empresaId = empresaId
     req.rolEmpresa = rol
+
+    // Gate de licencia (SAAS-ACCESO §5): toda capacidad que NO es de lectura
+    // ('…:ver') exige licencia operativa — PRUEBA/ACTIVA, o VENCIDA en gracia.
+    // La lectura NUNCA se bloquea: los datos siempre se pueden ver.
+    if (!capacidad.endsWith(':ver')) {
+      try {
+        licencias.exigirVigente(db, empresaId)
+      } catch (err) {
+        return res.status(402).json({
+          ok: false, error: err.message,
+          licencia: licencias.estadoParaUI(db, empresaId),
+        })
+      }
+    }
+
     next()
   }
 }

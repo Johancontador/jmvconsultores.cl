@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bandeja de Documentos — IVA Mensual</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .tabs { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1rem }
+    .tab-btn { padding:.5rem 1rem; border:1px solid var(--border,#ddd); border-radius:8px; background:transparent; cursor:pointer; font-weight:600 }
+    .tab-btn.active { background:var(--primary,#2563eb); color:#fff; border-color:var(--primary,#2563eb) }
+    .estado-chip { display:inline-block; font-size:.7rem; font-weight:600; padding:.12rem .5rem; border-radius:6px; background:#e5e7eb; color:#374151 }
+    .estado-chip.PENDIENTE { background:#fef3c7; color:#92400e }
+    .estado-chip.CLASIFICADO { background:#dbeafe; color:#1d4ed8 }
+    .estado-chip.PROPUESTO { background:#e0e7ff; color:#4338ca }
+    .estado-chip.CONTABILIZADO { background:#dcfce7; color:#15803d }
+    .estado-chip.REVISION { background:#fee2e2; color:#b91c1c }
+    .estado-chip.ANULADO { background:#e5e7eb; color:#6b7280; text-decoration:line-through }
+    .estado-chip.ERROR { background:#fee2e2; color:#b91c1c }
+    .flujo-chip { font-size:.7rem; font-weight:600; padding:.12rem .45rem; border-radius:6px }
+    .flujo-chip.compra { background:#f3e8ff; color:#7e22ce }
+    .flujo-chip.venta { background:#d1fae5; color:#047857 }
+    td.num, th.num { text-align:right; font-variant-numeric: tabular-nums }
+    .tabs-estado { display:flex; gap:.35rem; flex-wrap:wrap; margin:.5rem 0 }
+    .chip-estado-btn { font-size:.75rem; padding:.25rem .6rem; border-radius:999px; border:1px solid var(--border,#ddd); background:#fff; cursor:pointer }
+    .chip-estado-btn.active { background:#1f2937; color:#fff; border-color:#1f2937 }
+    .resumen-filtros { font-size:.85rem; color:#6b7280; margin:.4rem 0 }
+    .clasif-panel { border:1px solid var(--border,#ddd); border-radius:8px; padding:.8rem; margin:.6rem 0; background:#f8fafc }
+    .clasif-grid { display:grid; grid-template-columns: 2fr 1.2fr 1.2fr auto auto; gap:.5rem; align-items:end }
+    @media (max-width: 900px) { .clasif-grid { grid-template-columns: 1fr 1fr; } }
+    .dialogo { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:1rem }
+    .dialogo-card { background:#fff; border-radius:12px; max-width:860px; width:100%; max-height:90vh; overflow:auto; padding:1.2rem }
+    .dialogo-oculto { display:none }
+    .regla-cond { font-size:.78rem; color:#6b7280 }
+    table.table { font-size:.9rem }
+  </style>
+</head>
+<body>
+  <div id="layout-root"></div>
+
+  <main class="container" id="root" hidden>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">📥 Bandeja de Documentos</h1>
+        <p class="page-subtitle">Documentos SII → clasificación contable — reglas explícitas, cero digitación en el caso común</p>
+      </div>
+      <select id="select-empresa" class="form-select" style="min-width:240px"></select>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button type="button" class="tab-btn active" data-tab="bandeja">📥 Bandeja</button>
+      <button type="button" class="tab-btn" data-tab="reglas">⚙️ Reglas</button>
+      <button type="button" class="tab-btn" data-tab="contrapartes">🤝 Contrapartes</button>
+    </div>
+
+    <!-- ===== BANDEJA ===== -->
+    <section id="tab-bandeja">
+      <div class="informe-controls">
+        <form id="form-ingesta" class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="i-periodo">Ingestar período (AAAAMM)</label>
+            <input type="text" id="i-periodo" class="form-input" placeholder="202609" required>
+          </div>
+          <div class="form-group">
+            <button type="submit" class="btn btn-primary" id="btn-ingestar">⚡ Ingestar desde SII</button>
+          </div>
+          <div class="form-group" style="flex:1">
+            <span id="ingesta-estado" class="text-muted"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="informe-controls">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="f-periodo">Período ingesta</label>
+            <input type="text" id="f-periodo" class="form-input" placeholder="Todos">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="f-flujo">Flujo</label>
+            <select id="f-flujo" class="form-select">
+              <option value="">Compras y ventas</option>
+              <option value="compra">Compras</option>
+              <option value="venta">Ventas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="f-rut">RUT contraparte</label>
+            <input type="text" id="f-rut" class="form-input" placeholder="76543210">
+          </div>
+          <div class="form-group" style="flex:2">
+            <label class="form-label" for="f-texto">Proveedor / cliente o folio</label>
+            <input type="text" id="f-texto" class="form-input">
+          </div>
+          <div class="form-group">
+            <button type="button" class="btn btn-secondary" id="btn-filtrar">Filtrar</button>
+          </div>
+        </div>
+
+        <div class="tabs-estado" id="tabs-estado"></div>
+        <div class="resumen-filtros" id="resumen-filtros"></div>
+
+        <div style="display:flex; gap:.5rem; margin:.4rem 0; flex-wrap:wrap">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-auto">🤖 Clasificar con reglas</button>
+          <span class="text-muted" style="font-size:.8rem; align-self:center">Aplica el motor de reglas sobre los documentos del filtro actual (todos los estados clasificables).</span>
+        </div>
+
+        <table class="table">
+          <thead><tr>
+            <th>Estado</th><th>Flujo</th><th>Tipo</th><th>Folio</th><th>Contraparte</th><th>Fecha</th>
+            <th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th>
+            <th>Clasificación</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-bandeja-body"></tbody>
+        </table>
+        <div style="display:flex; gap:.5rem; margin-top:.5rem">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-mas">Ver más</button>
+          <span class="text-muted" id="paginacion" style="align-self:center"></span>
+        </div>
+      </div>
+
+      <!-- Panel de clasificación (diálogo) -->
+      <div class="dialogo dialogo-oculto" id="dlg-clasificar">
+        <div class="dialogo-card">
+          <h2 class="section-title">Clasificar documento <span id="cd-ident"></span></h2>
+          <p class="page-subtitle" id="cd-detalle"></p>
+          <div class="clasif-grid">
+            <div>
+              <label class="form-label" for="cd-cuenta">Cuenta imputable</label>
+              <select id="cd-cuenta" class="form-select"></select>
+            </div>
+            <div>
+              <label class="form-label" for="cd-cc">Centro de costo</label>
+              <select id="cd-cc" class="form-select"><option value="">—</option></select>
+            </div>
+            <div>
+              <label class="form-label" for="cd-iva">Tratamiento IVA</label>
+              <select id="cd-iva" class="form-select">
+                <option value="credito">Crédito fiscal</option>
+                <option value="sin_credito">Sin crédito (exento/boleta)</option>
+                <option value="uso_comun">Uso común</option>
+                <option value="no_recuperable">No recuperable</option>
+              </select>
+            </div>
+            <div class="form-group form-check" style="align-self:end; padding-bottom:.6rem">
+              <input type="checkbox" id="cd-recordar"> <label for="cd-recordar" title="Crea una regla RUT+tipo DTE+flujo → esta clasificación">Recordar para este proveedor</label>
+            </div>
+            <div>
+              <button type="button" class="btn btn-primary" id="btn-cd-guardar">Guardar</button>
+              <button type="button" class="btn btn-secondary" id="btn-cd-cerrar">Cerrar</button>
+            </div>
+          </div>
+          <div id="cd-mensaje" class="text-muted" style="margin-top:.5rem"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== REGLAS ===== -->
+    <section id="tab-reglas" hidden>
+      <div class="informe-controls" id="sec-regla-form" hidden>
+        <div class="section-header"><div>
+          <h2 class="section-title">Nueva regla</h2>
+          <p class="page-subtitle">CUANDO (todas las condiciones se combinan) → ENTONCES (cuenta + CC + IVA). Prioridad mayor evalúa primero (catch-all recomendado: 10).</p>
+        </div></div>
+        <form id="form-regla" class="form-row">
+          <div class="form-group" style="flex:2">
+            <label class="form-label" for="r-nombre">Nombre</label>
+            <input type="text" id="r-nombre" class="form-input" placeholder="Ej: Arriendo — Inmobiliaria X" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-prioridad">Prioridad</label>
+            <input type="number" id="r-prioridad" class="form-input" value="100" min="1" max="10000">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-flujo">Flujo</label>
+            <select id="r-flujo" class="form-select">
+              <option value="">Ambos</option>
+              <option value="compra">Compras</option>
+              <option value="venta">Ventas</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-rut">RUT contraparte</label>
+            <input type="text" id="r-rut" class="form-input" placeholder="76543210-8">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-tipo-doc">Tipo DTE</label>
+            <input type="number" id="r-tipo-doc" class="form-input" placeholder="33" min="1">
+          </div>
+          <div class="form-group" style="flex:2">
+            <label class="form-label" for="r-patron">Patrón razón social</label>
+            <input type="text" id="r-patron" class="form-input" placeholder="contiene…">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-min">Monto mín</label>
+            <input type="number" id="r-min" class="form-input" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-max">Monto máx</label>
+            <input type="number" id="r-max" class="form-input" min="0" step="1">
+          </div>
+          <div class="form-group" style="flex:2">
+            <label class="form-label" for="r-cuenta">Cuenta imputable</label>
+            <select id="r-cuenta" class="form-select" required></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-cc">Centro de costo</label>
+            <select id="r-cc" class="form-select"><option value="">—</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="r-iva">Tratamiento IVA</label>
+            <select id="r-iva" class="form-select">
+              <option value="credito">Crédito fiscal</option>
+              <option value="sin_credito">Sin crédito</option>
+              <option value="uso_comun">Uso común</option>
+              <option value="no_recuperable">No recuperable</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <button type="submit" class="btn btn-primary">Crear regla</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="informe-controls">
+        <div class="section-header"><div><h2 class="section-title">Reglas de la empresa</h2></div></div>
+        <table class="table">
+          <thead><tr><th>Prioridad</th><th>Nombre</th><th>CUANDO</th><th>ENTONCES</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="tabla-reglas-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== CONTRAPARTES ===== -->
+    <section id="tab-contrapartes" hidden>
+      <div class="informe-controls">
+        <div class="section-header"><div>
+          <h2 class="section-title">Proveedores y clientes</h2>
+          <p class="page-subtitle">Derivados del RCV con clasificación recordada — base para prellenar (FASE 4).</p>
+        </div></div>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <input type="text" id="cp-texto" class="form-input" placeholder="Buscar por razón social o RUT…">
+          </div>
+          <div class="form-group">
+            <button type="button" class="btn btn-secondary" id="btn-cp-buscar">Buscar</button>
+          </div>
+        </div>
+        <table class="table">
+          <thead><tr><th>RUT</th><th>Razón social</th><th>Clasificación</th><th>Cuenta recordada</th><th>CC</th><th>IVA</th></tr></thead>
+          <tbody id="tabla-cp-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script src="/shared/layout.js"></script>
+  <script>
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+    }
+    function tiene(permisos, cap) { return (permisos || []).includes(cap) }
+    const peso = (n) => '$' + Math.round(n || 0).toLocaleString('es-CL')
+    const NOMBRE_TIPO = { 33: 'Factura', 34: 'Fact. exenta', 39: 'Boleta', 41: 'Boleta exenta', 56: 'NC', 61: 'ND', 60: 'NC ajuste', 110: 'Fact. compra', 45: 'Fact. compra' }
+
+    initLayout('contable').then(async () => {
+      let me
+      try { me = (await apiGet('/api/auth/me')).user } catch (err) { return }
+      const acceso = me.acceso_contable
+      if (!acceso || !acceso.empresas || !acceso.empresas.length) {
+        document.getElementById('root').hidden = false
+        document.getElementById('root').innerHTML = '<div class="page-header"><p class="page-subtitle">No tienes empresas asignadas al módulo contable.</p></div>'
+        return
+      }
+
+      const empresas = acceso.empresas
+      const permisosPorId = new Map(empresas.map((e) => [String(e.id), e.permisos || []]))
+      const $sel = document.getElementById('select-empresa')
+      $sel.innerHTML = empresas.map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')
+      const guardada = localStorage.getItem('iva_empresa_activa')
+      if (guardada && empresas.some((e) => String(e.id) === guardada)) $sel.value = guardada
+      $sel.addEventListener('change', () => { localStorage.setItem('iva_empresa_activa', $sel.value); cargarTodo() })
+
+      const empresaId = () => $sel.value
+      const permisos = () => permisosPorId.get(empresaId()) || []
+
+      const filtros = { estado: '' }
+      let imputables = []
+      let centros = []
+      let pagina = 0
+      const PAGE = 200
+      let docClasificando = null
+
+      // ---- Tabs ----
+      document.querySelectorAll('#tabs .tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#tabs .tab-btn').forEach((b) => b.classList.toggle('active', b === btn))
+          for (const t of ['bandeja', 'reglas', 'contrapartes']) {
+            document.getElementById('tab-' + t).hidden = t !== btn.dataset.tab
+          }
+          if (btn.dataset.tab === 'reglas') cargarReglas()
+          if (btn.dataset.tab === 'contrapartes') cargarContrapartes()
+        })
+      })
+
+      // ---- Ingesta ----
+      let pollTimer = null
+      document.getElementById('form-ingesta').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const periodo = document.getElementById('i-periodo').value.trim()
+        if (!/^\d{6}$/.test(periodo)) { showToast('Período inválido (AAAAMM)', 'error'); return }
+        try {
+          const r = await apiPost(`/api/contable/empresas/${empresaId()}/documentos-ingesta`, { periodo })
+          showToast('Ingesta iniciada — consulta al SII en curso', 'info')
+          document.getElementById('btn-ingestar').disabled = true
+          const $estado = document.getElementById('ingesta-estado')
+          $estado.textContent = 'Procesando…'
+          clearInterval(pollTimer)
+          pollTimer = setInterval(async () => {
+            try {
+              const { job } = await apiGet(`/api/contable/empresas/${empresaId()}/documentos-ingesta/${r.jobId}`)
+              if (job.estado.startsWith('consultando') || job.estado.startsWith('ingestando') || job.estado === 'procesando') {
+                $estado.textContent = `${job.estado} (${job.procesados}/${job.total})`
+                return
+              }
+              clearInterval(pollTimer)
+              document.getElementById('btn-ingestar').disabled = false
+              const res = job.resultado || {}
+              const partes = []
+              for (const flujo of ['compra', 'venta']) {
+                const x = res[flujo]
+                if (!x) continue
+                if (x.error) partes.push(`${flujo}: ✗ ${x.error}`)
+                else partes.push(`${flujo}s: ${x.insertados} nuevos, ${x.duplicados} duplicados`)
+              }
+              $estado.textContent = `✓ ${job.estado === 'completado' ? 'Completado' : 'Completado con errores'} — ${partes.join(' · ')}`
+              showToast('Ingesta terminada', 'info')
+              cargarBandeja(true)
+            } catch (err) {
+              clearInterval(pollTimer)
+              document.getElementById('btn-ingestar').disabled = false
+              showToast(err.message, 'error')
+            }
+          }, 2000)
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      // ---- Bandeja ----
+      const CHIPS = [
+        ['', 'Todos'], ['PENDIENTE', 'Pendientes'], ['CLASIFICADO', 'Clasificados'],
+        ['REVISION', 'Revisión'], ['ANULADO', 'Anulados'],
+      ]
+
+      async function cargarBandeja(reset = false) {
+        if (reset) pagina = 0
+        try {
+          const p = new URLSearchParams({ limit: String(PAGE), offset: String(pagina * PAGE) })
+          if (document.getElementById('f-periodo').value.trim()) p.set('periodo', document.getElementById('f-periodo').value.trim())
+          if (document.getElementById('f-flujo').value) p.set('tipo_flujo', document.getElementById('f-flujo').value)
+          if (document.getElementById('f-rut').value.trim()) p.set('rut', document.getElementById('f-rut').value.trim())
+          if (document.getElementById('f-texto').value.trim()) p.set('texto', document.getElementById('f-texto').value.trim())
+          if (filtros.estado) p.set('estado', filtros.estado)
+
+          const { total, sumas, estados, documentos } = await apiGet(`/api/contable/empresas/${empresaId()}/documentos?${p.toString()}`)
+
+          // chips de estado (conteos sin filtro de estado)
+          const conteos = new Map(estados.map((e) => [e.estado, e.n]))
+          document.getElementById('tabs-estado').innerHTML = CHIPS.map(([val, label]) => {
+            const n = val === '' ? estados.reduce((s, e) => s + e.n, 0) : (conteos.get(val) || 0)
+            return `<button type="button" class="chip-estado-btn ${filtros.estado === val ? 'active' : ''}" data-estado="${val}">${label} (${n})</button>`
+          }).join('')
+          document.querySelectorAll('.chip-estado-btn').forEach((b) => {
+            b.addEventListener('click', () => { filtros.estado = b.dataset.estado; cargarBandeja(true) })
+          })
+
+          document.getElementById('resumen-filtros').textContent =
+            `${total} documento(s) · neto ${peso(sumas.neto)} · IVA ${peso(sumas.iva)} · total ${peso(sumas.total)}`
+          document.getElementById('paginacion').textContent = `${Math.min((pagina + 1) * PAGE, total)} de ${total}`
+
+          const puedeClasificar = tiene(permisos(), 'documentos:clasificar')
+          const cuerpo = (documentos || []).map((d) => {
+            const clasif = d.cuenta_codigo
+              ? `${esc(d.cuenta_codigo)} ${esc(d.cuenta_nombre)}${d.cc_codigo ? ' · CC ' + esc(d.cc_codigo) : ''}${d.regla_nombre ? ' · <span title="por regla">⚙️</span>' : ''}`
+              : '<span class="text-muted">—</span>'
+            return `<tr>
+              <td><span class="estado-chip ${esc(d.estado)}">${esc(d.estado)}</span></td>
+              <td><span class="flujo-chip ${esc(d.tipo_flujo)}">${d.tipo_flujo === 'compra' ? 'C' : 'V'}</span></td>
+              <td>${esc(NOMBRE_TIPO[d.tipo_doc] || d.tipo_doc)}</td>
+              <td>${esc(d.folio)}</td>
+              <td title="${esc(d.rut_contraparte)}">${esc(d.razon_social || d.rut_contraparte)}</td>
+              <td>${esc((d.fecha_docto || '').slice(0, 10))}</td>
+              <td class="num">${peso(d.monto_neto)}</td>
+              <td class="num">${peso(d.monto_iva)}</td>
+              <td class="num">${peso(d.monto_total)}</td>
+              <td>${clasif}</td>
+              <td>
+                ${puedeClasificar && ['PENDIENTE', 'CLASIFICADO', 'REVISION'].includes(d.estado)
+                  ? `<button type="button" class="btn btn-sm btn-secondary" data-clasificar="${d.id}">Clasificar</button>` : ''}
+                ${puedeClasificar && d.estado !== 'ANULADO' && d.estado !== 'CONTABILIZADO'
+                  ? `<button type="button" class="btn btn-sm btn-secondary" data-anular="${d.id}" title="Anular (auditado)">✕</button>` : ''}
+              </td>
+            </tr>`
+          }).join('')
+          document.getElementById('tabla-bandeja-body').innerHTML = cuerpo || '<tr><td colspan="11" class="text-muted">Sin documentos. Ingesta un período para empezar.</td></tr>'
+
+          document.querySelectorAll('[data-clasificar]').forEach((btn) => {
+            btn.addEventListener('click', () => abrirClasificar(Number(btn.dataset.clasificar)))
+          })
+          document.querySelectorAll('[data-anular]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const motivo = prompt('Motivo de la anulación (queda auditado):')
+              if (!motivo) return
+              try {
+                await apiPost(`/api/contable/empresas/${empresaId()}/documentos/${btn.dataset.anular}/anular`, { motivo })
+                showToast('Documento anulado (auditado)')
+                cargarBandeja(true)
+              } catch (err) { showToast(err.message, 'error') }
+            })
+          })
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      document.getElementById('btn-filtrar').addEventListener('click', () => cargarBandeja(true))
+      document.getElementById('btn-mas').addEventListener('click', () => { pagina++; cargarBandeja(false) })
+
+      document.getElementById('btn-auto').addEventListener('click', async () => {
+        try {
+          const body = {}
+          if (document.getElementById('f-periodo').value.trim()) body.periodo = document.getElementById('f-periodo').value.trim()
+          if (document.getElementById('f-flujo').value) body.tipo_flujo = document.getElementById('f-flujo').value
+          const r = await apiPost(`/api/contable/empresas/${empresaId()}/documentos/clasificar-automatico`, body)
+          showToast(`Motor de reglas: ${r.clasificados} de ${r.evaluados} clasificados (${r.sin_regla} sin regla)`, 'info')
+          cargarBandeja(true)
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      // ---- Diálogo de clasificación ----
+      async function abrirClasificar(id) {
+        try {
+          const { documento: d } = await apiGet(`/api/contable/empresas/${empresaId()}/documentos/${id}`)
+          docClasificando = d
+          document.getElementById('cd-ident').textContent = `${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${NOMBRE_TIPO[d.tipo_doc] || d.tipo_doc} folio ${d.folio}`
+          document.getElementById('cd-detalle').textContent = `${d.razon_social || d.rut_contraparte} (${d.rut_contraparte}) · ${d.fecha_docto || ''} · neto ${peso(d.monto_neto)} + IVA ${peso(d.monto_iva)} = ${peso(d.monto_total)}`
+          document.getElementById('cd-cuenta').innerHTML = imputables.map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+          document.getElementById('cd-cc').innerHTML = '<option value="">—</option>' + centros.filter((c) => c.activo).map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+          if (d.cuenta_id) document.getElementById('cd-cuenta').value = String(d.cuenta_id)
+          if (d.centro_costo_id) document.getElementById('cd-cc').value = String(d.centro_costo_id)
+          if (d.tratamiento_iva) document.getElementById('cd-iva').value = d.tratamiento_iva
+          document.getElementById('cd-recordar').checked = false
+          document.getElementById('cd-mensaje').textContent = ''
+          document.getElementById('dlg-clasificar').classList.remove('dialogo-oculto')
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      document.getElementById('btn-cd-cerrar').addEventListener('click', () => {
+        document.getElementById('dlg-clasificar').classList.add('dialogo-oculto')
+      })
+      document.getElementById('dlg-clasificar').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) document.getElementById('dlg-clasificar').classList.add('dialogo-oculto')
+      })
+
+      document.getElementById('btn-cd-guardar').addEventListener('click', async () => {
+        if (!docClasificando) return
+        const cuentaId = document.getElementById('cd-cuenta').value
+        if (!cuentaId) { showToast('Elige una cuenta', 'error'); return }
+        try {
+          const body = {
+            cuenta_id: Number(cuentaId),
+            centro_costo_id: document.getElementById('cd-cc').value || null,
+            tratamiento_iva: document.getElementById('cd-iva').value,
+          }
+          await apiPost(`/api/contable/empresas/${empresaId()}/documentos/${docClasificando.id}/clasificar`, body)
+          if (document.getElementById('cd-recordar').checked) {
+            try {
+              await apiPost(`/api/contable/empresas/${empresaId()}/documentos/${docClasificando.id}/aprender-regla`, body)
+              document.getElementById('cd-mensaje').textContent = '✓ Clasificado y regla creada para esta contraparte.'
+            } catch (err) {
+              document.getElementById('cd-mensaje').textContent = `✓ Clasificado (no se pudo crear la regla: ${err.message})`
+            }
+          } else {
+            document.getElementById('cd-mensaje').textContent = '✓ Clasificado.'
+          }
+          showToast('Documento clasificado')
+          cargarBandeja(false)
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      // ---- Reglas ----
+      async function cargarReglas() {
+        const puedeEditar = tiene(permisos(), 'reglas:editar')
+        document.getElementById('sec-regla-form').hidden = !puedeEditar
+        try {
+          const { reglas } = await apiGet(`/api/contable/empresas/${empresaId()}/reglas`)
+          document.getElementById('tabla-reglas-body').innerHTML = (reglas || []).map((r) => {
+            const cuando = [
+              r.tipo_flujo ? `flujo=${esc(r.tipo_flujo)}` : null,
+              r.rut_contraparte ? `RUT=${esc(r.rut_contraparte)}` : null,
+              r.tipo_doc ? `DTE=${esc(r.tipo_doc)}` : null,
+              r.patron_razon_social ? `razón~"${esc(r.patron_razon_social)}"` : null,
+              r.monto_min != null ? `≥${peso(r.monto_min)}` : null,
+              r.monto_max != null ? `≤${peso(r.monto_max)}` : null,
+            ].filter(Boolean).join(' · ') || '<em>catch-all</em>'
+            const entonces = `${esc(r.cuenta_codigo || '')} ${esc(r.cuenta_nombre || '')}${r.cc_codigo ? ' · CC ' + esc(r.cc_codigo) : ''} · IVA ${esc(r.tratamiento_iva)}`
+            return `<tr>
+              <td>${r.prioridad}</td><td>${esc(r.nombre)}</td>
+              <td class="regla-cond">${cuando}</td><td>${entonces}</td>
+              <td>${r.activa ? 'Activa' : 'Inactiva'}</td>
+              <td>${puedeEditar && r.activa ? `<button type="button" class="btn btn-sm btn-secondary" data-desactivar="${r.id}">Desactivar</button>` : ''}</td>
+            </tr>`
+          }).join('') || '<tr><td colspan="6" class="text-muted">Sin reglas aún. Clasifica un documento con "Recordar" para aprender la primera.</td></tr>'
+
+          document.querySelectorAll('[data-desactivar]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              try {
+                await apiPost(`/api/contable/empresas/${empresaId()}/reglas/${btn.dataset.desactivar}/desactivar`, {})
+                showToast('Regla desactivada')
+                cargarReglas()
+              } catch (err) { showToast(err.message, 'error') }
+            })
+          })
+        } catch (err) { showToast(err.message, 'error') }
+      }
+
+      document.getElementById('form-regla').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const val = (id) => document.getElementById(id).value.trim()
+        try {
+          await apiPost(`/api/contable/empresas/${empresaId()}/reglas`, {
+            nombre: val('r-nombre'),
+            prioridad: Number(val('r-prioridad')) || 100,
+            tipo_flujo: document.getElementById('r-flujo').value || null,
+            rut_contraparte: val('r-rut') || null,
+            tipo_doc: val('r-tipo-doc') ? Number(val('r-tipo-doc')) : null,
+            patron_razon_social: val('r-patron') || null,
+            monto_min: val('r-min') ? Number(val('r-min')) : null,
+            monto_max: val('r-max') ? Number(val('r-max')) : null,
+            cuenta_id: Number(document.getElementById('r-cuenta').value),
+            centro_costo_id: document.getElementById('r-cc').value || null,
+            tratamiento_iva: document.getElementById('r-iva').value,
+          })
+          showToast('Regla creada')
+          e.target.reset()
+          document.getElementById('r-prioridad').value = '100'
+          cargarReglas()
+        } catch (err) { showToast(err.message, 'error') }
+      })
+
+      // ---- Contrapartes ----
+      async function cargarContrapartes() {
+        try {
+          const p = new URLSearchParams()
+          if (document.getElementById('cp-texto').value.trim()) p.set('texto', document.getElementById('cp-texto').value.trim())
+          const { contrapartes } = await apiGet(`/api/contable/empresas/${empresaId()}/contrapartes?${p.toString()}`)
+          document.getElementById('tabla-cp-body').innerHTML = (contrapartes || []).map((c) => `<tr>
+            <td>${esc(c.rut)}</td><td>${esc(c.razon_social || '—')}</td>
+            <td>${esc(c.clasificacion)}</td>
+            <td>${c.cuenta_codigo ? esc(c.cuenta_codigo) + ' ' + esc(c.cuenta_nombre || '') : '<span class="text-muted">—</span>'}</td>
+            <td>${esc(c.cc_codigo || '—')}</td>
+            <td>${esc(c.tratamiento_iva || '—')}</td>
+          </tr>`).join('') || '<tr><td colspan="6" class="text-muted">Sin contrapartes aún (se crean al ingestar).</td></tr>'
+        } catch (err) { showToast(err.message, 'error') }
+      }
+      document.getElementById('btn-cp-buscar').addEventListener('click', cargarContrapartes)
+
+      // ---- Carga inicial ----
+      function cargarTodo() {
+        Promise.all([
+          apiGet(`/api/contable/empresas/${empresaId()}/cuentas-imputables`),
+          apiGet(`/api/contable/empresas/${empresaId()}/centros-costo`),
+        ]).then(([{ cuentas: imp }, { centros: cc }]) => {
+          imputables = imp || []
+          centros = cc || []
+          document.getElementById('r-cuenta').innerHTML = imputables.map((c) => `<option value="${c.id}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+          document.getElementById('r-cc').innerHTML = '<option value="">—</option>' + centros.filter((c) => c.activo).map((c) => `<option value="${c.id}">${esc(c.codigo)}</option>`).join('')
+          cargarBandeja(true)
+          cargarReglas()
+        }).catch((err) => showToast(err.message, 'error'))
+      }
+
+      document.getElementById('root').hidden = false
+      document.getElementById('i-periodo').value = (() => {
+        const h = new Date(); const anterior = new Date(h.getFullYear(), h.getMonth() - 1, 1)
+        return `${anterior.getFullYear()}${String(anterior.getMonth() + 1).padStart(2, '0')}`
+      })()
+      document.getElementById('f-periodo').value = document.getElementById('i-periodo').value
+      cargarTodo()
+    })
+  </script>
+</body>
+</html>

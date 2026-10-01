@@ -237,4 +237,222 @@ function seedPlanCuentas(db, empresaId, stmtInsertar = null) {
   return PLANTILLA.length
 }
 
-module.exports = { migracionesFase1, migracionesFase2, seedPlanCuentas }
+/**
+ * FASE 3 — Documentos (bandeja), reglas contables y contrapartes.
+ *
+ * - `documentos`: bandeja persistente por empresa, INDEPENDIENTE de informes
+ *   (DATA_MODEL §B.3, deuda §8.8 de CURRENT_STATE). Montos INTEGER en pesos:
+ *   la conversión REAL→INTEGER ocurre SOLO en la frontera de ingesta
+ *   (documentos/ingesta, Math.round), nunca después.
+ * - Dedupe idempotente: clave_dedupe = hash(rut empresa | flujo | tipo doc |
+ *   folio | período ingesta) con UNIQUE — re-ingesta del mismo RCV no duplica.
+ * - `reglas_contables`: tipo_flujo como condición (compra/venta/null=ambos):
+ *   una regla de compras no debe calzar con ventas del mismo tipo_doc.
+ * - `contrapartes`: entidades derivadas del RCV con clasificación recordada
+ *   (proveedor/cliente/ambos) para prellenar clasificaciones.
+ */
+function migracionesFase3(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS documentos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      tipo_flujo TEXT NOT NULL,            -- compra | venta
+      tipo_doc INTEGER NOT NULL,
+      folio TEXT NOT NULL,
+      rut_contraparte TEXT NOT NULL,
+      razon_social TEXT,
+      fecha_docto TEXT,
+      fecha_reclamo TEXT,
+      monto_exento INTEGER NOT NULL DEFAULT 0,
+      monto_neto INTEGER NOT NULL DEFAULT 0,
+      monto_iva INTEGER NOT NULL DEFAULT 0,
+      monto_total INTEGER NOT NULL DEFAULT 0,
+      montos_sii_json TEXT,
+      detalle_sii_json TEXT,
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE',
+      regla_id INTEGER REFERENCES reglas_contables(id),
+      cuenta_id INTEGER REFERENCES cuentas(id),
+      centro_costo_id INTEGER REFERENCES centros_costo(id),
+      tratamiento_iva TEXT,
+      asiento_id INTEGER REFERENCES asientos(id),
+      informe_id TEXT,
+      origen TEXT NOT NULL DEFAULT 'sii',
+      periodo_ingesta TEXT NOT NULL,
+      clave_dedupe TEXT NOT NULL,
+      creado_en TEXT DEFAULT (datetime('now')),
+      actualizado_en TEXT,
+      UNIQUE(empresa_id, clave_dedupe)
+    );
+    CREATE INDEX IF NOT EXISTS idx_documentos_empresa_estado ON documentos(empresa_id, estado);
+    CREATE INDEX IF NOT EXISTS idx_documentos_empresa_periodo ON documentos(empresa_id, periodo_ingesta);
+
+    CREATE TABLE IF NOT EXISTS reglas_contables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      nombre TEXT NOT NULL,
+      prioridad INTEGER NOT NULL DEFAULT 100,   -- mayor prioridad evalúa primero
+      activa INTEGER NOT NULL DEFAULT 1,
+      tipo_flujo TEXT,                          -- compra | venta | NULL = ambos
+      rut_contraparte TEXT,
+      tipo_doc INTEGER,
+      patron_razon_social TEXT,
+      patron_glosa TEXT,
+      monto_min INTEGER,
+      monto_max INTEGER,
+      cuenta_id INTEGER NOT NULL REFERENCES cuentas(id),
+      centro_costo_id INTEGER REFERENCES centros_costo(id),
+      tratamiento_iva TEXT NOT NULL DEFAULT 'credito',
+      cuenta_contraparte_id INTEGER REFERENCES cuentas(id),
+      crear_desde_clasificacion INTEGER NOT NULL DEFAULT 0,
+      creado_por INTEGER REFERENCES users(id),
+      creado_en TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_reglas_empresa_prioridad ON reglas_contables(empresa_id, prioridad DESC);
+
+    CREATE TABLE IF NOT EXISTS contrapartes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      rut TEXT NOT NULL,
+      razon_social TEXT,
+      clasificacion TEXT NOT NULL DEFAULT 'desconocida',  -- proveedor | cliente | ambos | desconocida
+      cuenta_id INTEGER REFERENCES cuentas(id),
+      centro_costo_id INTEGER REFERENCES centros_costo(id),
+      tratamiento_iva TEXT,
+      primera_vez_en TEXT DEFAULT (datetime('now')),
+      ultima_vez_en TEXT,
+      UNIQUE(empresa_id, rut)
+    );
+    CREATE INDEX IF NOT EXISTS idx_contrapartes_empresa ON contrapartes(empresa_id);
+  `)
+}
+
+/**
+ * FASE 4 — Automatización: propuestas de asiento desde documentos clasificados
+ * y conciliación SII ↔ contable.
+ *
+ * - `propuestas`: snapshot CONGELADO de las líneas del asiento propuesto
+ *   (ACCOUNTING_DOMAIN §6: la propuesta es un asiento pre-validado pendiente de
+ *   confirmación humana). El documento solo avanza a PROPUESTO con una propuesta
+ *   PENDIENTE viva (UNIQUE documento_id); confirmar aplicará exactamente estas
+ *   líneas — nunca regenera con reglas que pudieron cambiar entre medio.
+ * - `conciliaciones`: resultado persistido por empresa+periodo (DATA_MODEL §B.3,
+ *   ACCOUNTING_DOMAIN §9); el histórico se conserva por ejecución en auditoría.
+ * - `asientos.origen`: ya estaba en el diseño (DATA_MODEL §B.2) pero la tabla
+ *   de FASE 2 no lo tenía: se agrega por PRAGMA (idempotente). `asientos.crear`
+ *   ya lo recibía y lo dejaba en la auditoría; ahora también queda en la fila.
+ */
+function migracionesFase4(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS propuestas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      documento_id INTEGER NOT NULL REFERENCES documentos(id),
+      cuenta_id INTEGER NOT NULL REFERENCES cuentas(id),
+      centro_costo_id INTEGER REFERENCES centros_costo(id),
+      tratamiento_iva TEXT NOT NULL,
+      cuenta_contraparte_id INTEGER REFERENCES cuentas(id),
+      regla_id INTEGER REFERENCES reglas_contables(id),
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE',   -- PENDIENTE | APLICADA | DESCARTADA
+      lineas_json TEXT NOT NULL,                  -- snapshot de las líneas propuestas
+      propuesta_por INTEGER REFERENCES users(id),
+      aplicada_asiento_id INTEGER REFERENCES asientos(id),
+      aplicada_por INTEGER REFERENCES users(id),
+      aplicada_en TEXT,
+      descartada_en TEXT,
+      motivo_descarte TEXT,
+      creado_en TEXT DEFAULT (datetime('now'))
+    );
+    -- Una sola propuesta VIVA por documento (re-propuesta descarta la anterior;
+    -- el histórico DESCARTADA/APLICADA se conserva). Índice parcial UNIQUE.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_propuestas_viva_documento
+      ON propuestas(documento_id) WHERE estado = 'PENDIENTE';
+    CREATE INDEX IF NOT EXISTS idx_propuestas_empresa_estado ON propuestas(empresa_id, estado);
+
+    CREATE TABLE IF NOT EXISTS conciliaciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      periodo TEXT NOT NULL,
+      fuente TEXT NOT NULL DEFAULT 'bandeja',     -- bandeja | sii_resumen
+      resultado_json TEXT NOT NULL,               -- diferencias tipificadas + totales (§9)
+      diferencias INTEGER NOT NULL DEFAULT 0,
+      ejecutado_por INTEGER REFERENCES users(id),
+      ejecutado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, periodo)
+    );
+  `)
+
+  const asientosCols = db.prepare(`PRAGMA table_info(asientos)`).all()
+  if (asientosCols.length && !asientosCols.some((c) => c.name === 'origen')) {
+    db.exec(`ALTER TABLE asientos ADD COLUMN origen TEXT`)
+  }
+}
+
+/**
+ * FASE 5 — Reportes y cierres: snapshot JSON del cierre de período (§7).
+ * Los reportes (§8) se calculan en vivo sobre asiento_lineas; lo único que se
+ * persiste es el snapshot del cierre ejecutado (asientos de cierre + checklist
+ * + resultado del período) para consulta/auditoría posterior.
+ */
+function migracionesFase5(db) {
+  const cols = db.prepare(`PRAGMA table_info(periodos_contables)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'cierre_json')) {
+    db.exec(`ALTER TABLE periodos_contables ADD COLUMN cierre_json TEXT`)
+  }
+}
+
+/**
+ * SAAS-1 — Acomplamiento comercial (docs/SAAS-ACCESO.md): licencias por
+ * empresa + ficha tributaria para el onboarding autónomo vía SII.
+ *  - suscripciones: UNA activa por empresa (UNIQUE empresa_id). La licencia se
+ *    ata al RUT de la empresa, no al usuario. Estados §5.2 del documento.
+ *  - empresas: columnas de la ficha que el onboarding llena desde el SII
+ *    (o de formularios si el SII no la entrega — jamás scraping).
+ */
+function migracionesSaas1(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS suscripciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      plan TEXT NOT NULL,                  -- PRUEBA | PYME | PRO | DESPACHO
+      estado TEXT NOT NULL DEFAULT 'PRUEBA',   -- PRUEBA|ACTIVA|VENCIDA|SUSPENDIDA|CANCELADA
+      inicio TEXT NOT NULL,                -- 'YYYY-MM-DD' (fecha de creación)
+      fin TEXT NOT NULL,                   -- fin de vigencia (PRUEBA: inicio+90d)
+      gracia_hasta TEXT,                   -- fin del período de gracia (7 días)
+      monto_clp INTEGER,                   -- 0 en PRUEBA; precio del plan en los demás
+      activada_por INTEGER REFERENCES users(id),   -- super_admin (o pago futuro)
+      activada_en TEXT,
+      cancelada_en TEXT,
+      notas TEXT,
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_suscripciones_estado ON suscripciones(estado, fin);
+  `)
+
+  const cols = db.prepare(`PRAGMA table_info(empresas)`).all()
+  if (cols.length) {
+    const tiene = (n) => cols.some((c) => c.name === n)
+    const agregar = (col) => { if (!tiene(col.nombre)) db.exec(`ALTER TABLE empresas ADD COLUMN ${col.def}`) }
+    // Ficha tributaria (onboarding autónomo, SAAS-2 la llena desde el SII)
+    agregar({ nombre: 'razon_social_sii', def: `razon_social_sii TEXT` })
+    agregar({ nombre: 'inicio_actividades', def: `inicio_actividades TEXT` })
+    agregar({ nombre: 'actividades_json', def: `actividades_json TEXT` })
+    agregar({ nombre: 'regimen_tributario', def: `regimen_tributario TEXT` })
+    agregar({ nombre: 'socios_json', def: `socios_json TEXT` })
+    agregar({ nombre: 'onboarding_json', def: `onboarding_json TEXT` })
+  }
+
+  // Empresas preexistentes (migradas de clientes / creadas por JMV antes del
+  // SaaS): reciben una licencia heredada sin límite práctico para que el gate
+  // nunca las bloquee. Las registradas self-service YA tienen su fila (PRUEBA
+  // o plan pagado) y este backfill las respeta (NOT IN).
+  db.exec(`
+    INSERT INTO suscripciones (empresa_id, plan, estado, inicio, fin, monto_clp, notas)
+    SELECT id, 'DESPACHO', 'ACTIVA', date('now'), date('now', '+3650 days'), 0,
+           'Heredada: empresa preexistente al SaaS (SAAS-1)'
+    FROM empresas
+    WHERE activo = 1 AND id NOT IN (SELECT empresa_id FROM suscripciones)
+  `)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, seedPlanCuentas }

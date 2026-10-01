@@ -14,13 +14,15 @@
 // "hijos" arma un desplegable; puede anidarse (Ranking ▾ → Análisis ▾ → Mensual/Anual).
 const NAV_ITEMS = [
   { key: 'inicio', label: 'Inicio', icon: '🏠', tipo: null },
-  { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },
-  {
-    key: 'contabilidad', label: 'Contabilidad', icon: '📚', hijos: [
+  { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },    {
+      key: 'contabilidad', label: 'Contabilidad', icon: '📚', hijos: [
       { key: 'cont-admin', label: 'Administración', href: '/contable.html' },
       { key: 'cont-asientos', label: 'Asientos y Mayor', href: '/asientos.html' },
+      { key: 'cont-bandeja', label: 'Bandeja de Documentos', href: '/bandeja.html' },
+      { key: 'cont-propuestas', label: 'Propuestas y Conciliación', href: '/propuestas.html' },
+      { key: 'cont-reportes', label: 'Reportes y Cierre', href: '/reportes-contables.html' },
     ],
-  },
+    },
   { key: 'exportacion-masiva', label: 'Reporte Masivo', icon: '📦', href: '/exportacion-masiva.html' },
   {
     key: 'tributarios', label: 'Tributarios', icon: '🧾', hijos: [
@@ -176,6 +178,8 @@ async function initLayout(activeKey) {
     return
   }
 
+  _mostrarBannerLicencia(user)
+
   const esShell = !!document.getElementById('panel-central')
   _activeTipo = null // "Inicio" por defecto; el shell la corrige después vía LayoutSidebar.render
 
@@ -183,7 +187,8 @@ async function initLayout(activeKey) {
     <button type="button" class="sidebar-toggle-mobile" id="sidebar-toggle-mobile" aria-label="Menú">☰</button>
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
-        💼 <span>IVA Mensual</span>
+        <img src="/assets/logo-light.svg" alt="JMV Consultores" />
+        <span class="sidebar-logo-text">IVA Mensual<small>JMV Consultores</small></span>
         <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">⇤</button>
       </div>
       <nav class="sidebar-nav"></nav>
@@ -302,6 +307,41 @@ function _presetQueCoincide(r) {
   const m12 = m === 12 ? 1 : m + 1
   if (r.anioInicio === (m === 12 ? y : y - 1) && r.mesInicio === m12 && r.anioFin === y && r.mesFin === m) return '12m'
   return null
+}
+
+// Banner de licencia (SAAS-ACCESO §5.4): countdown de prueba, gracia o
+// suspensión — visible en las páginas del módulo contable. La licencia viene
+// en /api/auth/me → acceso_contable.empresas[].licencia (de la empresa activa).
+function _mostrarBannerLicencia(user) {
+  try {
+    const acc = user && user.acceso_contable
+    if (!acc || !acc.empresas || !acc.empresas.length) return
+    const activa = localStorage.getItem('iva_empresa_activa')
+    const emp = acc.empresas.find((e) => String(e.id) === String(activa)) || acc.empresas[0]
+    const lic = emp && emp.licencia
+    if (!lic || !lic.estado) return
+
+    let texto = '', tono = ''
+    if (lic.estado === 'PRUEBA' && lic.dias_restantes <= 14) {
+      texto = `⏳ Prueba: quedan <b>${lic.dias_restantes}</b> día(s) — Plan PYME $29.900/mes al término. Habla con JMV para activarlo.`
+      tono = '#b45309'
+    } else if (lic.en_gracia) {
+      texto = `⚠ ${lic.mensaje || 'Licencia vencida: activa un plan para evitar la suspensión'}`
+      tono = '#b45309'
+    } else if (lic.estado === 'SUSPENDIDA' || lic.estado === 'CANCELADA' || lic.estado === 'VENCIDA') {
+      texto = `⛔ ${lic.mensaje || `Licencia ${lic.estado}: puedes consultar todo, pero no registrar movimientos`}`
+      tono = '#b91c1c'
+    }
+    if (!texto) return
+
+    const main = document.querySelector('main.container')
+    if (!main) return
+    const banner = document.createElement('div')
+    banner.className = 'banner-licencia'
+    banner.style.cssText = `background:${tono}14;border:1px solid ${tono}55;color:${tono};border-radius:10px;padding:.55rem .9rem;margin:.4rem 0 .8rem;font-size:.88rem`
+    banner.innerHTML = texto
+    main.insertBefore(banner, main.firstChild)
+  } catch (err) { /* el banner nunca rompe la app */ }
 }
 
 const LayoutHeader = {

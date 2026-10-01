@@ -143,9 +143,9 @@ function crear(db, { empresaId, usuarioId, fecha, glosa, tipo = 'manual', lineas
     `).get(empresaId, anio)
 
     const info = db.prepare(`
-      INSERT INTO asientos (empresa_id, folio, anio, fecha, periodo, tipo, glosa, usuario_id, asiento_revertido_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(empresaId, folio, anio, fecha, periodo, tipo, glosaLimpia, usuarioId, asientoRevertidoId)
+      INSERT INTO asientos (empresa_id, folio, anio, fecha, periodo, tipo, glosa, usuario_id, asiento_revertido_id, origen)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(empresaId, folio, anio, fecha, periodo, tipo, glosaLimpia, usuarioId, asientoRevertidoId, origen)
     const asientoId = info.lastInsertRowid
 
     const insertarLinea = db.prepare(`

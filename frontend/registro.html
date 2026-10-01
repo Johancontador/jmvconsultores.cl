@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear cuenta — Software Contable JMV</title>
+  <meta name="description" content="Registra tu empresa con tu RUT y clave SII: el sistema arma tu contabilidad sola y parte con 3 meses gratis.">
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .reg-wrap { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-4); }
+    .reg-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: var(--space-6); align-items: start; }
+    @media (max-width: 860px) { .reg-grid { grid-template-columns: 1fr; } }
+    .reg-card {
+      background: var(--bg-surface); border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl); padding: var(--space-6); box-shadow: var(--shadow-lg);
+    }
+    .reg-aside { background: linear-gradient(180deg, rgba(99,102,241,0.08), rgba(2,6,23,0)); }
+    .reg-aside ul { list-style: none; padding: 0; margin: var(--space-4) 0; }
+    .reg-aside li { padding: var(--space-2) 0; display: flex; gap: var(--space-2); align-items: baseline; color: var(--fg-secondary); }
+    .reg-aside li::before { content: "✓"; color: var(--success); font-weight: 700; }
+    .reg-title { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-2xl); margin: 0 0 var(--space-2); }
+    .reg-sub { color: var(--fg-secondary); margin: 0 0 var(--space-5); }
+    .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; } /* honeypot */
+    .field-ok { color: var(--success); font-size: var(--fs-xs); }
+    .field-bad { color: var(--danger); font-size: var(--fs-xs); }
+    .reg-exito { text-align: center; padding: var(--space-8) var(--space-6); }
+    .reg-exito .big { font-size: 3rem; }
+    .btn-block { width: 100%; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: girar .8s linear infinite; vertical-align: -3px; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    details.priv { margin-top: var(--space-3); font-size: var(--fs-xs); color: var(--fg-muted); }
+  </style>
+</head>
+<body>
+  <div class="lp-nav">
+    <a class="lp-logo" href="/"><span class="lp-logo-badge">💼</span> IVA Mensual</a>
+    <div class="lp-links">
+      <a href="/">Iniciar sesión</a>
+      <a href="https://jmvconsultores.cl" target="_blank" rel="noopener">jmvconsultores.cl</a>
+    </div>
+  </div>
+
+  <div class="reg-wrap" id="root">
+    <div class="reg-grid">
+      <div class="reg-card">
+        <h1 class="reg-title">Crea tu cuenta en 2 minutos</h1>
+        <p class="reg-sub">Con tu <strong>RUT de empresa y clave tributaria SII</strong> el sistema arma tu contabilidad solo. Empiezas hoy con <strong>3 meses gratis</strong>, sin tarjeta.</p>
+
+        <form id="form-registro" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="f-usuario">Usuario</label>
+              <input class="form-input" id="f-usuario" type="text" autocomplete="username" placeholder="miempresa" required minlength="4">
+              <span id="chk-usuario"></span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="f-clave">Contraseña (mínimo 8)</label>
+              <input class="form-input" id="f-clave" type="password" autocomplete="new-password" required minlength="8">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="f-rut">RUT de tu empresa</label>
+              <input class="form-input" id="f-rut" type="text" placeholder="76123456-7" required>
+              <span id="chk-rut"></span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="f-telefono">WhatsApp (opcional)</label>
+              <input class="form-input" id="f-telefono" type="tel" placeholder="912345678">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="f-nombre">¿Cómo quieres ver tu empresa?</label>
+              <input class="form-input" id="f-nombre" type="text" placeholder="Mi Negocio Ltda" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="f-clavesii">Clave tributaria SII</label>
+            <input class="form-input" id="f-clavesii" type="password" autocomplete="off" required minlength="6">
+            <span class="text-muted" style="font-size:var(--fs-xs)">La validamos en vivo contra el SII y queda cifrada. Solo la usamos para descargar tus documentos.</span>
+          </div>
+
+          <!-- Honeypot anti-bot: campo oculto que los bots rellenan -->
+          <div class="hp" aria-hidden="true">
+            <label for="f-web">No completar este campo</label>
+            <input id="f-web" type="text" tabindex="-1" autocomplete="off">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="btn-enviar">Crear mi cuenta — 3 meses gratis</button>
+          <p id="reg-error" class="field-bad" style="margin-top:var(--space-2)"></p>
+
+          <details class="priv">
+            <summary>¿Qué haremos con tus datos?</summary>
+            <p>Tu clave SII se guarda cifrada (AES-256-GCM) y solo se usa para descargar tus documentos tributarios. No la compartimos con nadie. Cada acción en el sistema queda auditada.</p>
+          </details>
+        </form>
+      </div>
+
+      <aside class="reg-card reg-aside">
+        <h2 style="font-family:var(--font-display); margin-top:0">Qué pasa al enviar</h2>
+        <ul>
+          <li>Validamos tu RUT + clave SII contra el SII en ese momento.</li>
+          <li>Se crea tu empresa con plan de cuentas contable listo.</li>
+          <li>Recibes <strong>90 días de prueba</strong> (licencia automática).</li>
+          <li>Descarga tus documentos del mes y revisa tu IVA.</li>
+        </ul>
+        <p class="text-muted" style="font-size:var(--fs-sm)">Después de la prueba: plan PYME $29.900/mes (1 empresa), PRO $59.900/mes (3) o DESPACHO $119.900/mes (10). Cancelas cuando quieras.</p>
+        <p class="text-muted" style="font-size:var(--fs-xs)">¿Ya tienes cuenta? <a href="/">Inicia sesión aquí</a>. ¿Dudas? Escríbenos por WhatsApp al <a href="https://wa.me/56975752213" target="_blank" rel="noopener">+56 9 7575 2213</a>.</p>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="/shared/toast.js"></script>
+  <script src="/shared/api.js"></script>
+  <script>
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+    }
+    const $ = (id) => document.getElementById(id)
+
+    // ---- Disponibilidad en vivo (usuario y RUT) ----
+    let timerUsuario = null, timerRut = null
+    async function chequear(tipo, valor, $out) {
+      if (!valor) { $out.textContent = ''; return }
+      try {
+        const q = tipo === 'usuario' ? `username=${encodeURIComponent(valor)}` : `rut=${encodeURIComponent(valor)}`
+        const r = await apiGet(`/api/auth/registro/disponible?${q}`)
+        if (tipo === 'usuario') {
+          $out.textContent = r.username ? '✓ disponible' : '✗ ya existe — elige otro'
+          $out.className = r.username ? 'field-ok' : 'field-bad'
+        } else {
+          if (!r.rut_valido) { $out.textContent = '✗ RUT inválido'; $out.className = 'field-bad'; return }
+          $out.textContent = r.rut ? '✓ RUT disponible' : '✗ este RUT ya tiene cuenta — inicia sesión'
+          $out.className = r.rut ? 'field-ok' : 'field-bad'
+        }
+      } catch (err) { /* silencioso: la validación final la hace el servidor */ }
+    }
+    $('f-usuario').addEventListener('input', () => {
+      clearTimeout(timerUsuario)
+      timerUsuario = setTimeout(() => chequear('usuario', $('f-usuario').value.trim(), $('chk-usuario')), 450)
+    })
+    $('f-rut').addEventListener('input', () => {
+      clearTimeout(timerRut)
+      timerRut = setTimeout(() => chequear('rut', $('f-rut').value.trim(), $('chk-rut')), 450)
+    })
+
+    // ---- Envío ----
+    $('form-registro').addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const btn = $('btn-enviar')
+      const error = $('reg-error')
+      error.textContent = ''
+      const cuerpo = {
+        username: $('f-usuario').value.trim(),
+        password: $('f-clave').value,
+        rut: $('f-rut').value.trim(),
+        clave_sii: $('f-clavesii').value,
+        nombre_empresa: $('f-nombre').value.trim(),
+        telefono: $('f-telefono').value.trim(),
+        web: $('f-web').value, // honeypot: debe ser ''
+      }
+      if (!cuerpo.username || !cuerpo.password || !cuerpo.rut || !cuerpo.clave_sii || !cuerpo.nombre_empresa) {
+        error.textContent = 'Completa todos los campos obligatorios.'
+        return
+      }
+      btn.disabled = true
+      btn.innerHTML = '<span class="spinner"></span> Validando contra el SII…'
+      try {
+        const r = await apiPost('/api/auth/registro', cuerpo)
+        const fin = r.licencia && r.licencia.fin ? r.licencia.fin : ''
+        document.getElementById('root').innerHTML = `
+          <div class="reg-card reg-exito">
+            <div class="big">🎉</div>
+            <h1 class="reg-title">¡Tu cuenta está creada!</h1>
+            <p class="reg-sub">Tu empresa quedó registrada con <strong>90 días de prueba</strong>${fin ? ` (hasta el <strong>${esc(fin)}</strong>)` : ''}.</p>
+            <p><a class="btn btn-primary" href="/">Entrar al sistema</a></p>
+            <p class="text-muted" style="font-size:var(--fs-sm); max-width:520px; margin:var(--space-4) auto">
+              Primer paso sugerido: sincroniza el mes actual en <strong>Bandeja de Documentos</strong> — tus compras y ventas del SII aparecerán listas para clasificar.
+            </p>
+          </div>`
+      } catch (err) {
+        error.textContent = `✗ ${err.message}`
+        btn.disabled = false
+        btn.textContent = 'Crear mi cuenta — 3 meses gratis'
+      }
+    })
+  </script>
+</body>
+</html>

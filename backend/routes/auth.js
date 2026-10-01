@@ -49,6 +49,59 @@ router.post('/login', rateLimitLogin, (req, res) => {
   res.json({ ok: true, user: { username: user.username, is_admin: !!user.is_admin } })
 })
 
+// ---- Registro self-service (SAAS-ACCESO §3, §7) ----
+// Rate-limit INDEPENDIENTE del login: 10 registros/hora/IP.
+const registroIntentos = new Map()
+const LIMITE_REGISTRO = 10
+const VENTANA_REGISTRO_MS = 60 * 60 * 1000
+
+function rateLimitRegistro(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown'
+  const ahora = Date.now()
+  const registro = registroIntentos.get(ip) || { count: 0, inicio: ahora }
+  if (ahora - registro.inicio > VENTANA_REGISTRO_MS) {
+    registro.count = 0
+    registro.inicio = ahora
+  }
+  if (registro.count >= LIMITE_REGISTRO) {
+    return res.status(429).json({ ok: false, error: 'Demasiados registros desde esta IP. Intente más tarde.' })
+  }
+  registro.count++
+  registroIntentos.set(ip, registro)
+  next()
+}
+
+router.post('/registro', rateLimitRegistro, async (req, res) => {
+  try {
+    const { registrarConOnboarding } = require('../core/registro')
+    const r = await registrarConOnboarding(db, {
+      username: req.body.username, password: req.body.password,
+      rut: req.body.rut, claveSii: req.body.clave_sii,
+      nombreEmpresa: req.body.nombre_empresa, telefono: req.body.telefono,
+      web: req.body.web, // honeypot anti-bot (debe venir vacío)
+      probarSii: req.body.probar_sii !== false,
+      ip: req.ip || null,
+    })
+    res.status(201).json(r)
+  } catch (err) {
+    const code = /inválid|ya |obligator|debe |no aceptó|rechazado|existe/.test(err.message) ? 400 : 500
+    res.status(code).json({ ok: false, error: err.message })
+  }
+})
+
+// Disponibilidad en vivo para el formulario (usuario y RUT, sin crear nada).
+router.get('/registro/disponible', rateLimitRegistro, (req, res) => {
+  const { username, rut } = req.query
+  const out = {}
+  if (username) out.username = !db.prepare(`SELECT 1 FROM users WHERE username = ?`).get(String(username).trim().toLowerCase())
+  if (rut) {
+    const { validarRut, normalizarRut } = require('../core/empresas')
+    out.rut_valido = validarRut(rut)
+    if (out.rut_valido) out.rut = !db.prepare(`SELECT 1 FROM empresas WHERE rut = ? AND activo = 1`).get(normalizarRut(rut))
+  }
+  res.json({ ok: true, ...out })
+})
+
 router.post('/logout', requireAuth, (req, res) => {
   const cookies = parseCookies(req.headers.cookie)
   destruirSesion(cookies.sid)
@@ -66,12 +119,14 @@ router.get('/me', requireAuth, (req, res) => {
     const { superAdmin, asignaciones } = asignacionesDeUsuario(db, req.user.id)
     const filas = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1`).all()
     const nombrePorId = new Map(filas.map((e) => [e.id, e]))
+    const { estadoParaUI } = require('../core/licencias')
     const empresasDelUsuario = asignaciones
       .filter((a) => nombrePorId.has(a.empresa_id))
       .map((a) => ({
         ...nombrePorId.get(a.empresa_id),
         rol: a.rol,
         permisos: [...permisosDeRol(a.rol)],
+        licencia: estadoParaUI(db, a.empresa_id),
       }))
     accesoContable = { super_admin: superAdmin, empresas: empresasDelUsuario }
   } catch (err) {

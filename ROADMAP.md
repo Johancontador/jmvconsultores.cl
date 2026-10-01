@@ -11,15 +11,15 @@
 | 0 | Inspección + documentos de análisis (este set) | **✅ COMPLETADA** |
 | 1 | Fundación: empresas, usuarios, roles, períodos, auditoría, bóveda, backups | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
 | 2 | Núcleo contable: plan de cuentas, asientos, partida doble, diario, mayor | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
-| 3 | Documentos: ingesta SII, bandeja, clasificación, reglas | — |
-| 4 | Automatización: propuestas, contabilización, conciliación | — |
-| 5 | Reportes: balance, resultados, análisis | — |
+| 3 | Documentos: ingesta SII, bandeja, clasificación, reglas | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
+| 4 | Automatización: propuestas, contabilización, conciliación | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
+| 5 | Reportes: balance, resultados, análisis | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
 | 6 | Tesorería | — |
 | 7 | Activos fijos | — |
 | 8 | NIIF/IFRS avanzado | — |
 | 9 | Integraciones: Geo Daniela, bancos | — |
 
-**MVP (criterio §48) = Fases 1+2+3+4+5 hasta "cerrar período" con conciliación.** Las fases 6–9 no bloquean el MVP.
+**MVP (criterio §48) = Fases 1+2+3+4+5 hasta "cerrar período" con conciliación.** Las fases 6–9 no bloquean el MVP. **→ MVP COMPLETO (2026-10-01): la fase 5 cierra el criterio.**
 
 ---
 
@@ -54,6 +54,8 @@ Aceptación FASE 2: suite de tests unitarios del core (partida doble inválida r
 
 ## FASE 3 — Documentos (SII → bandeja)
 
+> **✅ IMPLEMENTADA (2026-10-01):** tabla `documentos` (bandeja persistente independiente de informes, cierra la deuda §8.8 de CURRENT_STATE) con dedupe idempotente `clave_dedupe` (SHA-256 de rut empresa|flujo|tipo DTE|folio|período) — re-ingesta del mismo RCV NO duplica (probado); máquina de estados §5 con transiciones validadas (RECIBIDO reservado, ingesta inserta PENDIENTE; PROPUESTO/CONTABILIZADO quedan para FASE 4; monto 0 → REVISIÓN; anulación auditada nunca física); ingesta en background con progreso (patrón informe.js) que consume `rcv.consultarRCV` existente SIN tocarlo, convierte montos REAL→INTEGER solo en la frontera y deriva `contrapartes` (proveedor/cliente, clasificación recordada); motor de reglas por prioridad DESC con condiciones combinables (flujo, RUT, tipo DTE, patrón razón social, rango de monto) y catch-all; clasificación manual con "recordar para este proveedor" (aprende regla RUT+DTE+flujo, prioridad 50); clasificación automática en lote auditada; UI `/bandeja.html` (ingesta con polling, chips de estado con conteos, filtros, diálogo de clasificación con cuenta/CC/IVA, reglas, contrapartes) con nav 📚 → Bandeja de Documentos. Nueva capacidad RBAC `documentos:ingestar` (contador y super admin). **17 tests nuevos** (`test/fase3.test.js`); suite completa: 55 verdes. Pendiente de validación con datos reales del VPS: ingestar Ene–Sep 2026 de la empresa real (1.570 ventas + 1.256 compras → 0 duplicados en re-ingesta) y verificar ≥80% de clasificación con reglas semilla (criterio de aceptación).
+
 1. **Ingesta** (`documentos/ingesta.js`): consumir `rcv.consultarRCV` existente por empresa+período; dedupe idempotente; montos INTEGER; estados iniciales; trabajo en background con progreso (patrón informe.js); reutiliza caché de períodos cerrados.
 2. **Bandeja**: `documentos` con filtros (período, RUT, proveedor, folio, tipo DTE, estado, monto, cuenta, CC) sobre `datagrid.js` existente.
 3. **Clasificación**: manual (cuenta + CC + tratamiento IVA) y por reglas.
@@ -64,6 +66,8 @@ Aceptación FASE 3: ingestar Ene–Sep 2026 de la empresa real (1.570 ventas + 1
 
 ## FASE 4 — Automatización (propuestas, contabilización, conciliación)
 
+> **✅ IMPLEMENTADA (2026-10-01):** tablas `propuestas` (snapshot CONGELADO de líneas en `lineas_json` — la confirmación aplica exactamente lo propuesto, nunca regenera; índice parcial `UNIQUE(documento_id) WHERE estado='PENDIENTE'` que permite histórico de re-propuestas) y `conciliaciones` (UNIQUE empresa+periodo, re-ejecutar reemplaza con ON CONFLICT DO UPDATE); columna `asientos.origen` ('propuesta:<id>') agregada por PRAGMA. `core/propuestas.js`: generar desde CLASIFICADO (re-propone PROPUESTO y CONTABILIZADO-solo-si-su-asiento-ya-está-revertido, transiciones §5), contraparte por precedencia §6 (cuenta_contraparte_id de la regla > clasificación recordada > alias PROVEEDORES/CLIENTES), NC 60/61 con patas invertidas conservando ΣD=ΣH, partida cuadrada validada ANTES de guardar el snapshot; confirmar = transacción única asiento (núcleo FASE 2 con todas sus validaciones) + propuesta APLICADA + documento CONTABILIZADO con asiento_id, fecha = fecha_docto del documento (devengo); confirmarLote omite y reporta los fallidos (p. ej. período cerrado) sin quedar a medias silenciosamente; descartar devuelve el doc a CLASIFICADO. `core/conciliacion.js` (§9): diferencias SOLO_SII / MONTO_DIVERGENTE / IMPUESTO_DIVERGENTE (IVA por alias con signo NC correcto), asientos sin documento = ajustes_sin_documento (NO son diferencias), comparación contra resumen oficial SII opcional (`sii_resumen`); concilia y REPORTA, jamás corrige en silencio. RBAC nuevo: propuestas:ver/generar/confirmar + conciliacion:ver/ejecutar (contador: todas; admin_empresa/auditor/tesorería: solo ver). UI `/propuestas.html` (tabs propuestas/conciliación, generar lote, confirmar individual con vista de partidas y fecha opcional, confirmar lote, descartar, historial) con nav 📚 → Propuestas y Conciliación. **16 tests nuevos** (`test/fase4.test.js`); suite completa: 71 verdes. Pendiente de validación con datos reales del VPS (criterio de aceptación): contabilizar un mes completo → diario cuadra a $0 y la conciliación contra el resumen SII del período explica el 100% de la diferencia (o da $0).
+
 1. **Propuestas**: generador desde documento clasificado + regla (Debe: imputable+IVA según tratamiento; Haber: proveedores/clientes); lotes ("proponer todo el mes"); borradores visibles sin asiento registrado.
 2. **Contabilización**: confirmación individual o por lote con validación final; transacción única (asiento + líneas + estado documento + auditoría); documento queda `CONTABILIZADO` con `asiento_id`.
 3. **REVISIÓN/ERROR**: banderas por divergencia (ACCOUNTING_DOMAIN §5); flujo de resolución con trazabilidad.
@@ -73,12 +77,16 @@ Aceptación FASE 4 (con datos reales): contabilizar un mes completo → el diari
 
 ## FASE 5 — Reportes y cierres
 
-1. Balance de comprobación y sumas; Estado de situación financiera; Estado de resultados (por naturaleza de cuenta, sin digitación).
-2. **Cierre de período**: checklist (§7 de ACCOUNTING_DOMAIN) + asientos de cierre (IVA→F29 por pagar, PPM devengado, resultado→patrimonio) + bloqueo del período.
-3. Comparativos y exportación Excel (reutilizar `shared/export.js`).
-4. Dashboard contable: indicadores financieros + contables + SII + alertas (§9 del PROMPT MAESTRO), distinguiendo lo automático de lo pendiente humano (§43).
+> **✅ IMPLEMENTADA (2026-10-01) — cierra el MVP (§48):** `core/reportes.js` 100% derivado de `asiento_lineas` (nada digitado): balance de comprobación (acumulado hasta el último día REAL del período + movimientos del mes, ambos con ΣD=ΣC verificado), estado de situación financiera (activos/pasivos/patrimonio por clase + resultado de clases 4/5/6 acumulado SIN asiento de cierre → la ecuación A = P + Patrimonio cuadra en todo estado, verificado por test pre y post cierre) y estado de resultados (mes + acumulado del año). **Cierre de período (§7):** `prepararCierre` NO muta — checklist visible (documentos sin contabilizar BLOQUEAN salvo `forzar` explícito y auditado; conciliación ejecutada y visible: sus diferencias NO bloquean, §7.2) + asientos de cierre PROPUESTOS por ALIAS de control — nunca código rígido (§3.5): IVA determinado → F29_POR_PAGAR (con remanente de crédito fiscal no se propone: el F29 lo arrastra, §10), PPM devengado = ingresos netos × tasa_ppm de la empresa (GASTO_PPM/PPM_POR_PAGAR, §10) y resultado ACUMULADO hasta el último día del período → RESULTADO_EJERCICIO (incorpora el PPM devengado para dejar las clases 4/5/6 en cero; con cuentas abiertas siempre hay asiento aunque el neto sea 0); cada propuesto se verifica cuadrado ANTES de ofrecerse. `ejecutarCierre` = UNA transacción auditada: asientos tipo 'cierre' vía `asientos.crear` (núcleo FASE 2 con TODAS sus validaciones), fechados el ÚLTIMO DÍA del período (el período siguiente queda limpio, sin contrapartidas de cierre), período → CERRADO y snapshot persistido en `periodos_contables.cierre_json` (migración PRAGMA idempotente), consultable vía `obtenerCierre`/snapshot UI. La confirmación es SIEMPRE humana (botón con selección de asientos y `confirm`); el núcleo rechaza cualquier mutación posterior en el período cerrado (test). UI `/reportes-contables.html` (tabs Balance/Situación/Resultados/Cierre con checklist + confirmación + snapshot) con nav 📚 → Reportes y Cierre; RBAC sin cambios: `reportes:ver` (contador/admin_empresa/auditor/tesorería) y `periodos:cerrar` (contador/super_admin) ya existentes. **9 tests nuevos** (`test/fase5.test.js`); suite completa: **80 verdes**. Quedan como mejora posterior (no bloquean el MVP): comparativos y exportación Excel (reutilizar `shared/export.js`) y dashboard contable (§43).
+
+1. ✅ Balance de comprobación y sumas; Estado de situación financiera; Estado de resultados (por naturaleza de cuenta, sin digitación).
+2. ✅ **Cierre de período**: checklist (§7 de ACCOUNTING_DOMAIN) + asientos de cierre (IVA→F29 por pagar, PPM devengado, resultado→patrimonio) + bloqueo del período.
+3. ⬜ Comparativos y exportación Excel (reutilizar `shared/export.js`) — post-MVP.
+4. ⬜ Dashboard contable: indicadores financieros + contables + SII + alertas (§9 del PROMPT MAESTRO), distinguiendo lo automático de lo pendiente humano (§43) — post-MVP.
 
 Aceptación FASE 5 (cierra el MVP, §48): flujo completo con datos reales: empresa → plan → SII → clasificar → asiento → diario → mayor → balance → resultados → conciliar → **cerrar período**; tras cerrar, ninguna mutación anterior es posible (test); A = P + Patrimonio verificado en todos los estados.
+
+> **Logrado en tests (80 verdes):** A = P + Patrimonio verificado pre y post cierre; tras cerrar, el núcleo rechaza cualquier asiento en el período (test); el período siguiente queda sin arrastre. Pendiente: corrida end-to-end con datos reales del VPS (flujo completo hasta cerrar un mes real).
 
 ## FASES 6–9 — Post-MVP (una línea cada una, se detallarán al llegar)
 
@@ -86,6 +94,17 @@ Aceptación FASE 5 (cierra el MVP, §48): flujo completo con datos reales: empre
 - **7 Activos fijos**: registro, depreciación mensual (asiento automático), venta/baja.
 - **8 NIIF/IFRS**: mapeo cuentas→rubros NIIF y presentación de estados.
 - **9 Integraciones**: receptor Geo Daniela (contrato ya definido en INTEGRATIONS §4), bancos, otras plataformas.
+
+## SAAS — Acomplamiento comercial (docs/SAAS-ACCESO.md)
+
+Paralelo a las fases 6–9: convierte el MVP en producto vendible desde jmvconsultores.cl.
+
+> **✅ SAAS-1 IMPLEMENTADA (2026-10-01):** acceso comercial completo — el sitio corporativo enlaza "Acceso al Software" (topbar + footer, URL en `CONFIG.appUrl`) a `app.jmvconsultores.cl`; **registro self-service** (`/registro.html` → `POST /api/auth/registro`): usuario + RUT de empresa + clave SII, con validación EN VIVO contra el SII (`probarConexion` existente, sin scraping) que rechaza crear cuentas con credenciales inválidas; en UNA transacción se crean usuario + empresa (clave cifrada en bóveda) + plan PUC + rol admin_empresa + **licencia PRUEBA 90 días automática**. **Licencias por empresa** (`suscripciones`, UNIQUE empresa_id): planes PRUEBA/PYME $29.900/PRO $59.900/DESPACHO $119.900 en `core/licencias.js`; estados PRUEBA→ACTIVA→VENCIDA (gracia 7d, sigue operando)→SUSPENDIDA, resueltos al leer (sin cron) y auditados; las empresas preexistentes/creadas por JMV reciben licencia HEREDADA (nunca bloqueadas); **gate centralizado en requirePermiso**: capacidades `:ver` nunca se bloquean, escrituras exigen licencia (HTTP 402 con detalle para la UI); banner de countdown en la app; endpoint de disponibilidad en vivo (usuario/RUT); honeypot + rate-limit propio (10/h/IP); backfill idempotente. Fichas tributarias (razón social, actividades, régimen, socios) como columnas listas para SAAS-2 (onboarding 100% autónomo desde el SII). **13 tests nuevos** (`test/saas1.test.js`, SII mockeado); suite completa: **93 verdes**.
+
+- **SAAS-2** — Onboarding autónomo completo: razón social, actividades económicas, inicio de actividades y régimen desde el SII (misma sesión, sin scraping; si no hay endpoint → formulario humano con checklist ✓/⚠ §43) + ingesta inicial guiada del histórico.
+- **SAAS-3** — Pagos y facturación: webhook MercadoPago/Transbank → `licencias.activarPlan`; factura electrónica de la suscripción; panel de facturación del cliente.
+
+Aceptación SAAS-1: un dueño de pyme entra desde jmvconsultores.cl → se registra con su RUT y clave SII → si la clave es válida opera con 90 días de prueba; si es inválida NO se crea nada; una empresa suspendida puede leer todo pero no escribir (402); nada de lo anterior rompe el flujo contable de JMV (licencias heredadas).
 
 ## Fuera de alcance permanente (recordatorio)
 

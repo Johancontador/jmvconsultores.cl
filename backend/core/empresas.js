@@ -132,6 +132,9 @@ function crear(db, { usuarioId, rut, nombre, claveSii, tasaPpm = 0, telefono = '
     const empresaId = info.lastInsertRowid
     // Plantilla PUC precargada al crear la empresa (FASE 2)
     seedPlanCuentas(db, empresaId)
+    // Licencia HEREDADA (SAAS-ACCESO §5): la empresa creada manualmente por el
+    // super_admin es cliente de servicio — el gate de licencias no la bloquea.
+    require('./licencias').crearHeredada(db, empresaId, usuarioId)
     registrarAccion(db, {
       empresaId, usuarioId, accion: 'empresa.crear', entidad: 'empresas', entidadId: empresaId,
       despues: { rut: rutNorm, nombre: String(nombre).trim(), tasa_ppm: tasa, exento: !!exento }, ip,

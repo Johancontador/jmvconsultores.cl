@@ -64,6 +64,9 @@ app.use('/api/proceso', requireAuth, require('./routes/proceso'))
 app.use('/api/exportacion-masiva', requireAuth, require('./routes/exportacion-masiva'))
 app.use('/api/sii', requireAuth, require('./routes/sii'))
 app.use('/api/contable', requireAuth, require('./routes/contable'))
+app.use('/api/contable', requireAuth, require('./routes/documentos'))
+app.use('/api/contable', requireAuth, require('./routes/propuestas'))
+app.use('/api/contable', requireAuth, require('./routes/reportes'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })
