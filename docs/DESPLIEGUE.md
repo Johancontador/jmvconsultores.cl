@@ -50,6 +50,30 @@ túnel; activar **Bot Fight Mode** y una regla de rate-limit para `/api/auth/log
 - DuckDNS + Cloudflare: se puede usar un dominio propio apuntando CNAME al túnel
   aunque el DNS esté en DuckDNS.
 
+## Requisitos operativos del Software Contable (FASE 1+)
+
+En el `.env` del VPS **son obligatorias** estas variables nuevas:
+
+```bash
+# Bóveda AES-256-GCM: cifra las claves SII de las empresas en reposo.
+# Generar UNA VEZ: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Si cambia después, los secretos cifrados dejan de ser legibles.
+SECRETOS_MASTER_KEY=<64-hex>
+```
+
+**Backups diarios** (la contabilidad es irremplazable — programar en cron del VPS):
+
+```bash
+# crontab -e
+0 3 * * * cd /home/johan/iva-mensual && /usr/bin/node scripts/backup-db.js >> logs-backup.log 2>&1
+```
+
+- `scripts/backup-db.js` usa el backup online de better-sqlite3 (seguro con el
+  servidor en marcha y WAL activo), escribe en `data/backups/` y aplica retención
+  configurable (`BACKUP_RETENCION`, default 30 copias).
+- Restaurar: detener servidor → copiar el `.db` elegido a `data/iva_mensual.db` → arrancar.
+- Probar el restore una vez al mes: un backup que nunca se restauró no es un backup.
+
 ## Opción B — PaaS (Render / Railway / Fly.io)
 
 **Por qué:** cero administración, deploy desde GitHub automático.

@@ -57,7 +57,27 @@ router.post('/logout', requireAuth, (req, res) => {
 })
 
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ ok: true, user: req.user })
+  // FASE 1: además del usuario, el shell necesita saber a qué empresas tiene
+  // acceso y con qué rol/capacidades (nav y botones se generan desde aquí).
+  let accesoContable = null
+  try {
+    const { asignacionesDeUsuario } = require('../core/empresas')
+    const { permisosDeRol } = require('../core/permisos')
+    const { superAdmin, asignaciones } = asignacionesDeUsuario(db, req.user.id)
+    const filas = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1`).all()
+    const nombrePorId = new Map(filas.map((e) => [e.id, e]))
+    const empresasDelUsuario = asignaciones
+      .filter((a) => nombrePorId.has(a.empresa_id))
+      .map((a) => ({
+        ...nombrePorId.get(a.empresa_id),
+        rol: a.rol,
+        permisos: [...permisosDeRol(a.rol)],
+      }))
+    accesoContable = { super_admin: superAdmin, empresas: empresasDelUsuario }
+  } catch (err) {
+    console.error('[me] error cargando acceso contable:', err.message)
+  }
+  res.json({ ok: true, user: { ...req.user, acceso_contable: accesoContable } })
 })
 
 router.get('/usuarios', requireAuth, requireAdmin, (req, res) => {

@@ -332,4 +332,10 @@ if (procesosSchema && /clientes_old_migracion/i.test(procesosSchema.sql)) {
   db.pragma('foreign_keys = ON')
 }
 
+// ===== Software Contable — FASE 1 (fundación) =====
+// Migraciones nuevas en módulos core (mismo patrón idempotente: se ejecutan
+// en cada arranque; si ya aplicaron, no hacen nada). No tocan clientes,
+// informes ni rcv_cache: la capa tributaria legada sigue funcionando igual.
+require('./core/migraciones').migracionesFase1(db)
+
 module.exports = db

@@ -9,8 +9,8 @@
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Inspección + documentos de análisis (este set) | **✅ COMPLETADA** |
-| 1 | Fundación: empresas, usuarios, roles, períodos, auditoría, bóveda, backups | Siguiente |
-| 2 | Núcleo contable: plan de cuentas, asientos, partida doble, diario, mayor | — |
+| 1 | Fundación: empresas, usuarios, roles, períodos, auditoría, bóveda, backups | **✅ IMPLEMENTADA** (2026-10-01, ver nota bajo la fase) |
+| 2 | Núcleo contable: plan de cuentas, asientos, partida doble, diario, mayor | Siguiente |
 | 3 | Documentos: ingesta SII, bandeja, clasificación, reglas | — |
 | 4 | Automatización: propuestas, contabilización, conciliación | — |
 | 5 | Reportes: balance, resultados, análisis | — |
@@ -26,6 +26,8 @@
 ## FASE 1 — Fundación (multiempresa, usuarios, roles, períodos, auditoría)
 
 Objetivo: que cualquier cosa contable que venga después nazca aislada, con roles y trazable.
+
+> **✅ IMPLEMENTADA (2026-10-01):** tablas `empresas/roles/usuario_empresa/periodos_contables/auditoria` con migración 1:1 desde clientes (clave SII cifrada en bóveda AES-256-GCM, `SECRETOS_MASTER_KEY`); RBAC de 5 roles por capacidades + `requirePermiso`; períodos con cierre/reapertura auditada; bitácora inmutable consultable; `scripts/backup-db.js` (retención configurable); UI `/contable.html` (ficha, crear empresa, roles, períodos, auditoría) con nav 📚 Contabilidad. Verificada con datos reales (2 empresas migradas, ciclo de cierre/reapertura auditado). **15 tests nuevos** en `test/fase1.test.js` (suite completa: 26 verdes). Pendiente operativo: programar el cron de backups en el VPS y definir `SECRETOS_MASTER_KEY` allá (docs/DESPLIEGUE.md §Requisitos operativos).
 
 1. **Empresas**: tabla + migración 1:1 desde `clientes` (conservar rut/nombre/ppm/clave/usuario dueño). CRUD en `/api/contable/empresas`. El portafolio pasa a leer empresas.
 2. **Roles y permisos**: tablas `roles`/`usuario_empresa`; 5 roles semilla (SUPER ADMIN, CONTADOR, ADMIN EMPRESA, AUDITOR, TESORERÍA); capacidades nombradas; middleware `requirePermiso`; `GET /api/auth/me` devuelve `{ usuario, empresas:[{id, rol, permisos}] }`. Selección de empresa activa en el shell (sesión).
