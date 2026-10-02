@@ -34,6 +34,7 @@ const CATALOGO_CAPACIDADES = {
   'automatizacion:ejecutar': 'Ejecutar el pipeline de contabilización automática del período (clasificar → proponer → contabilizar en lote)',
   'conciliacion:ver': 'Ver conciliación SII ↔ contable',
   'conciliacion:ejecutar': 'Ejecutar la conciliación de un período',
+  'onboarding:ejecutar': 'Consultar el SII y confirmar la ficha tributaria + ingesta del histórico (onboarding autónomo)',
   'reportes:ver': 'Ver reportes financieros',
   'config:editar': 'Editar configuración de la empresa',
 }
@@ -56,6 +57,7 @@ const PERMISOS_POR_ROL = {
     'propuestas:ver', 'propuestas:generar', 'propuestas:confirmar',
     'automatizacion:ejecutar',
     'conciliacion:ver', 'conciliacion:ejecutar',
+    'onboarding:ejecutar',
     'reportes:ver', 'config:editar',
   ],
 
@@ -64,11 +66,12 @@ const PERMISOS_POR_ROL = {
     'periodos:ver',
     'auditoria:ver',
     'cuentas:ver',
-    'documentos:ver',
+    'documentos:ver', 'documentos:ingestar',  // SAAS-2: ingesta del histórico sin JMV (gate de licencia igual aplica)
     'asientos:ver',
     'reglas:ver',
     'propuestas:ver',
     'conciliacion:ver',
+    'onboarding:ejecutar',
     'reportes:ver', 'config:editar',
   ],
 

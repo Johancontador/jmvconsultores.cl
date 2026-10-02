@@ -54,6 +54,23 @@ SII **en vivo contra el SII** (reusa `probarConexion`, sin scraping), y con eso
 arma la empresa: RUT normalizado, clave cifrada en bóveda, plan de cuentas PUC
 sembrado, usuario dueño con rol `admin_empresa` y licencia en prueba.
 
+> **✅ SAAS-2 IMPLEMENTADA (2026-10-02):** `core/onboarding.js` + vista 🚀
+> Onboarding en /sistema/ —
+> - **Ficha desde el SII** (solo vías ya existentes, sin scraping): la sesión
+>   RCV válida prueba el control de la empresa y propone razón social; el
+>   **inicio de actividades** se deriva de la primera venta del RCV (evidencia,
+>   confirmación humana antes de persistir).
+> - **Checklist §43** ✓ confirmado / ⚠ pendiente por dato, visible en Inicio
+>   y en la vista; auditado (`onboarding.ficha_confirmada`,
+>   `onboarding.historico_completado`).
+> - **Ingesta del histórico**: 1–24 períodos hacia atrás vía pipeline FASE 3
+>   (idempotente por dedupe), job en background con progreso; RBAC
+>   `onboarding:ejecutar` (contador, admin_empresa, super_admin) + gate de
+>   licencia; `admin_empresa` ganó `documentos:ingestar` para no depender de
+>   JMV.
+> - Lo que el SII no entrega por vía existente (actividades económicas,
+>   régimen, socios) queda como **formulario humano** con el checklist ⚠.
+
 Fases siguientes (mismo principio: **consultar al SII, nunca adivinar**):
 
 | Dato | Fuente SII | Fase |

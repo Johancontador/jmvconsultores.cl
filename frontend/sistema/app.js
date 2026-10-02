@@ -198,6 +198,7 @@ const NAV = [
   { key: 'asientos', label: 'Contabilidad', ico: '⚖️', permiso: 'asientos:ver' },
   { key: 'propuestas', label: 'Propuestas', ico: '⚡', permiso: 'propuestas:ver' },
   { key: 'reportes', label: 'Reportes y Cierre', ico: '📈', permiso: 'reportes:ver' },
+  { key: 'onboarding', label: 'Onboarding', ico: '🚀', permiso: 'documentos:ver' },
   { key: 'integraciones', label: 'Integraciones', ico: '🔌', permiso: 'empresas:ver' },
   { key: 'admin', label: 'Administración', ico: '⚙️', permiso: 'periodos:ver' },
 ]

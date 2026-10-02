@@ -24,6 +24,10 @@ VIEWS.inicio = {
       claveSiiConfigurada = !!(await apiGet(`/api/contable/empresas/${S.empresa.id}`)).empresa?.clave_sii_configurada
     } catch { /* la línea del checklist mostrará la advertencia */ }
 
+    // Onboarding (SAAS-2): checklist ✓/⚠ visible desde el primer día
+    let onb = null
+    try { onb = await apiGet(`/api/contable/empresas/${S.empresa.id}/onboarding/ficha`) } catch { /* vista seguirá sin él */ }
+
     const delMes = mesesData.find((m) => m.p === periodo) || { sumas: {}, estados: [], documentos: [] }
     const totalPor = (docs, flujo, campo) => docs
       .filter((d) => d.tipo_flujo === flujo && !['ANULADO', 'ERROR'].includes(d.estado))
@@ -80,6 +84,19 @@ VIEWS.inicio = {
           <a href="#automatizacion" class="btn btn-primary btn-sm">Abrir →</a>
         </div>
       </div>
+
+      ${onb && !onb.completo ? `
+      <div class="card mt">
+        <div class="flex" style="justify-content:space-between">
+          <div>
+            <h3 style="margin:0">🚀 Onboarding — ${onb.pendientes_humano.length} dato(s) por completar</h3>
+            <p class="muted" style="font-size:var(--fs-sm);margin:var(--space-2) 0 0">
+              Ficha tributaria desde el SII con tu confirmación + ingesta del histórico. Todo autónomo, sin esperar a JMV.
+            </p>
+          </div>
+          <a href="#onboarding" class="btn btn-primary btn-sm">Completar →</a>
+        </div>
+      </div>` : ''}
 
       <div class="grid-2 mt">
         <div class="card">
