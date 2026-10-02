@@ -66,17 +66,23 @@ function resolverContraparte(db, empresaId, { reglaId = null, rutContraparte, ti
 
 function glosaLinea(doc, tipo) {
   const nombre = doc.razon_social || doc.rut_contraparte
+  if (tipo === 'base') return `${nombre} — base imputable (neto + exento + otros)`
   return tipo === 'neto' ? `${nombre} — neto` : `${nombre} — total doc ${doc.folio}`
 }
 
 /**
  * Construye las líneas de la propuesta (§6). Montos enteros en pesos:
- *  - Compra con crédito:    Debe: imputable (neto) + IVA_CREDITO (IVA); Haber: contraparte (total)
+ *  - Compra con crédito:    Debe: imputable (base = total − IVA) + IVA_CREDITO (IVA); Haber: contraparte (total)
  *  - Compra sin crédito / uso común / no recuperable: Debe: imputable (total); Haber: contraparte (total)
- *  - Venta con IVA débito:  Debe: contraparte (total); Haber: ventas (neto) + IVA_DEBITO (IVA)
+ *  - Venta con IVA débito:  Debe: contraparte (total); Haber: ventas (base) + IVA_DEBITO (IVA)
  *  - Venta exenta/sin IVA:  Debe: contraparte (total); Haber: ventas (total)
  *  - NC (tipo 61/60): patas invertidas, conservando ΣD = ΣH (§6).
- * Tratamiento "credito" con IVA $0 en el documento: partida cuadrada igual.
+ *
+ * La base imputable con crédito es `total − IVA` (no solo el neto): absorbe el
+ * monto exento, los impuestos sin derecho a crédito que declara el propio RCV
+ * (validación con datos reales: peajes exentos, "Impto. Sin Derecho a Credito")
+ * y redondeos del SII — siempre ΣD = ΣH sin inventar montos. El IVA a crédito
+ * es únicamente el IVA RECUPERABLE que declara el documento.
  */
 function construirLineas(db, empresaId, doc) {
   const contra = resolverContraparte(db, empresaId, {
@@ -87,6 +93,8 @@ function construirLineas(db, empresaId, doc) {
   const neto = Number(doc.monto_neto) || 0
   const iva = Number(doc.monto_iva) || 0
   const total = Number(doc.monto_total) || 0
+  // Base imputable con crédito: todo lo del documento que NO es IVA recuperable
+  const base = Math.max(0, total - iva)
 
   let lineas
   if (doc.tipo_flujo === 'compra') {
@@ -94,7 +102,7 @@ function construirLineas(db, empresaId, doc) {
       const ivaCredito = cuentas.cuentaPorAlias(db, empresaId, 'IVA_CREDITO')
       if (!ivaCredito) throw new Error('Falta la cuenta IVA_CREDITO en el plan de la empresa')
       lineas = [
-        { cuenta_id: Number(doc.cuenta_id), debe: neto, haber: 0, glosa: glosaLinea(doc, 'neto') },
+        { cuenta_id: Number(doc.cuenta_id), debe: base, haber: 0, glosa: glosaLinea(doc, 'base') },
         { cuenta_id: ivaCredito.id, debe: iva, haber: 0, glosa: 'IVA crédito fiscal' },
         { cuenta_id: contra, debe: 0, haber: total, glosa: glosaLinea(doc, 'total') },
       ]
@@ -110,7 +118,7 @@ function construirLineas(db, empresaId, doc) {
       if (!ivaDebito) throw new Error('Falta la cuenta IVA_DEBITO en el plan de la empresa')
       lineas = [
         { cuenta_id: contra, debe: total, haber: 0, glosa: glosaLinea(doc, 'total') },
-        { cuenta_id: Number(doc.cuenta_id), debe: 0, haber: neto, glosa: glosaLinea(doc, 'neto') },
+        { cuenta_id: Number(doc.cuenta_id), debe: 0, haber: base, glosa: glosaLinea(doc, 'base') },
         { cuenta_id: ivaDebito.id, debe: 0, haber: iva, glosa: 'IVA débito fiscal' },
       ]
     } else {
@@ -153,8 +161,16 @@ function generar(db, { empresaId, usuarioId, documentoId, ip = null }) {
     throw new Error('Inconsistencia: documento CONTABILIZADO sin asiento')
   }
   if (doc.estado === 'CONTABILIZADO') {
-    const rev = db.prepare(`SELECT asiento_revertido_id FROM asientos WHERE id = ?`).get(doc.asiento_id)
-    if (!rev || rev.asiento_revertido_id === null) {
+    // Convención DATA_MODEL §B.2: la REVERSIÓN apunta al original
+    // (reversion.asiento_revertido_id = original.id). Se comprueba en ambas
+    // direcciones por robustez; antes solo se miraba la columna del original,
+    // que revertir() nunca escribe — el re-propuesto tras revertir nunca
+    // funcionaba (camino muerto detectado validando el pipeline con datos reales).
+    const rev = db.prepare(`
+      SELECT id FROM asientos
+      WHERE (id = ? AND asiento_revertido_id IS NOT NULL) OR asiento_revertido_id = ?
+    `).get(doc.asiento_id, doc.asiento_id)
+    if (!rev) {
       throw new Error('Documento CONTABILIZADO vigente: primero revierte su asiento (asientos.revertir) y luego re-propón')
     }
   }

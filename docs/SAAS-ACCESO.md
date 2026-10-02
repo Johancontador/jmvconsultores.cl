@@ -42,7 +42,7 @@ jmvconsultores.cl (GitHub Pages + Cloudflare)      iva-mensual (VPS, Docker)
 |---|---|---|
 | **Registro self-service** (nueva) | Dueño de pyme / contador nuevo | RUT + clave SII → sistema arma la empresa → prueba 90 días → opera |
 | **Login directo** | Usuarios ya creados | username + contraseña (como hoy) |
-| **Alta manual por JMV** | Clientes de servicio contable | El super_admin crea empresa+usuario en contable.html (como hoy) |
+| **Alta manual por JMV** | Clientes de servicio contable | El super_admin crea empresa+usuario en el Sistema Contable (/sistema/ → Administración → Empresas) |
 
 Criterio único de autoridad: **una empresa activa por RUT** (ya garantizado por
 `UNIQUE` de RUT activo en `empresas`). El RUT es la licencia, no el usuario.

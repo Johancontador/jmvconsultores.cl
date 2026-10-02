@@ -25,8 +25,10 @@ const PLANES = {
 const GRACIA_DIAS = 7 // días de gracia tras vencer antes de SUSPENDIDA
 
 function hoyISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  // UTC, no local: SQLite date('now') (usado en INSERT/UPDATE de suscripciones y
+  // en los tests) es UTC — mezclar con la fecha local rompía las transiciones
+  // de estado cerca de medianoche en zonas UTC-negativas (VENCIDA vs SUSPENDIDA).
+  return new Date().toISOString().slice(0, 10)
 }
 
 function sumaDias(fechaISO, dias) {

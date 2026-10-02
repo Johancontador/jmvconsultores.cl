@@ -61,6 +61,24 @@ function movimientosContables(db, empresaId, periodo) {
 }
 
 /**
+ * Líneas de los asientos VINCULADOS a los documentos del período de ingesta,
+ **seguidas por el vínculo asiento_id — no por el período contable**: con
+ * devengo (fecha_docto), un doc ingestado en 202609 fechado 31/08 contabiliza
+ * en 202608 y NO es divergencia.
+ */
+function lineasDeDocsContabilizados(db, empresaId, periodo) {
+  return db.prepare(`
+    SELECT d.id AS documento_id, al.cuenta_id, al.debe, al.haber
+    FROM documentos d
+    JOIN asientos a ON a.id = d.asiento_id
+    JOIN asiento_lineas al ON al.asiento_id = a.id
+    WHERE d.empresa_id = ? AND d.periodo_ingesta = ?
+      AND d.estado = 'CONTABILIZADO' AND d.asiento_id IS NOT NULL
+    ORDER BY d.id, al.id
+  `).all(empresaId, periodo)
+}
+
+/**
  * Ejecuta la conciliación del período. `siiResumen` es OPCIONAL: un objeto
  * { neto, iva, total } con los totales oficiales del SII (consultarResumen,
  * compras+ventas con signo NC ya aplicado) para comparar también contra el
@@ -81,6 +99,19 @@ function ejecutar(db, { empresaId, usuarioId, periodo, siiResumen = null, ip = n
   )
   const contableDebe = movs.reduce((s, m) => s + (m.debe || 0), 0)
   const contableHaber = movs.reduce((s, m) => s + (m.haber || 0), 0)
+
+  // Líneas por documento vía VÍNCULO (ver lineasDeDocsContabilizados) + índice
+  // de asientos revertidos: un doc contabilizado cuyo asiento fue revertido ya
+  // NO está en los libros → SOLO_SII (pendiente de re-proponer).
+  const lineasPorDoc = new Map()
+  for (const l of lineasDeDocsContabilizados(db, empresaId, periodo)) {
+    if (!lineasPorDoc.has(l.documento_id)) lineasPorDoc.set(l.documento_id, [])
+    lineasPorDoc.get(l.documento_id).push(l)
+  }
+  const asientosRevertidos = new Set(
+    db.prepare(`SELECT asiento_revertido_id AS id FROM asientos WHERE empresa_id = ? AND asiento_revertido_id IS NOT NULL`)
+      .all(empresaId).map((r) => r.id)
+  )
 
   // Lado 3 (opcional): resumen oficial SII
   const sii = siiResumen ? {
@@ -103,21 +134,22 @@ function ejecutar(db, { empresaId, usuarioId, periodo, siiResumen = null, ip = n
   for (const d of docs) {
     if (['ANULADO', 'ERROR'].includes(d.estado)) continue
     const key = triploKey(d.tipo_doc, d.folio, d.rut_contraparte)
-    const esContabilizado = d.estado === 'CONTABILIZADO' && d.asiento_id !== null
+    const asientoRevertido = d.asiento_id !== null && asientosRevertidos.has(d.asiento_id)
+    const esContabilizado = d.estado === 'CONTABILIZADO' && d.asiento_id !== null && !asientoRevertido
     if (esContabilizado) contabilizados++
 
     if (!esContabilizado) {
       diferencias.push({
         tipo: 'SOLO_SII', clave: key, documento_id: d.id, tipo_flujo: d.tipo_flujo,
         tipo_doc: d.tipo_doc, folio: d.folio, rut: d.rut_contraparte,
-        razon_social: d.razon_social, estado: d.estado,
+        razon_social: d.razon_social, estado: asientoRevertido ? 'REVERTIDO' : d.estado,
         monto_neto: d.monto_neto, monto_iva: d.monto_iva, monto_total: d.monto_total,
       })
       continue
     }
 
     // Contabilizado: verificar que el asiento cuadre con el documento
-    const lineasDoc = movs.filter((m) => m.documento_id === d.id)
+    const lineasDoc = lineasPorDoc.get(d.id) || []
     const debe = lineasDoc.reduce((s, m) => s + (m.debe || 0), 0)
     const haber = lineasDoc.reduce((s, m) => s + (m.haber || 0), 0)
     if (debe !== d.monto_total) {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ingresar — IVA Mensual</title>
+  <title>Ingresar — Sistema Contable JMV</title>
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,14 +32,13 @@
     .login-logo {
       text-align: center;
       font-size: 1.375rem;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: -0.01em;
       margin-bottom: 1.75rem;
-
+      font-family: var(--font-display);
     }
-    .login-logo img { height: 56px; width: auto; display: block; margin: 0 auto 0.5rem; }
+    .login-logo img { height: 52px; width: auto; display: block; margin: 0 auto 0.5rem; }
     .login-logo small { display: block; font-size: 0.68rem; font-weight: 500; color: var(--fg-muted); letter-spacing: 0.08em; text-transform: uppercase; }
-    }
     .login-error {
       color: var(--error);
       background: rgba(239, 68, 68, 0.1);
@@ -63,7 +62,11 @@
 </head>
 <body class="login-body">
   <form class="login-card" id="login-form" autocomplete="on">
-    <div class="login-logo">💼 IVA Mensual</div>
+    <div class="login-logo">
+      <img src="/assets/logo-light.svg" alt="JMV Consultores">
+      Sistema Contable
+      <small>JMV Consultores</small>
+    </div>
     <div class="login-error" id="login-error"></div>
     <div class="form-group">
       <label class="form-label" for="input-username">Usuario</label>
@@ -82,9 +85,9 @@
     const errorEl = document.getElementById('login-error')
     const btn = document.getElementById('btn-login')
 
-    // Si ya hay sesión activa, no mostrar el login de nuevo.
+    // Si ya hay sesión activa, entrar directo al Sistema Contable.
     apiGet('/api/auth/me').then(() => {
-      window.location.href = '/dashboard.html'
+      window.location.href = '/sistema/'
     }).catch(() => {})
 
     form.addEventListener('submit', async (e) => {
@@ -97,7 +100,7 @@
           username: document.getElementById('input-username').value.trim(),
           password: document.getElementById('input-password').value,
         })
-        window.location.href = '/dashboard.html'
+        window.location.href = '/sistema/'
       } catch (err) {
         errorEl.textContent = err.message || 'No se pudo iniciar sesión'
         btn.disabled = false

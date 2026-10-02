@@ -67,6 +67,24 @@ function enteroSeguro(valor) {
 }
 
 /**
+ * Normaliza fechas del RCV a ISO (YYYY-MM-DD). El SII entrega DD/MM/YYYY
+ * (p. ej. "14/09/2026"); sin esta normalización la confirmación de propuestas
+ * no reconoce la fecha del documento y el asiento se fecha HOY — rompiendo el
+ * devengo. Formato desconocido se conserva tal cual (visible, nunca inventado).
+ */
+function normalizarFechaSII(valor) {
+  const s = String(valor ?? '').trim()
+  if (!s) return null
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10) // ya ISO
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/) // DD/MM/YYYY del RCV
+  if (m) {
+    const [, d, mo, y] = m
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+  }
+  return s
+}
+
+/**
  * Normaliza un documento tal como lo entrega la integración SII existente
  * (consultarRCV → {folio, rutDoc, razonSocial, monto*, tipoDoc, fechaDocto,
  * fechaReclamo, montos, detalleSII}) a la forma de la bandeja. Única
@@ -80,8 +98,8 @@ function mapearDocumentoRCV(doc, tipoFlujo) {
     folio: String(doc.folio ?? '').trim(),
     rut_contraparte: String(doc.rutDoc ?? '').trim().toUpperCase(),
     razon_social: doc.razonSocial ? String(doc.razonSocial).trim().slice(0, 300) : null,
-    fecha_docto: doc.fechaDocto ? String(doc.fechaDocto).trim().slice(0, 30) : null,
-    fecha_reclamo: doc.fechaReclamo ? String(doc.fechaReclamo).trim().slice(0, 30) : null,
+    fecha_docto: normalizarFechaSII(doc.fechaDocto),
+    fecha_reclamo: normalizarFechaSII(doc.fechaReclamo),
     monto_exento: enteroSeguro(doc.montoExento),
     monto_neto: enteroSeguro(doc.montoNeto),
     monto_iva: enteroSeguro(doc.montoIVA),
@@ -253,6 +271,34 @@ function obtener(db, empresaId, documentoId) {
  * PENDIENTE/CLASIFICADO/REVISION → CLASIFICADO (re-clasificar es volver a pasar
  * por aquí). Auditado con antes/después.
  */
+/**
+ * Marca un documento en REVISIÓN con el motivo de la divergencia (§5) y deja
+ * auditado el hallazgo. Usado por el pipeline cuando la propuesta nace
+ * descuadrada (datos inconsistentes del RCV: neto+IVA ≠ total) o ante
+ * cualquier regla de negocio que detecte un problema en el documento.
+ */
+function marcarRevision(db, { empresaId, usuarioId, documentoId, motivo, ip = null }) {
+  const doc = obtener(db, empresaId, documentoId)
+  if (!doc) throw new Error('Documento no encontrado en esta empresa')
+  const texto = String(motivo || '').trim()
+  if (!texto) throw new Error('El motivo de revisión es obligatorio')
+  const tx = db.transaction(() => {
+    db.prepare(`
+      UPDATE documentos SET estado = 'REVISION', actualizado_en = datetime('now')
+      WHERE id = ? AND empresa_id = ?
+    `).run(documentoId, empresaId)
+    registrarAccion(db, {
+      empresaId, usuarioId,
+      accion: 'documento.marcar_revision', entidad: 'documentos', entidadId: String(documentoId),
+      antes: { estado: doc.estado },
+      despues: { estado: 'REVISION', motivo: texto.slice(0, 500) },
+      ip,
+    })
+  })
+  tx()
+  return obtener(db, empresaId, documentoId)
+}
+
 function clasificar(db, { empresaId, usuarioId, documentoId, cuentaId, centroCostoId = null, tratamientoIva = 'credito', reglaId = null, ip = null }) {
   const doc = obtener(db, empresaId, documentoId)
   if (!doc) throw new Error('Documento no encontrado en esta empresa')
@@ -337,6 +383,6 @@ function anular(db, { empresaId, usuarioId, documentoId, motivo, ip = null }) {
 
 module.exports = {
   ESTADOS, TRANSICIONES, TRATAMIENTOS_IVA, TIPOS_FLUJO, ADMITEN_CLASIFICACION,
-  puedeTransicionar, claveDedupe, mapearDocumentoRCV, ingestarBatch,
-  listar, obtener, clasificar, anular,
+  puedeTransicionar, claveDedupe, mapearDocumentoRCV, ingestarBatch, normalizarFechaSII,
+  listar, obtener, clasificar, anular, marcarRevision,
 }

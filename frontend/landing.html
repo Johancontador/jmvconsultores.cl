@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IVA Mensual — El copiloto tributario del contador chileno</title>
-  <meta name="description" content="Conecta el SII, sincroniza libros de compra y venta, calcula IVA y PPM, y revisa la salud tributaria de todas tus empresas desde un solo panel.">
+  <title>Sistema Contable JMV — Contabilidad integral automática para contadores</title>
+  <meta name="description" content="Contabilidad integral con libros de compra y venta que se cargan solos desde el SII: partida doble, clasificación con reglas, reportes, conciliación y cierre de período auditado.">
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,6 +71,14 @@
       @keyframes lp-grow { from { transform: scaleY(0); } }
     }
 
+    .lp-flow { display: flex; align-items: stretch; gap: var(--space-3); margin-top: var(--space-8); flex-wrap: wrap; }
+    .lp-step { flex: 1; min-width: 170px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); position: relative; }
+    .lp-step .n { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--space-2); }
+    .lp-step b { display: block; font-size: var(--fs-sm); margin-bottom: var(--space-1); }
+    .lp-step span { font-size: var(--fs-xs); color: var(--fg-secondary); line-height: var(--lh-relaxed); display: block; }
+    .lp-step .arr { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); color: var(--c-slate-500); font-size: 16px; z-index: 1; }
+    @media (max-width: 860px) { .lp-step .arr { display: none; } }
+
     .lp-section { max-width: 1160px; margin: 0 auto; padding: var(--space-16) var(--space-6); }
     .lp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-5); margin-top: var(--space-8); }
     .lp-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: var(--space-6); transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base); }
@@ -106,21 +114,21 @@
 <body>
   <div class="lp">
     <nav class="lp-nav">
-      <div class="lp-logo"><span class="lp-logo-badge">💼</span> IVA Mensual</div>
+      <div class="lp-logo"><span class="lp-logo-badge">📚</span> Sistema Contable</div>
       <div class="lp-links">
         <a href="#producto" class="lp-hide-m">Producto</a>
         <a href="#herramientas" class="lp-hide-m">Herramientas</a>
         <a href="#ingresar" class="lp-hide-m">Ingresar</a>
-        <a href="/login.html" class="btn btn-primary btn-sm">Ingresar al panel</a>
+        <a href="/login.html" class="btn btn-primary btn-sm">Ingresar al sistema</a>
       </div>
     </nav>
 
     <header class="lp-hero">
-      <span class="lp-kicker">⚡ Conexión directa al SII</span>
-      <h1>El copiloto tributario del <em>contador chileno</em></h1>
-      <p class="lead">Sincroniza los libros de compra y venta del SII, calcula IVA, PPM y F29, y controla la salud tributaria de <strong>todas tus empresas</strong> desde un solo panel — con caché inteligente y alertas automáticas.</p>
+      <span class="lp-kicker">⚡ Libros que se cargan solos desde el SII</span>
+      <h1>Tu contabilidad al día, <em>sola</em></h1>
+      <p class="lead">La conexión mensual con el SII centraliza tus compras y ventas, y el sistema las <strong>contabiliza automáticamente</strong>: clasifica con reglas, arma los asientos en partida doble y deja el diario listo — para <strong>todas tus empresas</strong> y sin digitar una sola línea.</p>
       <div class="lp-cta-row">
-        <a href="#ingresar" class="btn btn-primary">Ver mis empresas →</a>
+        <a href="#ingresar" class="btn btn-primary">Entrar al sistema →</a>
         <a href="#producto" class="btn btn-secondary">Conocer el producto</a>
       </div>
 
@@ -138,47 +146,55 @@
 
     <section class="lp-section" id="producto">
       <div class="lp-center">
-        <h2 class="lp-h2">Todo el ciclo tributario, en un solo lugar</h2>
-        <p>Deja de abrir 4 pestañas del SII y copiar números a mano. IVA Mensual habla directo con el SII, guarda todo en caché y te muestra lo que importa.</p>
+        <h2 class="lp-h2">Del SII al balance, sin pasos manuales</h2>
+        <p>La integración con el SII (IVA Mensual, funciona en segundo plano) trae los documentos; el Sistema Contable los clasifica, contabiliza y cierra el período. Tú solo revisas y apruebas.</p>
       </div>
+      <div class="lp-flow">
+        <div class="lp-step"><span class="n">1</span><b>Conexión SII</b><span>El RCV de compras y ventas se descarga solo, mes a mes, para cada empresa.</span><span class="arr">→</span></div>
+        <div class="lp-step"><span class="n">2</span><b>Centralización</b><span>Documentos normalizados en una sola bandeja: folio, RUT, neto, IVA y total.</span><span class="arr">→</span></div>
+        <div class="lp-step"><span class="n">3</span><b>Clasificación con reglas</b><span>El motor aprende: cada proveedor y tipo de documento cae en su cuenta.</span><span class="arr">→</span></div>
+        <div class="lp-step"><span class="n">4</span><b>Contabilización automática</b><span>Asientos en partida doble, cuadrados y auditados — diario y mayor al instante.</span><span class="arr">→</span></div>
+        <div class="lp-step"><span class="n">5</span><b>Reportes y cierre</b><span>Balance, resultados, conciliación contra el SII y período cerrado con checklist.</span></div>
+      </div>
+
       <div class="lp-grid">
         <div class="lp-card">
           <div class="ico">🔌</div>
-          <h3>Sincronización SII real</h3>
-          <p>Login directo con la clave tributaria, descarga de RCV compra/venta y caché de meses cerrados: re-sincronizar cuesta segundos, no minutos.</p>
+          <h3>Integración SII automática</h3>
+          <p>La conexión corre en segundo plano: descarga el RCV de compra y venta, guarda los meses cerrados en caché y llena tus libros solos.</p>
         </div>
         <div class="lp-card">
-          <div class="ico">📊</div>
-          <h3>Portafolio multi-empresa</h3>
-          <p>KPIs agregados de todos tus clientes, vencimientos F29 con cuenta regresiva y estado de sincronización por empresa — al abrir la app.</p>
+          <div class="ico">⚖️</div>
+          <h3>Partida doble real</h3>
+          <p>Plan de cuentas chileno precargado, asientos con validación en vivo, libro diario, mayor con saldo corrido y reversiones auditadas.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">🧠</div>
+          <h3>Contabilización automática</h3>
+          <p>Reglas por RUT, tipo de documento o proveedor + un clic que clasifica, propone y contabiliza el mes completo en partida doble.</p>
+        </div>
+        <div class="lp-card">
+          <div class="ico">📈</div>
+          <h3>Reportes y cierre de período</h3>
+          <p>Balance de comprobación, situación financiera y estado de resultados al instante; cierre con checklist y asientos propuestos, auditado.</p>
         </div>
         <div class="lp-card">
           <div class="ico">🛡️</div>
-          <h3>Centro Tributario</h3>
-          <p>Validador de IVA que concilia a $0, detector de duplicadas y documentos pendientes, calendario tributario y checklist de cierre mensual.</p>
-        </div>
-        <div class="lp-card">
-          <div class="ico">🧾</div>
-          <h3>18+ reportes exportables</h3>
-          <p>IVA mensual/anual, comparativos, rankings, desgloses de gestión y Libros completos — todos a CSV, Excel y PDF con un clic.</p>
-        </div>
-        <div class="lp-card">
-          <div class="ico">💬</div>
-          <h3>WhatsApp integrado</h3>
-          <p>Resumen de IVA por cliente listo para enviar, y generador de cobranza con tono cordial, formal o firme.</p>
+          <h3>Conciliación honesta</h3>
+          <p>Compara la bandeja del SII contra la contabilidad y reporta cada diferencia — nunca corrige en silencio ni pierde un documento.</p>
         </div>
         <div class="lp-card">
           <div class="ico">🔒</div>
-          <h3>Multipusuario seguro</h3>
-          <p>Cada usuario ve solo sus empresas, sesiones httpOnly con expiración, rate-limit en login y auditoría de accesos.</p>
+          <h3>Multi-empresa y roles</h3>
+          <p>Cada usuario ve solo sus empresas con permisos por rol, períodos que se bloquean al cerrar y auditoría inmutable de todo.</p>
         </div>
       </div>
     </section>
 
     <section class="lp-section" id="herramientas" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
       <div class="lp-center">
-        <h2 class="lp-h2">Herramientas que nacieron del trabajo real</h2>
-        <p>Cada una existe porque un contador la necesitó — no son features de relleno.</p>
+        <h2 class="lp-h2">Y además, el panel tributario completo</h2>
+        <p>El mismo equipo detrás del sistema mantiene IVA Mensual: 28+ reportes tributarios, centro tributario y herramientas nacidas del trabajo real.</p>
       </div>
       <div class="lp-grid">
         <div class="lp-card"><div class="ico">🔍</div><h3>Detección de duplicadas</h3><p>Encuentra facturas con folio repetido y el monto involucrado antes de que sea un problema en la declaración.</p></div>
@@ -200,17 +216,18 @@
     <section class="lp-section lp-final" id="ingresar">
       <div class="lp-login-wrap">
         <div>
-          <h2 class="lp-h2">Tu panel te está esperando</h2>
+          <h2 class="lp-h2">Tu contabilidad te está esperando</h2>
           <ul class="lp-benefits" style="margin-top: var(--space-6); list-style: none; padding: 0;">
-            <li><span class="ico">🏢</span><span><b>Todas tus empresas en una pantalla</b> — estado, ventas, IVA y vencimientos al instante.</span></li>
-            <li><span class="ico">⚡</span><span><b>Sincronización con caché</b> — los meses cerrados nunca se vuelven a descargar.</span></li>
-            <li><span class="ico">🛡️</span><span><b>Centro Tributario completo</b> — validador, pendientes, duplicadas y calendario.</span></li>
+            <li><span class="ico">📚</span><span><b>Libros de compras y ventas automáticos</b> — la conexión mensual con el SII centraliza todo el RCV sin digitar.</span></li>
+            <li><span class="ico">⚡</span><span><b>Contabilización automática</b> — clasifica, propone y contabiliza el período en un clic, partida doble siempre cuadrada.</span></li>
+            <li><span class="ico">⚖️</span><span><b>Partida doble con validación</b> — diario, mayor y reportes siempre cuadrados.</span></li>
+            <li><span class="ico">☑️</span><span><b>Cierre de período auditado</b> — checklist, asientos propuestos y períodos bloqueados.</span></li>
             <li><span class="ico">🔐</span><span><b>Tus datos son tuyos</b> — self-hosted, sin terceros, sin vendor lock-in.</span></li>
           </ul>
         </div>
         <div class="lp-login-card">
           <h2>Ingresar</h2>
-          <p class="sub">Con tus credenciales del panel IVA Mensual</p>
+          <p class="sub">Con tus credenciales de JMV Consultores</p>
           <div class="lp-error" id="lp-error" hidden></div>
           <form id="lp-form">
             <div class="form-group">
@@ -221,7 +238,7 @@
               <label class="form-label" for="lp-pass">Contraseña</label>
               <input type="password" id="lp-pass" class="form-input" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-primary" id="lp-btn" style="width:100%">Entrar al panel →</button>
+            <button type="submit" class="btn btn-primary" id="lp-btn" style="width:100%">Entrar al sistema →</button>
           </form>
           <p class="sub" style="margin-top: var(--space-4); margin-bottom: var(--space-2); text-align: center;">¿Nueva empresa? <a href="/registro.html" style="font-weight:600">Crea tu cuenta con tu RUT y clave SII</a> — 3 meses gratis.</p>
           <p class="sub" style="margin-top: var(--space-2); margin-bottom: 0; text-align: center;">¿Problemas para entrar? Contacta a tu contador.</p>
@@ -230,14 +247,14 @@
     </section>
 
     <footer class="lp-footer">
-      IVA Mensual — Software tributario para contadores chilenos · Los cálculos son referenciales y no reemplazan la declaración oficial en sii.cl
+      Sistema Contable JMV — Contabilidad integral para contadores chilenos · Los cálculos son referenciales y no reemplazan la declaración oficial en sii.cl
     </footer>
   </div>
 
   <div id="lp-toast" role="status"></div>
 
   <script>
-    // Login embebido: mismo endpoint que login.html — al éxito entra directo al panel.
+    // Login embebido: mismo endpoint que login.html — al éxito entra al Sistema Contable.
     const form = document.getElementById('lp-form')
     const errorBox = document.getElementById('lp-error')
     const btn = document.getElementById('lp-btn')
@@ -265,18 +282,18 @@
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok || data.ok === false) throw new Error(data.error || 'Credenciales inválidas')
-        avisar('Bienvenido — cargando tu panel…')
-        setTimeout(() => { window.location.href = '/dashboard.html' }, 600)
+        avisar('Bienvenido — cargando el sistema…')
+        setTimeout(() => { window.location.href = '/sistema/' }, 600)
       } catch (err) {
         errorBox.textContent = err.message
         errorBox.hidden = false
         btn.disabled = false
-        btn.textContent = 'Entrar al panel →'
+        btn.textContent = 'Entrar al sistema →'
       }
     })
 
     // Si ya tiene sesión activa, ofrecer entrar directo
-    fetch('/api/auth/me').then((r) => { if (r.ok) avisar('Ya tienes sesión activa — usa "Ingresar al panel" arriba') }).catch(() => {})
+    fetch('/api/auth/me').then((r) => { if (r.ok) avisar('Ya tienes sesión activa — usa "Entrar al sistema" arriba') }).catch(() => {})
   </script>
 </body>
 </html>

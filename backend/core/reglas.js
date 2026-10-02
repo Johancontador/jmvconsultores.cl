@@ -21,6 +21,9 @@ const documentosCore = require('./documentos')
 
 const TRATAMIENTOS = documentosCore.TRATAMIENTOS_IVA
 
+/** Estados que admiten clasificación automática (mismo dominio que documentos.js). */
+const ADMITEN_CLASIFICACION = ['PENDIENTE', 'CLASIFICADO', 'REVISION']
+
 function toRegla(row) {
   return {
     id: row.id, empresa_id: row.empresa_id, nombre: row.nombre,
@@ -202,12 +205,15 @@ function normRut(rut) {
 
 /**
  * Clasificación automática: aplica el motor sobre los documentos que lo
- * admiten (PENDIENTE/CLASIFICADO/REVISION, según los filtros). Devuelve
- * {evaluados, clasificados, sin_regla} y deja auditada cada clasificación
+ * admiten (por defecto PENDIENTE/CLASIFICADO/REVISION, según los filtros).
+ * `estados` permite restringir la pasada (el pipeline de automatización usa
+ * ['PENDIENTE','REVISION'] para NO pisar decisiones humanas ya clasificadas).
+ * Devuelve {evaluados, clasificados, sin_regla} y deja auditada cada clasificación
  * (via documentos.clasificar) + un resumen del lote.
  */
-function clasificarAutomatico(db, { empresaId, usuarioId, periodo = null, tipoFlujo = null, documentoId = null, ip = null }) {
-  const admisibles = ['PENDIENTE', 'CLASIFICADO', 'REVISION']
+function clasificarAutomatico(db, { empresaId, usuarioId, periodo = null, tipoFlujo = null, documentoId = null, estados = null, ip = null }) {
+  const admisibles = (Array.isArray(estados) && estados.length ? estados : ADMITEN_CLASIFICACION)
+    .filter((e) => ADMITEN_CLASIFICACION.includes(e))
   const where = ['empresa_id = ?', `estado IN (${admisibles.map(() => '?').join(',')})`]
   const params = [empresaId, ...admisibles]
   if (periodo) { where.push('periodo_ingesta = ?'); params.push(periodo) }

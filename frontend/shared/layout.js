@@ -12,17 +12,11 @@
 // "tipo" apunta a una clave de CATALOGO (frontend/js/reportes.js) — el sidebar
 // no conoce el contenido de cada reporte, solo el identificador para navegar.
 // "hijos" arma un desplegable; puede anidarse (Ranking ▾ → Análisis ▾ → Mensual/Anual).
+// IVA Mensual es tributario puro: la CONTABILIDAD vive aparte, en /sistema/
+// (Sistema Contable JMV), que consume esta app solo como integración SII.
 const NAV_ITEMS = [
   { key: 'inicio', label: 'Inicio', icon: '🏠', tipo: null },
-  { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },    {
-      key: 'contabilidad', label: 'Contabilidad', icon: '📚', hijos: [
-      { key: 'cont-admin', label: 'Administración', href: '/contable.html' },
-      { key: 'cont-asientos', label: 'Asientos y Mayor', href: '/asientos.html' },
-      { key: 'cont-bandeja', label: 'Bandeja de Documentos', href: '/bandeja.html' },
-      { key: 'cont-propuestas', label: 'Propuestas y Conciliación', href: '/propuestas.html' },
-      { key: 'cont-reportes', label: 'Reportes y Cierre', href: '/reportes-contables.html' },
-    ],
-    },
+  { key: 'clientes', label: 'Clientes', icon: '👥', href: '/index.html' },
   { key: 'exportacion-masiva', label: 'Reporte Masivo', icon: '📦', href: '/exportacion-masiva.html' },
   {
     key: 'tributarios', label: 'Tributarios', icon: '🧾', hijos: [
