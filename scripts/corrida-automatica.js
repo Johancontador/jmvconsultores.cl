@@ -154,7 +154,7 @@ async function main() {
   }
   console.log(`  Clasificados ${r.clasificados}/${r.evaluados} (sin regla: ${r.sin_regla})`)
   console.log(`  Propuestas nuevas ${r.propuestas_nuevas}${r.propuestas_fallidas.length ? ` · fallidas: ${r.propuestas_fallidas.map((f) => `#${f.documento_id} ${f.motivo}`).join('; ')}` : ''}`)
-  console.log(`  Contabilizadas ${r.contabilizadas} de ${r.contabilizadas + r.omitidas.length} (asientos ${r.total_asientos})`)
+  console.log(`  Contabilizadas ${r.contabilizadas} de ${r.contabilizadas + r.omitidas.length} (monto $${r.total_asientos})`)
   if (r.omitidas.length) {
     console.log('  Omitidas (no silenciosas):')
     for (const o of r.omitidas.slice(0, 20)) console.log(`    · propuesta #${o.propuesta_id}: ${o.motivo}`)

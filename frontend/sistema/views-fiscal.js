@@ -8,51 +8,59 @@
 VIEWS.inicio = {
   titulo: 'Inicio',
   async render(cont) {
-    const periodo = periodoActual()
-    const meses = ultimosPeriodos(6)
-
-    const mesesData = await Promise.all(meses.map(async (p) => {
-      try {
-        const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/documentos?periodo=${p}&limit=1000`)
-        return { p, ...r }
-      } catch { return { p, sumas: { neto: 0, iva: 0, total: 0 }, estados: [], documentos: [] } }
-    }))
-
-    // Estado real de la conexión (§43: nunca afirmar verificado sin verificarlo)
-    let claveSiiConfigurada = false
+    const eid = S.empresa.id
+    const pedido = window._inicioPeriodo || null
+    let d
     try {
-      claveSiiConfigurada = !!(await apiGet(`/api/contable/empresas/${S.empresa.id}`)).empresa?.clave_sii_configurada
-    } catch { /* la línea del checklist mostrará la advertencia */ }
+      const r = await apiGet(`/api/contable/empresas/${eid}/dashboard${pedido ? `?periodo=${pedido}` : ''}`)
+      d = r.dashboard
+    } catch (err) {
+      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
+      return
+    }
+    window._inicioPeriodo = d.periodo
 
-    // Onboarding (SAAS-2): checklist ✓/⚠ visible desde el primer día
-    let onb = null
-    try { onb = await apiGet(`/api/contable/empresas/${S.empresa.id}/onboarding/ficha`) } catch { /* vista seguirá sin él */ }
-
-    const delMes = mesesData.find((m) => m.p === periodo) || { sumas: {}, estados: [], documentos: [] }
-    const totalPor = (docs, flujo, campo) => docs
-      .filter((d) => d.tipo_flujo === flujo && !['ANULADO', 'ERROR'].includes(d.estado))
-      .reduce((s, d) => s + (d[campo] || 0), 0)
-
-    const ventas = totalPor(delMes.documentos || [], 'venta', 'monto_total')
-    const compras = totalPor(delMes.documentos || [], 'compra', 'monto_total')
-    const ivaVentas = totalPor(delMes.documentos || [], 'venta', 'monto_iva')
-    const ivaCompras = totalPor(delMes.documentos || [], 'compra', 'monto_iva')
-    const ivaDeterminado = ivaVentas - ivaCompras
-    const sinContabilizar = (delMes.estados || [])
-      .filter((e) => ['PENDIENTE', 'CLASIFICADO', 'PROPUESTO', 'REVISIÓN'].includes(e.estado))
-      .reduce((s, e) => s + e.n, 0)
-
-    const maxBarra = Math.max(1, ...mesesData.flatMap((m) => [
-      totalPor(m.documentos || [], 'venta', 'monto_total'),
-      totalPor(m.documentos || [], 'compra', 'monto_total'),
-    ]))
+    const k = d.kpis
+    const pct = k.docs_total ? Math.round((k.docs_contabilizados / k.docs_total) * 100) : 0
+    const icono = { error: '✕', warn: '⚠', info: '●', ok: '✓' }
+    const nPendientes = d.alertas.filter((a) => a.nivel === 'error' || a.nivel === 'warn').length
+    const maxBarra = Math.max(1, ...d.serie.flatMap((m) => [m.ventas, m.compras]))
 
     cont.innerHTML = `
+      <div class="frm-row mb">
+        <div><span class="frm-label">Período</span>${inputPeriodoHTML('inicio-periodo', d.periodo)}</div>
+        <span class="chip ${d.periodo_cerrado ? 'anulado' : 'contabilizado'}">${d.periodo_cerrado ? 'CERRADO' : 'ABIERTO'}</span>
+        <span class="spacer"></span>
+        <span class="muted" style="font-size:var(--fs-sm)"><b>${esc(S.empresa.nombre)}</b> · ${esc(formatRut(S.empresa.rut))}</span>
+      </div>
+
       <div class="kpi-grid">
-        <div class="kpi"><small>Ventas ${perDisplay(periodo)}</small><strong>${fmtCorto(ventas)}</strong><span class="sub">${fmtM(ventas)}</span></div>
-        <div class="kpi"><small>Compras ${perDisplay(periodo)}</small><strong>${fmtCorto(compras)}</strong><span class="sub">${fmtM(compras)}</span></div>
-        <div class="kpi acc"><small>IVA determinado</small><strong>${fmtCorto(ivaDeterminado)}</strong><span class="sub">débito − crédito</span></div>
-        <div class="kpi ${sinContabilizar ? 'warn' : 'up'}"><small>Por contabilizar</small><strong>${sinContabilizar}</strong><span class="sub">documentos del mes</span></div>
+        <div class="kpi up"><small>Ingresos ${perDisplay(d.periodo)}</small><strong>${fmtCorto(k.ingresos)}</strong><span class="sub">acumulado año: ${fmtCorto(k.ingresos_acum)}</span></div>
+        <div class="kpi"><small>Gastos ${perDisplay(d.periodo)}</small><strong>${fmtCorto(k.gastos)}</strong><span class="sub">pre-cierre (el PPM se devenga al cerrar)</span></div>
+        <div class="kpi ${k.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado ${perDisplay(d.periodo)}</small><strong>${fmtCorto(k.resultado)}</strong><span class="sub">acumulado año: ${fmtCorto(k.resultado_acum)}</span></div>
+        <div class="kpi acc"><small>IVA determinado</small><strong>${fmtCorto(k.iva_determinado)}</strong><span class="sub">débito − crédito del RCV</span></div>
+      </div>
+
+      <div class="kpi-grid mt">
+        <div class="kpi ${k.docs_total === 0 ? '' : (k.docs_sin_contabilizar ? 'warn' : 'up')}"><small>Contabilizados</small><strong>${k.docs_contabilizados}/${k.docs_total}</strong><span class="sub">${pct}% del período · ${k.docs_sin_contabilizar} por decisión humana (§43)</span></div>
+        <div class="kpi ${k.asientos_cuadrado ? 'up' : 'bad'}"><small>Asientos del período</small><strong>${k.asientos_n}</strong><span class="sub">ΣD = ΣH ${k.asientos_cuadrado ? '✓' : '✗ DESCUADRE'}</span></div>
+        <div class="kpi"><small>Cuentas por pagar</small><strong>${k.cxp === null ? '—' : fmtCorto(k.cxp)}</strong><span class="sub">proveedores · saldo acumulado</span></div>
+        <div class="kpi"><small>Cuentas por cobrar</small><strong>${k.cxc === null ? '—' : fmtCorto(k.cxc)}</strong><span class="sub">clientes · saldo acumulado</span></div>
+      </div>
+
+      <div class="card mt">
+        <div class="flex" style="justify-content:space-between">
+          <h3 style="margin:0">${nPendientes ? `⚠ ${nPendientes} acción(es) pendiente(s) — ${perDisplay(d.periodo)}` : `✓ Al día — ${perDisplay(d.periodo)}`}</h3>
+          <span class="muted" style="font-size:var(--fs-xs)">automático: ${k.docs_contabilizados} contabilizados · humano: ${k.docs_sin_contabilizar} por decidir</span>
+        </div>
+        <div class="alerta-lista mt">
+          ${d.alertas.map((a) => `
+            <div class="alerta ${a.nivel}">
+              <span class="ico">${icono[a.nivel] || '●'}</span>
+              <div class="tx"><b>${esc(a.mensaje)}</b>${a.detalle ? `<span class="muted"> — ${esc(a.detalle)}</span>` : ''}</div>
+              <a class="btn btn-secondary btn-sm" href="#${a.vista}">${esc(a.etiqueta)} →</a>
+            </div>`).join('')}
+        </div>
       </div>
 
       <div class="card mt">
@@ -61,16 +69,13 @@ VIEWS.inicio = {
           <div class="legend"><span><i style="background:var(--accent)"></i>Ventas</span><span><i style="background:var(--c-slate-500)"></i>Compras</span></div>
         </div>
         <div class="bars mt">
-          ${mesesData.map((m) => {
-            const v = totalPor(m.documentos || [], 'venta', 'monto_total')
-            const c = totalPor(m.documentos || [], 'compra', 'monto_total')
-            return `<div class="b" title="${perDisplay(m.p)} — ${fmtM(v)} vs ${fmtM(c)}">
-              <i class="v" style="height:${Math.round((v / maxBarra) * 100)}%"></i>
-              <i class="c" style="height:${Math.round((c / maxBarra) * 100)}%"></i>
-            </div>`
-          }).join('')}
+          ${d.serie.map((m) => `
+            <div class="b" title="${perDisplay(m.periodo)} — ${fmtM(m.ventas)} vs ${fmtM(m.compras)}">
+              <i class="v" style="height:${Math.round((m.ventas / maxBarra) * 100)}%"></i>
+              <i class="c" style="height:${Math.round((m.compras / maxBarra) * 100)}%"></i>
+            </div>`).join('')}
         </div>
-        <div class="bars-lbl">${mesesData.map((m) => `<span>${m.p.slice(4)}/${m.p.slice(2, 4)}</span>`).join('')}</div>
+        <div class="bars-lbl">${d.serie.map((m) => `<span>${m.periodo.slice(4)}/${m.periodo.slice(2, 4)}</span>`).join('')}</div>
       </div>
 
       <div class="card mt">
@@ -79,17 +84,18 @@ VIEWS.inicio = {
             <h3 style="margin:0">⚡ Contabilización automática</h3>
             <p class="muted" style="font-size:var(--fs-sm);margin:var(--space-2) 0 0">
               Clasifica con reglas, genera propuestas en partida doble y contabiliza el período completo en un clic.
+              ${d.automatizacion.reglas_activas ? `${d.automatizacion.reglas_activas} regla(s) activa(s).` : 'Tu empresa aún no tiene reglas.'}
             </p>
           </div>
           <a href="#automatizacion" class="btn btn-primary btn-sm">Abrir →</a>
         </div>
       </div>
 
-      ${onb && !onb.completo ? `
+      ${d.onboarding && !d.onboarding.completo ? `
       <div class="card mt">
         <div class="flex" style="justify-content:space-between">
           <div>
-            <h3 style="margin:0">🚀 Onboarding — ${onb.pendientes_humano.length} dato(s) por completar</h3>
+            <h3 style="margin:0">🚀 Onboarding — ${d.onboarding.pendientes} dato(s) por completar</h3>
             <p class="muted" style="font-size:var(--fs-sm);margin:var(--space-2) 0 0">
               Ficha tributaria desde el SII con tu confirmación + ingesta del histórico. Todo autónomo, sin esperar a JMV.
             </p>
@@ -105,8 +111,8 @@ VIEWS.inicio = {
             La conexión con el SII corre sobre IVA Mensual, como integración oculta:
             descarga el RCV de compras y ventas y alimenta estos libros automáticamente.
           </p>
-          <div class="checkline ${claveSiiConfigurada ? 'ok' : 'warn'}">${claveSiiConfigurada ? 'Clave SII configurada' : '⚠ Sin clave SII configurada'}</div>
-          <div class="checkline ${delMes.documentos?.length ? 'ok' : 'warn'}">${perDisplay(periodo)}: ${delMes.documentos?.length || 0} documentos sincronizados</div>
+          <div class="checkline ${d.clave_sii_configurada ? 'ok' : 'warn'}">${d.clave_sii_configurada ? 'Clave SII configurada' : '⚠ Sin clave SII configurada'}</div>
+          <div class="checkline ${k.docs_total ? 'ok' : 'warn'}">${perDisplay(d.periodo)}: ${k.docs_total} documentos sincronizados</div>
           <div class="mt"><a href="#libros" class="btn btn-primary btn-sm">Sincronizar un período →</a></div>
         </div>
         <div class="card">
@@ -121,6 +127,11 @@ VIEWS.inicio = {
           <p class="hint mt">Empresa activa: <b>${esc(S.empresa.nombre)}</b> · RUT ${esc(formatRut(S.empresa.rut))}</p>
         </div>
       </div>`
+
+    document.getElementById('inicio-periodo').addEventListener('change', () => {
+      window._inicioPeriodo = leerPeriodo('inicio-periodo') || null
+      renderRoute()
+    })
   },
 }
 

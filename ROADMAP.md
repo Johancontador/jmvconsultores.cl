@@ -82,7 +82,7 @@ Aceptación FASE 4 (con datos reales): contabilizar un mes completo → el diari
 1. ✅ Balance de comprobación y sumas; Estado de situación financiera; Estado de resultados (por naturaleza de cuenta, sin digitación).
 2. ✅ **Cierre de período**: checklist (§7 de ACCOUNTING_DOMAIN) + asientos de cierre (IVA→F29 por pagar, PPM devengado, resultado→patrimonio) + bloqueo del período.
 3. ⬜ Comparativos y exportación Excel (reutilizar `shared/export.js`) — post-MVP.
-4. ⬜ Dashboard contable: indicadores financieros + contables + SII + alertas (§9 del PROMPT MAESTRO), distinguiendo lo automático de lo pendiente humano (§43) — post-MVP.
+4. ✅ Dashboard contable (2026-10-02): ver entrada **DASHBOARD OPERATIVO** más abajo.
 
 Aceptación FASE 5 (cierra el MVP, §48): flujo completo con datos reales: empresa → plan → SII → clasificar → asiento → diario → mayor → balance → resultados → conciliar → **cerrar período**; tras cerrar, ninguna mutación anterior es posible (test); A = P + Patrimonio verificado en todos los estados.
 
@@ -104,6 +104,8 @@ Aceptación FASE 5 (cierra el MVP, §48): flujo completo con datos reales: empre
 - **7 Activos fijos**: registro, depreciación mensual (asiento automático), venta/baja.
 - **8 NIIF/IFRS**: mapeo cuentas→rubros NIIF y presentación de estados.
 - **9 Integraciones**: receptor Geo Daniela (contrato ya definido en INTEGRATIONS §4), bancos, otras plataformas.
+
+> **✅ DASHBOARD OPERATIVO (2026-10-02) — PROMPT MAESTRO §9/§10/§35:** `core/dashboard.js` agrega en UNA lectura (nunca muta) todo lo que el Inicio necesita para priorizar acciones: KPIs financieros del período (ingresos/costos/gastos/resultado del ER derivado de `asiento_lineas` + acumulado del año, IVA determinado del RCV), deuda por alias de control (CxP = PROVEEDORES haber−debe, CxC = CLIENTES debe−haber, acumulados a fin de período), situación contable (documentos por estado §5 con `contabilizados/total` y "por decisión humana", asientos del período con ΣD=ΣH verificado), conciliación del período (¿ejecutada?, diferencias con conteo por tipo), serie ventas/compras de 6 meses (el Inicio pasa de 7 fetches a 1) y **alertas accionables**: cada una nombra el problema verificado en BD, el porqué y la vista destino (error de ingesta, sin reglas, sin clasificar, en revisión, listos para contabilizar, conciliación sin ejecutar/con diferencias, período anterior sin cerrar, onboarding incompleto, período cerrado solo-consulta, y "al día → cerrar período" como caso residual), ordenadas por severidad. La resolución de período: pedido válido → último con actividad → mes actual UTC. `GET /api/contable/empresas/:id/dashboard` con `reportes:ver`. UI: Inicio de `/sistema/` reescrito (2 filas de KPIs + tarjeta de alertas con colores por severidad y botón de acción a cada módulo + barras y tarjetas de automatización/onboarding/SII conservadas). Distingue automático vs humano (§43) en KPI y encabezado de alertas. QA real en navegador (login qa_onb): KPIs de septiembre contra el mayor al peso (CxP $36.947.132, CxC $48.755.820), resultado mes $10.024.785 vs acumulado $9.959.116 con la diferencia exacta explicada por el devengo cruzado de los 3 docs de agosto ($65.669), navegación de alertas y selector de período verificados, 0 errores de consola. **13 tests nuevos** (`test/dashboard.test.js`); suite completa: **131 verdes**.
 
 ## SAAS — Acomplamiento comercial (docs/SAAS-ACCESO.md)
 

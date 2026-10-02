@@ -9,6 +9,7 @@ const express = require('express')
 const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const reportes = require('../core/reportes')
+const dashboardCore = require('../core/dashboard')
 
 const router = express.Router()
 
@@ -17,6 +18,17 @@ function ip(req) {
 }
 
 // ---------- Reportes (§8) ----------
+
+// Dashboard operativo (§35): KPIs, estados, conciliación y alertas accionables
+// del período. Solo lectura: agrega en core/dashboard.js sin mutar nada.
+router.get('/empresas/:empresaId/dashboard', requirePermiso('reportes:ver'), (req, res) => {
+  try {
+    const d = dashboardCore.dashboard(db, { empresaId: req.empresaId, periodo: req.query.periodo || null })
+    res.json({ ok: true, dashboard: d })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
 
 // Balance de comprobación y sumas: acumulado hasta el período + movimientos del mes.
 router.get('/empresas/:empresaId/reportes/balance/:periodo', requirePermiso('reportes:ver'), (req, res) => {
