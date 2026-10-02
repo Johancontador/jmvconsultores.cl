@@ -86,8 +86,9 @@
     const btn = document.getElementById('btn-login')
 
     // Si ya hay sesión activa, entrar directo al Sistema Contable.
-    apiGet('/api/auth/me').then(() => {
-      window.location.href = '/sistema/'
+    // Sondeo con /estado (siempre 200): sin ruido 401 en consola.
+    fetch('/api/auth/estado').then((r) => r.json()).then((d) => {
+      if (d.autenticado) window.location.href = '/sistema/'
     }).catch(() => {})
 
     form.addEventListener('submit', async (e) => {

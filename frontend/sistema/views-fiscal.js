@@ -18,6 +18,12 @@ VIEWS.inicio = {
       } catch { return { p, sumas: { neto: 0, iva: 0, total: 0 }, estados: [], documentos: [] } }
     }))
 
+    // Estado real de la conexión (§43: nunca afirmar verificado sin verificarlo)
+    let claveSiiConfigurada = false
+    try {
+      claveSiiConfigurada = !!(await apiGet(`/api/contable/empresas/${S.empresa.id}`)).empresa?.clave_sii_configurada
+    } catch { /* la línea del checklist mostrará la advertencia */ }
+
     const delMes = mesesData.find((m) => m.p === periodo) || { sumas: {}, estados: [], documentos: [] }
     const totalPor = (docs, flujo, campo) => docs
       .filter((d) => d.tipo_flujo === flujo && !['ANULADO', 'ERROR'].includes(d.estado))
@@ -82,7 +88,7 @@ VIEWS.inicio = {
             La conexión con el SII corre sobre IVA Mensual, como integración oculta:
             descarga el RCV de compras y ventas y alimenta estos libros automáticamente.
           </p>
-          <div class="checkline ok">Conexión activa — sesión verificada</div>
+          <div class="checkline ${claveSiiConfigurada ? 'ok' : 'warn'}">${claveSiiConfigurada ? 'Clave SII configurada' : '⚠ Sin clave SII configurada'}</div>
           <div class="checkline ${delMes.documentos?.length ? 'ok' : 'warn'}">${perDisplay(periodo)}: ${delMes.documentos?.length || 0} documentos sincronizados</div>
           <div class="mt"><a href="#libros" class="btn btn-primary btn-sm">Sincronizar un período →</a></div>
         </div>

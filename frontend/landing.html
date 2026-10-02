@@ -292,8 +292,8 @@
       }
     })
 
-    // Si ya tiene sesión activa, ofrecer entrar directo
-    fetch('/api/auth/me').then((r) => { if (r.ok) avisar('Ya tienes sesión activa — usa "Entrar al sistema" arriba') }).catch(() => {})
+    // Si ya tiene sesión activa, ofrecer entrar directo (siempre 200: sin ruido 401 en consola)
+    fetch('/api/auth/estado').then((r) => r.json()).then((d) => { if (d.autenticado) avisar('Ya tienes sesión activa — usa "Entrar al sistema" arriba') }).catch(() => {})
   </script>
 </body>
 </html>

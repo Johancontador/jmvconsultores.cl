@@ -371,6 +371,14 @@ function pintarConciliacion(out, c) {
   try { res = typeof c.resultado_json === 'string' ? JSON.parse(c.resultado_json) : c.resultado_json } catch { /* */ }
   const difs = res?.diferencias || []
   const conteo = res?.conteo_diferencias || {}
+  // Monto legible por tipo: SOLO_SII trae monto_total del doc; IMPUESTO_DIVERGENTE
+  // trae iva_sii vs iva_contable (su diferencia es el impuesto en disputa).
+  const monto = (d) => {
+    if (d.diferencia != null) return d.diferencia
+    if (d.monto_total != null) return d.monto_total
+    if (d.iva_sii != null || d.iva_contable != null) return (d.iva_sii || 0) - (d.iva_contable || 0)
+    return null
+  }
   out.innerHTML = `
     <div class="kpi-grid mb">
       <div class="kpi ${c.diferencias ? 'warn' : 'up'}"><small>Diferencias</small><strong>${c.diferencias}</strong></div>
@@ -380,9 +388,10 @@ function pintarConciliacion(out, c) {
       <thead><tr><th>Tipo</th><th>Documento</th><th>Detalle</th><th class="num">Monto</th></tr></thead>
       <tbody>${difs.map((d) => `<tr>
         <td><span class="chip ${String(d.tipo).includes('SOLO') ? 'pendiente' : 'revision'}">${esc(d.tipo)}</span></td>
-        <td class="mono sub">${esc(d.folio || d.clave || '—')}</td>
-        <td class="sub">${esc(d.detalle || d.descripcion || '')}</td>
-        <td class="num">${d.diferencia != null ? fmtM(d.diferencia) : (d.monto != null ? fmtM(d.monto) : '—')}</td>
+        <td>${d.tipo_flujo ? `<span class="sub">${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'}</span> ` : ''}<span class="mono">${esc(d.folio || '—')}</span>
+          ${d.razon_social ? `<div class="sub" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.razon_social)}</div>` : ''}</td>
+        <td class="sub">${esc(d.detalle || (d.estado ? `documento en ${d.estado}` : ''))}</td>
+        <td class="num">${monto(d) != null ? fmtM(monto(d)) : '—'}</td>
       </tr>`).join('') || '<tr><td colspan="4"><div class="empty">Sin diferencias — cuadra perfecto ✓</div></td></tr>'}</tbody>
     </table></div>`
 }
@@ -416,7 +425,7 @@ VIEWS.reportes = {
     const body = document.getElementById('rep-body')
     const eid = S.empresa.id
     if (tab === 'balance') {
-      const r = await apiGet(`/api/contable/empresas/${eid}/reportes/balance/${periodo}`)
+      const { balance: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/balance/${periodo}`)
       const tabla = (b, titulo) => `
         <h3 class="section-title">${titulo} <span class="chip ${b.cuadra ? 'contabilizado' : 'error'}">${b.cuadra ? 'Cuadra ΣD = ΣH' : 'DESCUADRE'}</span></h3>
         <div class="tbl-wrap"><table class="tbl">
@@ -430,7 +439,7 @@ VIEWS.reportes = {
         </table></div>`
       body.innerHTML = tabla(r.acumulado, `Acumulado al ${perDisplay(periodo)}`) + tabla(r.periodo_mes, 'Movimientos del mes')
     } else if (tab === 'situacion') {
-      const r = await apiGet(`/api/contable/empresas/${eid}/reportes/situacion/${periodo}`)
+      const { situacion: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/situacion/${periodo}`)
       body.innerHTML = `
         <div class="kpi-grid mb">
           <div class="kpi up"><small>Activos</small><strong>${fmtCorto(r.totales.activos)}</strong></div>
@@ -448,7 +457,7 @@ VIEWS.reportes = {
             </tr>`).join('') || '<tr><td><div class="empty">Sin saldos.</div></td></tr>'}</tbody>
           </table></div>`).join('')}`
     } else if (tab === 'resultados') {
-      const r = await apiGet(`/api/contable/empresas/${eid}/reportes/resultados/${periodo}`)
+      const { resultados: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/resultados/${periodo}`)
       const cards = (d, t) => `
         <div class="kpi-grid mb">
           <div class="kpi up"><small>${t} · Ingresos</small><strong>${fmtCorto(d.ingresos)}</strong></div>

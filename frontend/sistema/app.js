@@ -106,6 +106,10 @@ window.appBoot = boot
 
 async function boot() {
   try {
+    // Sondeo barato (siempre 200): sin sesión renderiza el login sin ensuciar
+    // la consola con un 401; con sesión se pide el /me completo.
+    const estado = await fetch('/api/auth/estado').then((r) => r.json())
+    if (!estado.autenticado) return renderLogin()
     const me = await apiGet('/api/auth/me')
     setUser(me.user)
     renderShell()
@@ -188,7 +192,7 @@ function renderLogin(mensaje = '') {
 
 const NAV = [
   { key: 'inicio', label: 'Inicio', ico: '🏠', permiso: null },
-  { key: 'automatizacion', label: '⚡ Automatización', ico: '⚡', permiso: 'propuestas:ver' },
+  { key: 'automatizacion', label: 'Automatización', ico: '⚡', permiso: 'propuestas:ver' },
   { key: 'libros', label: 'Libros Compras y Ventas', ico: '📚', permiso: 'documentos:ver' },
   { key: 'documentos', label: 'Documentos', ico: '🧾', permiso: 'documentos:ver' },
   { key: 'asientos', label: 'Contabilidad', ico: '⚖️', permiso: 'asientos:ver' },

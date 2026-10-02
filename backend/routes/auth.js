@@ -1,7 +1,7 @@
 const express = require('express')
 const db = require('../db')
 const { hashPassword, verifyPassword } = require('../services/password')
-const { crearSesion, destruirSesion, SESSION_TTL_MS } = require('../services/session')
+const { crearSesion, obtenerSesion, destruirSesion, SESSION_TTL_MS } = require('../services/session')
 const { requireAuth, requireAdmin, parseCookies } = require('../middleware/requireAuth')
 
 const router = express.Router()
@@ -109,6 +109,15 @@ router.post('/logout', requireAuth, (req, res) => {
   res.json({ ok: true })
 })
 
+// Sondeo de sesión para páginas PÚBLICAS (landing, login). Siempre 200:
+// el navegador no registra ruido 401 en consola y el front distingue con
+// el payload. Las páginas autenticadas siguen usando /me (401 → redirect).
+router.get('/estado', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie)
+  const user = obtenerSesion(cookies.sid)
+  res.json({ ok: true, autenticado: !!user, username: user ? user.username : null })
+})
+
 router.get('/me', requireAuth, (req, res) => {
   // FASE 1: además del usuario, el shell necesita saber a qué empresas tiene
   // acceso y con qué rol/capacidades (nav y botones se generan desde aquí).
@@ -117,7 +126,9 @@ router.get('/me', requireAuth, (req, res) => {
     const { asignacionesDeUsuario } = require('../core/empresas')
     const { permisosDeRol } = require('../core/permisos')
     const { superAdmin, asignaciones } = asignacionesDeUsuario(db, req.user.id)
-    const filas = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1`).all()
+    // tasa_ppm y exento viajan para la ficha de Administración → Empresas
+    // (la SPA las lee del acceso; sin ellas mostraría NaN%).
+    const filas = db.prepare(`SELECT id, rut, nombre, tasa_ppm, exento FROM empresas WHERE activo = 1`).all()
     const nombrePorId = new Map(filas.map((e) => [e.id, e]))
     const { estadoParaUI } = require('../core/licencias')
     const empresasDelUsuario = asignaciones

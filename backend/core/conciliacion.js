@@ -269,8 +269,10 @@ function obtener(db, empresaId, periodo) {
 
 /** Historial de ejecuciones por período (el resultado persistido es el último). */
 function listar(db, empresaId, limit = 50) {
+  // resultado_json incluido: la UI de historial pinta el detalle de las
+  // diferencias del último resultado persistido (sin re-ejecutar).
   return db.prepare(`
-    SELECT id, empresa_id, periodo, fuente, diferencias, ejecutado_por, ejecutado_en
+    SELECT id, empresa_id, periodo, fuente, resultado_json, diferencias, ejecutado_por, ejecutado_en
     FROM conciliaciones WHERE empresa_id = ? ORDER BY periodo DESC, ejecutado_en DESC LIMIT ?
   `).all(empresaId, Math.min(Number(limit) || 50, 200))
 }
