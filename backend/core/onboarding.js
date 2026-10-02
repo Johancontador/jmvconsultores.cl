@@ -106,13 +106,28 @@ async function consultarSii(db, empresaId) {
   const ventas = await rcv.consultarRCV(emp.rut, clave, 'ventas', periodoActual)
   const compras = await rcv.consultarRCV(emp.rut, clave, 'compras', periodoActual)
 
-  // 2) Inicio de actividades: primera venta emitida (mínimo de fecha_docto) en
-  //    el RCV consultado. Evidencia, no adivinanza: se propone al humano.
-  const fechas = [...ventas, ...compras]
+  // ISSUE-001: el mes actual solo muestra lo nuevo del mes — en una empresa que
+  // opera hace años, el primer documento del mes NO es su inicio de actividades.
+  // El primer período ingestado de la empresa (histórico SAAS-2) es la ventana
+  // más antigua disponible: se consulta también y se propone lo más antiguo.
+  const primerPeriodo = db
+    .prepare(`SELECT MIN(periodo_ingesta) AS p FROM documentos WHERE empresa_id = ?`)
+    .get(empresaId)?.p || null
+  let ventasHistoricas = []
+  let comprasHistoricas = []
+  if (primerPeriodo && String(primerPeriodo) < periodoActual) {
+    try {
+      ventasHistoricas = await rcv.consultarRCV(emp.rut, clave, 'ventas', String(primerPeriodo))
+      comprasHistoricas = await rcv.consultarRCV(emp.rut, clave, 'compras', String(primerPeriodo))
+    } catch { /* sin histórico accesible: se propone con lo del mes actual */ }
+  }
+
+  const todasLasVentas = [...ventas, ...ventasHistoricas]
+  const fechas = [...todasLasVentas, ...compras, ...comprasHistoricas]
     .map((d) => documentosCore.normalizarFechaSII(d.fechaDocto))
     .filter(Boolean)
     .sort()
-  const primeraVenta = ventas
+  const primeraVenta = todasLasVentas
     .map((d) => documentosCore.normalizarFechaSII(d.fechaDocto))
     .filter(Boolean)
     .sort()[0] || null
@@ -123,12 +138,19 @@ async function consultarSii(db, empresaId) {
     // (si solo hay compras, se propone el documento más antiguo igual).
     inicio_actividades_propuesto: primeraVenta || fechas[0] || null,
     primera_venta: primeraVenta,
-    documentos_analizados: { ventas: ventas.length, compras: compras.length, periodo: periodoActual },
+    documentos_analizados: {
+      ventas: todasLasVentas.length,
+      compras: compras.length + comprasHistoricas.length,
+      periodo: periodoActual,
+      periodo_historico: (primerPeriodo && String(primerPeriodo) < periodoActual) ? String(primerPeriodo) : null,
+    },
     fuente: 'sii_rcv',
     avisos: [
       fechas.length
         ? null
         : 'El RCV consultado no tiene documentos: no se puede proponer inicio de actividades (ingresa documentos o confirma la fecha a mano).',
+      // ISSUE-001: dejar explícito que la fecha propuesta es un piso, no el dato legal.
+      'La fecha propuesta es el primer documento visible en el RCV: revísala contra tu resolución de inicio de actividades antes de confirmar (no la sustituye).',
       'Actividades económicas, régimen tributario y socios: el SII no los entrega por una vía ya existente — se piden en el formulario (sin scraping).',
     ].filter(Boolean),
   }

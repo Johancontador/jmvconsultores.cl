@@ -140,7 +140,7 @@ VIEWS.onboarding = {
           <h3>Propuesta desde el SII</h3>
           <p class="sub">RCV ${esc(p.documentos_analizados?.periodo || '')}: ${p.documentos_analizados?.ventas || 0} ventas, ${p.documentos_analizados?.compras || 0} compras analizadas.</p>
           <div class="checkline ok">Razón social: <b>${esc(p.razon_social_sii || '—')}</b></div>
-          <div class="checkline ${p.inicio_actividades_propuesto ? 'ok' : 'warn'}">Inicio de actividades propuesto: <b>${esc(p.inicio_actividades_propuesto || 'no determinable')}</b>${p.primera_venta ? ` (primera venta: ${esc(p.primera_venta)})` : ''}</div>
+          <div class="checkline ${p.inicio_actividades_propuesto ? 'ok' : 'warn'}">Inicio de actividades propuesto: <b>${esc(p.inicio_actividades_propuesto || 'no determinable')}</b>${p.documentos_analizados?.periodo_historico ? ` (primer documento desde ${perDisplay(p.documentos_analizados.periodo_historico)})` : ''}</div>
           ${(p.avisos || []).map((a) => `<div class="checkline warn">⚠ ${esc(a)}</div>`).join('')}
           <div class="modal-foot">
             <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
@@ -185,7 +185,13 @@ VIEWS.onboarding = {
         {
           intervalo: 2000,
           esTerminal: (d) => ['completado', 'completado_con_errores', 'error'].includes(d.job?.estado),
+          // ISSUE-002: al terminar, refresca TODA la vista — el polling solo
+          // pinta la zona de progreso y el checklist quedaba desactualizado.
           onUpdate: (d) => {
+            if (['completado', 'completado_con_errores'].includes(d.job?.estado)) {
+              setTimeout(() => renderRoute(), 1200)
+              return
+            }
             const j = d.job
             const pct = j.total ? Math.round((j.procesados / j.total) * 100) : 0
             zona.innerHTML = `
