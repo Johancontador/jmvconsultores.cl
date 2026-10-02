@@ -12,6 +12,9 @@ RUN npm ci --omit=dev
 
 COPY backend ./backend
 COPY frontend ./frontend
+# scripts/: backup-db.js y rotar-master-key.js se usan dentro del contenedor
+# (cron de backups y ops de bóveda) — sin esto, docker exec falla con MODULE_NOT_FOUND.
+COPY scripts ./scripts
 
 ENV NODE_ENV=production
 EXPOSE 3500
