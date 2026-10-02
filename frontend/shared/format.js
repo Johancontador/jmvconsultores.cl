@@ -21,11 +21,21 @@ function fmt(monto) {
   return '$' + Math.round(monto || 0).toLocaleString('es-CL')
 }
 
+/** Formato compacto al estilo chileno de prensa financiera: prefijo antes del
+ * signo y coma decimal (M$31,7 = 31,7 millones de pesos) — nunca "31.7M$",
+ * que se lee como dólares. Los KPIs muestran el monto exacto debajo (fmtM). */
 function fmtCorto(monto) {
-  const abs = Math.abs(monto || 0)
-  if (abs >= 1e9) return (monto / 1e9).toFixed(1) + 'MM$'
-  if (abs >= 1e6) return (monto / 1e6).toFixed(1) + 'M$'
-  if (abs >= 1e3) return (monto / 1e3).toFixed(0) + 'K$'
+  const v = monto || 0
+  const abs = Math.abs(v)
+  const sgn = v < 0 ? '−' : ''
+  const dec = (x) => x.toFixed(1).replace('.', ',')
+  if (abs >= 1e9) return sgn + 'MM$' + dec(abs / 1e9)
+  if (abs >= 1e6) return sgn + 'M$' + dec(abs / 1e6)
+  if (abs >= 1e3) {
+    const k = Math.round(abs / 1e3)
+    // 999.999+ redondea a "K$1000": se escala a M$ para no mostrar miles falsos
+    return k >= 1000 ? sgn + 'M$' + dec(abs / 1e6) : sgn + 'K$' + k
+  }
   return fmt(monto)
 }
 
