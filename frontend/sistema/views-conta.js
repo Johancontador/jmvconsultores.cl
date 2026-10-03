@@ -1084,3 +1084,59 @@ function vistaCuentaCorriente(rol) {
 VIEWS.cclientes = vistaCuentaCorriente('cliente')
 VIEWS.cproveedores = vistaCuentaCorriente('proveedor')
 
+/* ==================== RECEPTOR EXTERNO (FASE 9.1) ====================
+ * Centralizaciones de asientos recibidas de sistemas externos (Geo Daniela
+ * y otros), con el contrato de integración visible para el integrador.
+ */
+
+VIEWS.externos = {
+  titulo: 'Receptor Externo de Asientos',
+  async render(cont) {
+    const eid = S.empresa.id
+    let recibidos = []
+    try {
+      const r = await apiGet(`/api/contable/asientos-externos?empresa_rut=${encodeURIComponent(S.empresa.rut || '')}`)
+      recibidos = r.recibidos || []
+    } catch (err) {
+      cont.innerHTML = `<div class="empty">${esc(err.message)}</div>`
+      return
+    }
+    void eid
+
+    cont.innerHTML = `
+      <div class="kpi-grid mb">
+        <div class="kpi"><small>Centralizaciones recibidas</small><strong>${recibidos.length}</strong><span class="sub">de sistemas externos</span></div>
+        <div class="kpi"><small>Última recepción</small><strong class="mono" style="font-size:var(--fs-lg)">${recibidos[0] ? esc((recibidos[0].creado_en || '').slice(0, 10)) : '—'}</strong><span class="sub">${recibidos[0] ? esc(recibidos[0].remitente) : ''}</span></div>
+      </div>
+      <div class="card">
+        <h3>Centralizaciones recibidas</h3>
+        ${recibidos.length ? `
+        <div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>Recepción</th><th>Remitente</th><th>Período</th><th>Glosa</th><th>Asiento</th><th>Fecha</th></tr></thead>
+          <tbody>${recibidos.map((r) => `
+            <tr>
+              <td class="sub">${esc((r.creado_en || '').slice(0, 16).replace('T', ' '))}</td>
+              <td><span class="chip contabilizado">${esc(r.remitente)}</span></td>
+              <td class="mono">${esc(r.periodo)}</td>
+              <td>${esc(r.glosa)}</td>
+              <td class="mono">F${r.folio}/${r.anio}</td>
+              <td class="sub">${esc(r.fecha || '')}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>` : '<div class="empty">Sin centralizaciones externas todavía. Cuando Geo Daniela (u otro sistema) envíe su asiento cuadrado, aparecerá aquí y en el diario.</div>'}
+      </div>
+      <div class="card mt">
+        <h3>Contrato para el integrador</h3>
+        <p class="hint" style="margin-top:-6px">Cualquier sistema externo contabiliza con un POST autenticado (usuario con permiso de asientos): el núcleo valida la partida doble — el rechazo es completo si no cuadra, y el re-envío de la misma centralización no duplica.</p>
+        <pre class="mono sub" style="white-space:pre-wrap;font-size:var(--fs-sm)">POST /api/contable/asientos-externos
+{ "empresa_rut": "${esc(S.empresa.rut || '76123456-7')}",
+  "idempotencia": "centralizacion-202610-v1",   // opcional, recomendada
+  "glosa": "Centralización remuneraciones octubre 2026",
+  "fecha": "2026-10-31",
+  "lineas": [ { "cuenta_codigo": "6.1.1.01", "debe": 5000000, "haber": 0 },
+              { "cuenta_codigo": "2.1.3.01", "debe": 0, "haber": 3550000 },
+              { "cuenta_codigo": "2.1.3.02", "debe": 0, "haber": 1450000 } ] }</pre>
+        <p class="hint">Auxiliar: <span class="mono">GET /api/contable/asientos-externos/validar-codigos?empresa_rut=…&codigos=6.1.1,2.1.4</span> — valida que los códigos existan en el plan SIN crearlos. Detalle completo: docs INTEGRATIONS §4.</p>
+      </div>`
+  },
+}
+

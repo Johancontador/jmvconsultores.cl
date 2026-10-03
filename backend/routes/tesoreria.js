@@ -9,12 +9,83 @@ const express = require('express')
 const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const teso = require('../core/tesoreria')
+const formatos = require('../core/tesoreria-cartola-formatos')
 
 const router = express.Router()
 
 function ip(req) {
   return req.ip || null
 }
+
+// ---------- 9.2: cartola desde ARCHIVO (Excel/CSV del portal del banco) ----------
+
+// Preview: parsea el archivo y devuelve las filas detectadas SIN importar nada.
+router.post('/empresas/:empresaId/tesoreria/cartola-archivo', requirePermiso('bancos:conciliar'), async (req, res) => {
+  try {
+    const b = req.body || {}
+    if (!b.contenido_base64) return res.status(400).json({ ok: false, error: 'Falta el contenido del archivo (contenido_base64)' })
+    const parsed = await formatos.parsearArchivo({ nombre: b.nombre_archivo, contenidoBase64: b.contenido_base64 })
+
+    let fuente = parsed.formato_detectado ? parsed.formato_detectado.fuente : null
+    let { filas, saltadas } = parsed
+    if (b.mapeo) {
+      const manual = formatos.parsearConMapeo(parsed.matriz, b.mapeo)
+      filas = manual.filas
+      saltadas = manual.saltadas
+      fuente = 'manual'
+      if (b.guardar_formato) {
+        formatos.guardarFormato(db, {
+          empresaId: req.empresaId, usuarioId: req.user.id,
+          nombre: b.guardar_formato, mapeo: b.mapeo, ip: ip(req),
+        })
+      }
+    }
+
+    let importacion = null
+    if (b.importar) {
+      if (!filas.length) return res.status(422).json({ ok: false, error: 'No hay filas importables: el formato no se reconoció y no hay mapeo manual que aplique' })
+      importacion = teso.importarCartola(db, {
+        empresaId: req.empresaId, usuarioId: req.user.id,
+        bancoCuentaId: b.banco_cuenta_id, filas, ip: ip(req),
+      })
+    }
+
+    res.json({
+      ok: true,
+      tipo_archivo: parsed.tipo_archivo,
+      fuente_mapeo: fuente,
+      formato_detectado: parsed.formato_detectado,
+      filas_detectadas: filas.length,
+      filas: filas.slice(0, 200),
+      saltadas,
+      filas_totales: parsed.filas_totales,
+      importacion,
+    })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.get('/empresas/:empresaId/tesoreria/cartola-formatos', requirePermiso('bancos:conciliar'), (req, res) => {
+  try {
+    res.json({ ok: true, formatos: formatos.listarFormatos(db, req.empresaId) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.post('/empresas/:empresaId/tesoreria/cartola-formatos', requirePermiso('bancos:conciliar'), (req, res) => {
+  try {
+    const b = req.body || {}
+    const r = formatos.guardarFormato(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      nombre: b.nombre, mapeo: b.mapeo, ip: ip(req),
+    })
+    res.status(201).json({ ok: true, formato: r, formatos: formatos.listarFormatos(db, req.empresaId) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
 
 // ---------- Resumen (para el dashboard del módulo) ----------
 

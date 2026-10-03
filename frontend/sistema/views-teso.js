@@ -281,6 +281,15 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
       <p class="hint" style="margin-top:-6px">Pega las líneas del cartola bancario (CSV: fecha, monto, glosa — el monto firmado: cargo negativo, abono positivo). Re-importar no duplica.</p>
       <textarea id="c-cartola" class="form-input" rows="4" placeholder="2026-10-05, -400000, Cargo proveedor\n2026-10-06, 700000, Abono cliente" style="font-family:var(--font-mono);font-size:var(--fs-sm)"></textarea>
       <div class="mt"><button class="btn btn-secondary btn-sm" id="c-importar">Importar cartola</button></div>
+    </div>
+    <div class="card mt">
+      <h3>Importar archivo del banco (Excel/CSV)</h3>
+      <p class="hint" style="margin-top:-6px">Sube la cartola exportada del portal del banco: el sistema detecta el formato (fecha, monto firmado, glosa), te muestra lo que va a importar y nada entra sin tu confirmación. Si el formato no se reconoce, mapeas las columnas a mano y lo guardas para siempre.</p>
+      <div class="frm-row mt">
+        <input type="file" id="c-archivo" class="form-input" accept=".csv,.xlsx,.xls" style="max-width:360px">
+        <button class="btn btn-secondary btn-sm" id="c-archivo-ver" disabled>Analizar archivo</button>
+      </div>
+      <div id="c-archivo-out"></div>
     </div>` : ''}
     <div id="c-out"></div>`
 
@@ -317,6 +326,99 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
       conciliar()
     } catch (err) { showToast(err.message, 'error') }
   })
+
+  /* --- 9.2: cartola por archivo (Excel/CSV) con preview y mapeo manual --- */
+  const inputArchivo = document.getElementById('c-archivo')
+  const btnVer = document.getElementById('c-archivo-ver')
+  const outArchivo = document.getElementById('c-archivo-out')
+  let archivoBase64 = null
+  let archivoNombre = ''
+  let ultimoResultado = null
+
+  if (inputArchivo) {
+    inputArchivo.addEventListener('change', () => {
+      const file = inputArchivo.files && inputArchivo.files[0]
+      btnVer.disabled = !file
+      outArchivo.innerHTML = ''
+      archivoBase64 = null
+      if (!file) return
+      archivoNombre = file.name
+      const lector = new FileReader()
+      lector.onload = () => { archivoBase64 = String(lector.result).split(',')[1] || null }
+      lector.readAsDataURL(file)
+    })
+  }
+
+  const pedirParseo = async (extra) => apiPost(`/api/contable/empresas/${eid}/tesoreria/cartola-archivo`, {
+    banco_cuenta_id: Number(document.getElementById('c-banco').value),
+    nombre_archivo: archivoNombre,
+    contenido_base64: archivoBase64,
+    ...extra,
+  })
+
+  async function analizarArchivo() {
+    if (!archivoBase64) { showToast('Elige primero el archivo', 'error'); return }
+    outArchivo.innerHTML = '<p class="hint mt">Analizando archivo…</p>'
+    try {
+      const r = await pedirParseo({})
+      ultimoResultado = r
+      pintarPreview(r)
+    } catch (err) { showToast(err.message, 'error'); outArchivo.innerHTML = '' }
+  }
+
+  function pintarPreview(r) {
+    const fuente = r.fuente_mapeo === 'encabezado' ? 'detectado por encabezado'
+      : r.fuente_mapeo === 'estadistico' ? 'detectado por estructura de columnas'
+      : r.fuente_mapeo === 'manual' ? 'mapeo manual tuyo' : 'no reconocido'
+    outArchivo.innerHTML = `
+      <p class="hint mt">Archivo <b>${esc(archivoNombre)}</b> (${esc(r.tipo_archivo)}) — formato: <b>${esc(fuente)}</b>. Detectadas <b>${r.filas_detectadas}</b> de ${r.filas_totales} fila(s)${r.saltadas.length ? `, ${r.saltadas.length} saltada(s) con motivo` : ''}.</p>
+      ${r.filas.length ? `
+      <div class="tbl-wrap mt" style="max-height:260px;overflow:auto"><table class="tbl">
+        <thead><tr><th>Fecha</th><th>Monto</th><th>Glosa</th></tr></thead>
+        <tbody>${r.filas.slice(0, 50).map((f) => `
+          <tr><td>${esc(f.fecha)}</td><td class="num ${f.monto > 0 ? 'up' : ''}">${fmtM(f.monto)}</td><td class="sub">${esc(f.glosa || '')}</td></tr>`).join('')}
+        </tbody></table></div>
+      ${r.filas.length > 50 ? `<p class="hint">…y ${r.filas.length - 50} más.</p>` : ''}` : '<p class="hint mt warn">No se reconoció ninguna fila: mapea las columnas a mano abajo.</p>'}
+      <div class="frm-row mt">
+        <div><span class="frm-label">Col. fecha</span><input id="cm-fecha" class="form-input" type="number" min="0" style="width:90px" placeholder="0"></div>
+        <div><span class="frm-label">Col. monto</span><input id="cm-monto" class="form-input" type="number" min="0" style="width:90px" placeholder="1"></div>
+        <div><span class="frm-label">Col. glosa</span><input id="cm-glosa" class="form-input" type="number" min="0" style="width:90px" placeholder="2"></div>
+        <div style="align-self:flex-end"><button class="btn btn-secondary btn-sm" id="cm-aplicar">Re-analizar con este mapeo</button></div>
+        <div><span class="frm-label">Guardar formato como</span><input id="cm-nombre" class="form-input" placeholder="Banco X — cartola mensual" style="width:220px"></div>
+      </div>
+      ${r.filas_detectadas ? `<div class="mt"><button class="btn btn-primary" id="cm-importar">Importar ${r.filas_detectadas} movimiento(s)</button></div>` : ''}`
+
+    document.getElementById('cm-aplicar').addEventListener('click', async () => {
+      // el usuario define QUÉ COLUMNA es cada cosa; el archivo se re-analiza completo
+      const mapeoReal = {
+        fila_inicio: 0,
+        col_fecha: Number(document.getElementById('cm-fecha').value) || 0,
+        col_monto: Number(document.getElementById('cm-monto').value) || 1,
+        col_glosa: Number(document.getElementById('cm-glosa').value) || 2,
+      }
+      try {
+        const nombre = document.getElementById('cm-nombre').value.trim()
+        const r2 = await pedirParseo({ mapeo: mapeoReal, guardar_formato: nombre || undefined })
+        ultimoResultado = r2
+        pintarPreview(r2)
+        if (nombre) showToast(`Formato "${nombre}" guardado para esta empresa`, 'success')
+      } catch (err) { showToast(err.message, 'error') }
+    })
+
+    const btnImportar = document.getElementById('cm-importar')
+    if (btnImportar) btnImportar.addEventListener('click', async () => {
+      try {
+        const r2 = await pedirParseo({ importar: true })
+        showToast(`Cartola importada: ${r2.importacion.insertadas} nueva(s), ${r2.importacion.duplicadas} duplicada(s) saltada(s)`, 'success')
+        outArchivo.innerHTML = ''
+        inputArchivo.value = ''
+        btnVer.disabled = true
+        conciliar()
+      } catch (err) { showToast(err.message, 'error') }
+    })
+  }
+
+  if (btnVer) btnVer.addEventListener('click', analizarArchivo)
 
   function pintarResultado(r) {
     document.getElementById('c-out').innerHTML = `

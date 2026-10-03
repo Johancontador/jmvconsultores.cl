@@ -103,7 +103,7 @@ function obtenerCompleto(db, empresaId, asientoId) {
  * Crea un asiento validado y auditado. Devuelve el asiento completo.
  * @param {object} p lineas: mínimo 2; tipo: manual|ajuste|automatico|...
  */
-function crear(db, { empresaId, usuarioId, fecha, glosa, tipo = 'manual', lineas, asientoRevertidoId = null, origen = null, ip = null }) {
+function crear(db, { empresaId, usuarioId, fecha, glosa, tipo = 'manual', lineas, asientoRevertidoId = null, origen = null, idempotencia = null, ip = null }) {
   const rol = rolEnEmpresa(db, usuarioId, empresaId)
   if (!rol) throw new Error('No tiene acceso a esta empresa')
   if (!TIPOS.includes(tipo)) throw new Error(`Tipo de asiento inválido: ${tipo}`)
@@ -142,10 +142,23 @@ function crear(db, { empresaId, usuarioId, fecha, glosa, tipo = 'manual', lineas
       SELECT COALESCE(MAX(folio), 0) + 1 AS n FROM asientos WHERE empresa_id = ? AND anio = ?
     `).get(empresaId, anio)
 
+    // Idempotencia (FASE 9, asientos externos): UNIQUE parcial empresa+clave.
+    if (idempotencia !== null) {
+      const previo = db.prepare(`
+        SELECT id, folio, anio FROM asientos WHERE empresa_id = ? AND idempotencia = ?
+      `).get(empresaId, String(idempotencia))
+      if (previo) {
+        const e = new Error(`Ya existe el asiento ${previo.folio}/${previo.anio} con esa clave de idempotencia`)
+        e.status = 422
+        e.codigo = 'IDEMPOTENCIA_CONFLICTO'
+        throw e
+      }
+    }
+
     const info = db.prepare(`
-      INSERT INTO asientos (empresa_id, folio, anio, fecha, periodo, tipo, glosa, usuario_id, asiento_revertido_id, origen)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(empresaId, folio, anio, fecha, periodo, tipo, glosaLimpia, usuarioId, asientoRevertidoId, origen)
+      INSERT INTO asientos (empresa_id, folio, anio, fecha, periodo, tipo, glosa, usuario_id, asiento_revertido_id, origen, idempotencia)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(empresaId, folio, anio, fecha, periodo, tipo, glosaLimpia, usuarioId, asientoRevertidoId, origen, idempotencia === null ? null : String(idempotencia))
     const asientoId = info.lastInsertRowid
 
     const insertarLinea = db.prepare(`
@@ -167,6 +180,7 @@ function crear(db, { empresaId, usuarioId, fecha, glosa, tipo = 'manual', lineas
         lineas: normalizadas.map((l) => ({ cuenta_id: l.cuenta_id, debe: l.debe, haber: l.haber })),
         ...(asientoRevertidoId !== null ? { revierte_a: asientoRevertidoId } : {}),
         ...(origen ? { origen } : {}),
+        ...(idempotencia !== null ? { idempotencia: String(idempotencia) } : {}),
       },
       ip,
     })

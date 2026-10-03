@@ -618,4 +618,47 @@ function migracionesFase8(db) {
   }
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, seedPlanCuentas }
+// ============================================================
+// FASE 9 — INTEGRACIONES (9.1 receptor de asientos externos, Geo Daniela):
+//  - `asientos.idempotencia` con UNIQUE parcial (empresa+clave): re-envío de
+//    una centralización no duplica — la clave la provee el remitente o es el
+//    SHA-256 del payload canónico (core/asientos-externos.js).
+//  - `asientos_externos`: registro de centralizaciones recibidas para consulta
+//    del contador (remitente, período, líneas, asiento generado).
+// ============================================================
+function migracionesFase9(db) {
+  const cols = db.prepare(`PRAGMA table_info(asientos)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'idempotencia')) {
+    db.exec(`ALTER TABLE asientos ADD COLUMN idempotencia TEXT`)
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_asientos_idempotencia
+      ON asientos(empresa_id, idempotencia) WHERE idempotencia IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS asientos_externos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      remitente TEXT NOT NULL DEFAULT 'geodaniela',
+      idempotencia TEXT NOT NULL,
+      periodo TEXT NOT NULL,
+      glosa TEXT NOT NULL,
+      lineas_json TEXT NOT NULL,
+      asiento_id INTEGER NOT NULL REFERENCES asientos(id),
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, idempotencia)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asientos_ext_empresa ON asientos_externos(empresa_id, periodo);
+
+    -- 9.2: formatos de cartola guardados (mapeo manual de columnas por banco)
+    CREATE TABLE IF NOT EXISTS teso_cartola_formatos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      nombre TEXT NOT NULL,
+      mapeo_json TEXT NOT NULL,
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, nombre)
+    );
+  `)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, seedPlanCuentas }

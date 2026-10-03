@@ -79,7 +79,7 @@ La conciliación usa `consultarResumen` (totales oficiales del SII) contra los t
 
 ## 4. Geo Daniela (remuneraciones) — contrato FUTURO de asiento externo (fase 9)
 
-**Estado: solo diseño. Nada se implementa en el MVP.** El núcleo contable ya reserva el canal: `asientos.tipo='externo'` con `origen='geodaniela'`.
+**Estado: ✅ IMPLEMENTADO (2026-10-02, FASE 9.1 — 10 tests).** Detalle de implementación en ROADMAP.md → PLAN FASE 9 §9.1. El canal es `asientos.tipo='externo'` con `origen='<remitente>:<periodo>'`.
 
 Contrato previsto (cuando Geo Daniela quiera enviar su centralización):
 
@@ -87,6 +87,9 @@ Contrato previsto (cuando Geo Daniela quiera enviar su centralización):
 ENTRADA: POST /api/contable/asientos-externos   (autenticado, permiso asientos:crear)
 {
   "empresa_rut":  "76312274-3",
+  "idempotencia": "centralizacion-202609-v1",   // OPCIONAL: si se envía, DEBE enviarse siempre
+                                                 // (re-envío con la misma clave = 200 deduplicado, no duplica;
+                                                 //  sin clave, el dedupe es por SHA-256 del payload)
   "periodo":      "202609",            // debe estar ABIERTO
   "glosa":        "Centralización remuneraciones septiembre 2026",
   "fecha":        "2026-09-30",
@@ -108,6 +111,11 @@ REGLAS (idénticas a cualquier asiento, validadas por el MISMO núcleo):
 
 Esto cumple la regla del PROMPT MAESTRO: **cero desarrollo de remuneraciones**; solo el núcleo abierto a recibir un asiento externo.
 
+Auxiliares del receptor (FASE 9.1):
+- `GET /api/contable/asientos-externos?empresa_rut=…` — centralizaciones recibidas (histórico con folio).
+- `GET /api/contable/asientos-externos/validar-codigos?empresa_rut=…&codigos=6.1.1,2.1.4` — valida existencia/imputabilidad SIN crear cuentas.
+- Errores: 422 con `codigo` PAYLOAD_INVALIDO (incluye Σd≠Σh — rechazo completo) · PERIODO_CERRADO · CUENTA_INEXISTENTE (lista exacta de códigos) · 403 SIN_ACCESO (el usuario no pertenece a la empresa) · 402 licencia.
+
 ## 5. GitHub / CI / VPS (integración de desarrollo, vigente)
 
 - Remotes: `vps` (bare en VPS vía Tailscale, **activo**), `github` (pendiente: el usuario debe ejecutar `gh auth login -h github.com`; luego crear repo privado, `git remote add github <url>`, `git push -u github master`).
@@ -117,7 +125,7 @@ Esto cumple la regla del PROMPT MAESTRO: **cero desarrollo de remuneraciones**; 
 ## 6. Integraciones explícitamente FUERA de alcance
 
 - SII: cualquier otra cosa distinta al RCV (boletas de honorarios electrónicas SII-web, F22, cartolas bancos) — fase futura, requiere decisión expresa.
-- Bancos (cartolas/conciliación bancaria automática): fase 9.
+- Bancos: la cartola del portal entra como ARCHIVO con conector por formato — ✅ IMPLEMENTADO (FASE 9.2: `core/tesoreria-cartola-formatos.js`, detección por encabezado/estructura + mapeo manual guardado; cero scraping, el humano descarga el archivo). La integración directa vía agregador (XuMi) queda bajo decisión expresa del dueño (ROADMAP §9.3).
 - Facturación emisora (envío de DTE propios): fuera del alcance; el software es receptor/consumidor.
 - scraping de cualquier tipo: prohibido por mandato.
 

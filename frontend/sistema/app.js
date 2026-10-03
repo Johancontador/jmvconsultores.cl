@@ -216,6 +216,7 @@ const MENU = [
       { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
       { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
       { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
+      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
     ]
   },
   {

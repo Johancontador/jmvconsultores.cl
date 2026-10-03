@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-02 · Commit base: `afd29ea` (master) · Suite: 175 verdes
+> Fecha: 2026-10-02 · Commit base: `afd29ea` (master) · Suite: 197 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 18 archivos, 175 tests verdes: `npm test` |
+| Tests | `node --test` | 20 archivos, 197 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -50,7 +50,7 @@ backend/
                             plan-cuentas-plantilla, cuentas, asientos, documentos, ingesta,
                             reglas + semillas, contrapartes, propuestas, conciliación,
                             automatización, onboarding, reportes, dashboard, tesorería,
-                            activos, niif
+                            tesoreria-cartola-formatos, activos, niif, asientos-externos
   routes/
     auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin),
                             registro self-service con validación SII en vivo (SAAS-1)
@@ -64,6 +64,8 @@ backend/
     tesoreria.js            bancos, pagos/cobros/transferencias, cartola, conciliación (FASE 6)
     activos.js              activos fijos, depreciación mensual, venta/baja (FASE 7)
     niif.js                 mapeo cuentas→rubros NIIF + estados por rubros (FASE 8)
+    asientos-externos.js    receptor de centralizaciones externas — Geo Daniela (FASE 9.1)
+    tesoreria-cartola-formatos.js   conectores de cartolas por formato CSV/XLSX (FASE 9.2)
     clientes.js             CRUD clientes con scoping user_id, validación RUT/PPM/teléfono (legacy)
     informe.js              iniciar/consultar/listar/eliminar informes (async en background)
     proceso.js              proceso masivo por período (F29 + WhatsApp)
@@ -107,9 +109,9 @@ data/                       SQLite (no versionado)
 nginx/, Dockerfile, docker-compose.yml, migrations/, scripts/, iniciar.bat
 docs/                       PRD, TRD, BACKEND, APPFLOW, UI-UX, PLAN, MASTERPLAN,
                             SEGURIDAD, DESPLIEGUE, ROADMAP-FUNCIONALIDADES, REDISENO_PROPUESTA
-test/                       18 suites: calculos, db-schema, export-fecha, informe-listar,
-                            fase1-fase8, saas1, saas2, automatizacion, dashboard,
-                            memoria-reportes
+test/                       20 suites: calculos, db-schema, export-fecha, informe-listar,
+                            fase1-fase9, saas1, saas2, automatizacion, dashboard,
+                            memoria-reportes, cartola-formatos
 ```
 
 ## 4. Modelo de datos actual (resumen; detalle en DATA_MODEL.md)
@@ -128,11 +130,13 @@ test/                       18 suites: calculos, db-schema, export-fecha, inform
 - `propuestas` (snapshot congelado de líneas), `conciliaciones` — automatización y conciliación SII↔contable.
 - `bancos_cuentas`, `teso_movimientos` (monto FIRMADO, UNIQUE banco+asiento), `teso_cartola` (dedupe idempotente; `movimiento_id` = match de conciliación) — tesorería de FASE 6: cada movimiento bancario queda respaldado por un asiento del núcleo (`asiento_id`) y el saldo inicial del banco se contabiliza como asiento de apertura.
 - `empresas.config_json` — memoria de contabilización: `modo_conciliacion` ('simple' | 'completa') + cuentas regulares de gastos/ingresos donde se netean compras/ventas en modo simple; la memoria RUT → cuenta vive en `contrapartes` (precedencia: regla > memoria RUT > cuenta regular > alias).
+
+**Integraciones (FASE 9.1):** `asientos.idempotencia` (UNIQUE parcial) + `asientos_externos` (UNIQUE empresa+idempotencia) — receptor de centralizaciones externas (Geo Daniela, INTEGRATIONS §4): la empresa se resuelve por RUT dentro de las empresas del usuario autenticado, rechazo completo 422 si Σd≠Σh/período cerrado/códigos inválidos, re-envío deduplicado (clave explícita o SHA-256 del payload).
 - `activos_fijos` (código UNIQUE, cuenta clase 1, vida útil, residual, estado ACTIVO|VENDIDO|BAJA, asiento de alta/baja) + `activos_depreciaciones` (UNIQUE activo+período con `asiento_id`) — FASE 7: depreciación por línea recta respaldada asiento por asiento; la venta/baja limpia costo + depreciación acumulada contra utilidad/pérdida por alias.
 
 **Presentación NIIF (FASE 8):** `cuentas.rubro_niif` (defaults de la PLANTILLA PUC; backfill por código para empresas preexistentes) — mapeo editable y auditado; los estados por rubros derivan del mayor con `SIN_CLASIFICAR` visible y never-guess (ecuación A = P + PN verificada; PYE se presenta neto).
 
-**No existe aún:** NIIF avanzado tipo consolidación/moneda extranjera (la presentación por rubros de la FASE 8 cubre el estándar), integraciones bancarias automáticas (la cartola se importa a mano — report-only) ni receptor Geo Daniela.
+**No existe aún:** NIIF avanzado tipo consolidación/moneda extranjera (la presentación por rubros de la FASE 8 cubre el estándar) ni integraciones bancarias automáticas (la cartola se importa a mano — report-only; conector por formato planificado en ROADMAP → FASE 9.2). El receptor Geo Daniela (9.1) ya existe.
 
 ## 5. Autenticación, autorización y aislamiento hoy
 
@@ -177,7 +181,7 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 8. **`informe_documentos` crece sin límite por informe** (delete+insert completo en cada regeneración). RESUELTO para el contable: la bandeja `documentos` es una entidad persistente por empresa, independiente de informes (FASE 3).
 9. **Node 25 rompe `node --test test/` en modo directorio** (preexistente); `npm test` con archivos explícitos funciona.
 10. **`/index.html` (Clientes), `dashboard.html` (legado) y `/sistema/` (contable) coexisten**; el shell contable real es `/sistema/`.
-11. **Tesorería sin integración bancaria automática**: la cartola se pega/importa a mano (CSV) y la conciliación es report-only — así lo exige el §22 hasta Fase 9 (integraciones con bancos).
+11. **Tesorería sin integración bancaria automática**: la cartola entra por pegado CSV o por archivo del portal del banco con conector por formato (FASE 9.2 — detección genérica + formatos guardados; formatos concretos por banco por afinar con muestras reales) y la conciliación es report-only — sin agregador bancario (9.3 queda bajo decisión del dueño).
 12. **Conciliación bancaria empareja 1↔1**: un pago que cubre varias facturas queda sin match individual; se reporta en `no_conciliado_libro` para ajuste manual. Mejora 1↔n post-MVP.
 
 ## 9. Qué funciona y está verificado (no asumir, comprobado en vivo)
@@ -190,11 +194,15 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Activos fijos (FASE 7, 14 tests):** registro con alta contable opcional (apertura activo↔contraparte); depreciación mensual por línea recta propuesta→confirmada (UN asiento por período, cuota final con depreciable exacto, UNIQUE activo+período, re-confirmar lanza); venta/baja con utilidad/pérdida por alias y aviso de cuota pendiente; períodos cerrados rechazados; la situación financiera sigue cuadrando (A = P + P) con depreciación y ventas operando. Además, los tests destaparon y corrigieron un bug del balance de 8 columnas (columnas deudor/acreedor por signo del neto, no por naturaleza).
 
+- **Cartolas por archivo (FASE 9.2, 12 tests):** conector por formato CSV/XLSX (exceljs de lectura, montos chilenos con miles/decimales/paréntesis, fechas ISO/DD-MM/serial con rechazo de inexistentes), detección por encabezado o estructura estadística (con y sin fila de encabezado), formato no reconocido → mapeo manual guardado por nombre (auditado, upsert), importación a la misma `teso_cartola` con dedupe idempotente y conciliación de FASE 6 intacta. La validación con cartolas reales de los bancos del dueño queda como criterio operativo (ROADMAP → 9.2).
+
+- **Receptor de asientos externos (FASE 9.1, 10 tests):** contrato INTEGRATIONS §4 implementado — centralización cuadrada → asiento tipo 'externo' con folio correlativo, origen y auditoría; idempotencia por clave explícita o hash del payload (re-envío no duplica); rechazo COMPLETO con lista exacta de códigos inválidos; período cerrado y acceso restringido a las empresas del usuario; auxiliar validar-codigos sin crear cuentas; vista 🔌 Receptor Externo con el contrato visible para el integrador.
+
 - **NIIF (FASE 8, 7 tests):** mapeo cuentas→rubros con defaults de plantilla (backfill idempotente por código), edición masiva auditada (solo cambios reales), situación financiera por rubros con PYE neto y ecuación A = P + PN verificada, resultados por naturaleza mes/acumulado, SIN_CLASIFICAR reportado sin romper el cuadre y aislamiento estricto por empresa.
 
 - **Memoria de contabilización + modo simple + reportes nuevos (8 tests):** config de empresa (`modo_conciliacion` simple/completa + cuentas regulares validadas, auditada); precedencia de contraparte regla > memoria RUT > cuenta regular > alias, con aprendizaje automático al confirmar propuestas (el RUT queda vinculado para el mes siguiente) y vista "contrapartes nuevas por ubicar"; balance de 8 columnas (hoja de trabajo con cuadres ΣD=ΣC, saldos y Pérdida/Utilidad); balance clasificado (corriente/no corriente por código del plan, capital de trabajo, A = P + P); cuenta corriente de clientes/proveedores con pagos/cobros aplicados y saldo corrido; mayor con filtro por RUT de contraparte (documento contabilizado o pago de tesorería). Shell `/sistema/` rediseñado a menú superior horizontal con secciones (Empresa / SII / Contabilizaciones / Tesorería / Reportes).
 
-- Tests `npm test` en verde (175). CI en verde en cada push.
+- Tests `npm test` en verde (197). CI en verde en cada push.
 
 ## 10. Conclusión del estado actual
 

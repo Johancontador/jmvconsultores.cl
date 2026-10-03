@@ -27,7 +27,13 @@ const PORT = process.env.PORT || 3500
 
 // Límite de tamaño del JSON: las rutas de esta app reciben parámetros de
 // consulta (cliente_id, rango), no payloads grandes — 100 KB es generoso y
-// evita que un body gigante consuma memoria del servidor.
+// evita que un body gigante consuma memoria del servidor. EXCEPCIÓN (FASE 9.2):
+// la cartola bancaria sube como archivo en base64 — solo esa ruta acepta más.
+const jsonCartola = express.json({ limit: '8mb' })
+app.use('/api/contable', (req, res, next) => {
+  if (req.path.endsWith('/tesoreria/cartola-archivo')) return jsonCartola(req, res, next)
+  next()
+})
 app.use(express.json({ limit: '100kb' }))
 
 // Confiar en el proxy de nginx (docker-compose): req.ip refleja X-Forwarded-For
@@ -72,6 +78,7 @@ app.use('/api/contable', requireAuth, require('./routes/onboarding'))
 app.use('/api/contable', requireAuth, require('./routes/tesoreria'))
 app.use('/api/contable', requireAuth, require('./routes/activos'))
 app.use('/api/contable', requireAuth, require('./routes/niif'))
+app.use('/api/contable', requireAuth, require('./routes/asientos-externos'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })
