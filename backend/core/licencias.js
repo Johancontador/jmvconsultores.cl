@@ -240,5 +240,6 @@ module.exports = {
   esPlanValido, suscripcionDe, refrescarEstado,
   puedeEscribir, exigirVigente, estadoParaUI,
   crearPrueba, crearHeredada, activarPlan, cancelar,
+  usuarioSistema,
   hoyISO, sumaDias,
 }

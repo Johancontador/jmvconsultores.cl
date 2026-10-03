@@ -42,6 +42,10 @@ const CATALOGO_CAPACIDADES = {
   'activos:ver': 'Ver activos fijos, su plan de depreciación y las depreciaciones registradas',
   'activos:operar': 'Registrar activos fijos, ejecutar la depreciación mensual y registrar ventas/bajas',
   'config:editar': 'Editar configuración de la empresa',
+  // SAAS-3: pagos y facturación de la suscripción (SAAS-ACCESO §5.3)
+  'licencias:ver': 'Ver la suscripción, su estado y el historial de pagos de la empresa',
+  'licencias:pagar': 'Contratar o renovar el plan de la empresa (checkout de la pasarela)',
+  'facturacion:emitir': 'Emitir la factura electrónica (DTE) de los pagos de la suscripción',
 }
 
 const TODAS_LAS_CAPACIDADES = Object.keys(CATALOGO_CAPACIDADES)
@@ -68,6 +72,8 @@ const PERMISOS_POR_ROL = {
     'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
     // Fase 7: activos fijos y depreciación mensual
     'activos:ver', 'activos:operar',
+    // SAAS-3: JMV (contador del despacho) ve pagos y emite la factura de la suscripción
+    'licencias:ver', 'facturacion:emitir',
   ],
 
   admin_empresa: [
@@ -84,6 +90,10 @@ const PERMISOS_POR_ROL = {
     'reportes:ver', 'config:editar',
     // Fase 7: el dueño ve sus activos y depreciaciones, sin operarlos
     'activos:ver',
+    // SAAS-3: el dueño ve y PAGA su suscripción — el pago jamás queda bloqueado
+    // por el estado de la propia licencia (si no, una empresa SUSPENDIDA no
+    // podría reactivarse sola); el gate de licencia no aplica a este módulo.
+    'licencias:ver', 'licencias:pagar',
   ],
 
   auditor: [
@@ -101,6 +111,8 @@ const PERMISOS_POR_ROL = {
     'tesoreria:ver',
     // Fase 7: el auditor ve activos fijos pero no opera
     'activos:ver',
+    // SAAS-3: el auditor consulta suscripción y pagos, no paga ni factura
+    'licencias:ver',
   ],
 
   tesoreria: [
@@ -113,6 +125,7 @@ const PERMISOS_POR_ROL = {
     'conciliacion:ver',
     'reportes:ver',
     'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
+    'licencias:ver',
   ],
 }
 

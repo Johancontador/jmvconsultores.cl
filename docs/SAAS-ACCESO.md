@@ -112,9 +112,13 @@ El paso de tiempo lo resuelve `licencias.refrescarEstado()` al leer (sin cron).
 - El límite operativo se aplica como gate en escrituras (`licencias.exigirVigente`),
   **nunca** borrando ni bloqueando lectura: los datos siempre se ven, no se puede
   escribir en período sin licencia (mismo espíritu que el bloqueo de período cerrado).
-- Pagos: FASE SAAS-3 (MercadoPago/Transbank webhook → `activarPlan`). Hoy la
-  activación la hace JMV (super_admin) desde la ficha de la empresa; la prueba
-  es 100% automática.
+- Pagos: ✅ SAAS-3 IMPLEMENTADA — checkout MercadoPago con adaptador inyectable
+  (webhook idempotente → `activarPlan`; Transbank/Webpay como segundo adaptador
+  cuando se decida). El dueño contrata/renueva desde 💳 Suscripción y Pagos sin
+  esperar a JMV; para producción falta la cuenta real (env `MP_ACCESS_TOKEN`,
+  `MP_WEBHOOK_SECRET`). La factura electrónica de la suscripción (DTE 33 vía
+  @devlas/dte-sii) queda PENDIENTE por pago aprobado y se emite cuando JMV
+  configure firma electrónica + CAF.
 
 ### 5.4 Prueba: 3 meses (90 días), automática y honesta
 
@@ -158,8 +162,9 @@ frontend/landing.html         enlace "Crear cuenta"
 
 ## 8. Qué NO es esta fase (explícito)
 
-- Sin pasarela de pago real (SAAS-3). Sin facturación electrónica de la
-  suscripción (JMV factura manual). Sin multi-moneda. Sin equipo/organización
-  contable con varias empresas en un plan (hasta SAAS-3).
+- Sin pasarela real configurada en producción (SAAS-3 implementada con
+  adaptador MercadoPago: falta la cuenta real en el VPS). Factura electrónica
+  de la suscripción implementada (DTE 33) — requiere firma electrónica + CAF
+  de JMV para emitir. Sin multi-moneda.
 - Sin emails transaccionales: el banner en la app + WhatsApp de JMV bastan para
   arrancar (el sitio ya convierte por WhatsApp).

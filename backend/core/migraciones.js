@@ -661,4 +661,70 @@ function migracionesFase9(db) {
   `)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, seedPlanCuentas }
+// ============================================================
+// SAAS-3 — PAGOS Y FACTURACIÓN DE LA SUSCRIPCIÓN (SAAS-ACCESO §5.3):
+//  - `pagos_suscripcion`: un intento de pago por checkout (adaptador de
+//    pasarela — MercadoPago primero). external_reference = 'pago_suscripcion:<id>'
+//    es el vínculo con la pasarela; UNIQUE(gateway, gateway_pago_id) hace que
+//    el MISMO pago de la pasarela active la licencia UNA sola vez.
+//  - `webhook_eventos`: registro de notificaciones entrantes (UNIQUE
+//    gateway+evento_id) — re-entrega del webhook no re-procesa nada.
+//  - `facturas_suscripcion`: el DTE (factura 33) de cada pago aprobado —
+//    montos con IVA calculado de la tasa configurada; el XML/track-id queda
+//    en la fila una vez emitida (emitir es idempotente por UNIQUE(pago_id)).
+// El gate de licencia NO aplica a este módulo: pagar debe ser posible incluso
+// con la licencia SUSPENDIDA (si no, la empresa no puede reactivarse sola).
+// ============================================================
+function migracionesSaas3(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pagos_suscripcion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      plan TEXT NOT NULL,
+      monto_clp INTEGER NOT NULL,
+      meses INTEGER NOT NULL DEFAULT 1,
+      gateway TEXT NOT NULL,
+      gateway_pref_id TEXT,
+      gateway_pago_id TEXT,
+      external_reference TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE',   -- PENDIENTE | APROBADO | RECHAZADO
+      respuesta_json TEXT,
+      creado_en TEXT DEFAULT (datetime('now')),
+      resuelto_en TEXT,
+      UNIQUE(gateway, gateway_pago_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pagos_empresa ON pagos_suscripcion(empresa_id, creado_en);
+
+    CREATE TABLE IF NOT EXISTS webhook_eventos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gateway TEXT NOT NULL,
+      evento_id TEXT NOT NULL,
+      payload TEXT,
+      procesado INTEGER NOT NULL DEFAULT 0,
+      resultado TEXT,
+      recibido_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(gateway, evento_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS facturas_suscripcion (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      pago_id INTEGER NOT NULL REFERENCES pagos_suscripcion(id),
+      tipo_dte INTEGER NOT NULL DEFAULT 33,
+      folio INTEGER,
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE',   -- PENDIENTE | EMITIDA | RECHAZADA
+      monto_neto INTEGER NOT NULL,
+      monto_iva INTEGER NOT NULL,
+      monto_total INTEGER NOT NULL,
+      receptor_json TEXT,
+      xml TEXT,
+      track_id TEXT,
+      motivo_rechazo TEXT,
+      emitido_en TEXT,
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(pago_id)
+    );
+  `)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, seedPlanCuentas }

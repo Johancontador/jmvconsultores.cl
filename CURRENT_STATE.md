@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-02 · Commit base: `afd29ea` (master) · Suite: 197 verdes
+> Fecha: 2026-10-03 · Commit base: `63a862b` (master) · Suite: 214 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 20 archivos, 197 tests verdes: `npm test` |
+| Tests | `node --test` | 21 archivos, 214 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -202,10 +202,12 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Memoria de contabilización + modo simple + reportes nuevos (8 tests):** config de empresa (`modo_conciliacion` simple/completa + cuentas regulares validadas, auditada); precedencia de contraparte regla > memoria RUT > cuenta regular > alias, con aprendizaje automático al confirmar propuestas (el RUT queda vinculado para el mes siguiente) y vista "contrapartes nuevas por ubicar"; balance de 8 columnas (hoja de trabajo con cuadres ΣD=ΣC, saldos y Pérdida/Utilidad); balance clasificado (corriente/no corriente por código del plan, capital de trabajo, A = P + P); cuenta corriente de clientes/proveedores con pagos/cobros aplicados y saldo corrido; mayor con filtro por RUT de contraparte (documento contabilizado o pago de tesorería). Shell `/sistema/` rediseñado a menú superior horizontal con secciones (Empresa / SII / Contabilizaciones / Tesorería / Reportes).
 
-- Tests `npm test` en verde (197). CI en verde en cada push.
+- **Pagos y facturación de la suscripción (SAAS-3, 17 tests):** checkout con adaptador de pasarela inyectable (MercadoPago primero, Transbank/Webpay después), webhook PÚBLICO idempotente en dos espacios (evento y pago) que re-confirma SIEMPRE contra la API de la pasarela y activa/renueva la licencia vía `activarPlan` en una transacción auditada; el gate de licencia NO aplica a pagar (una empresa SUSPENDIDA puede reactivarse sola); factura electrónica (DTE 33) con desglose IVA citado, receptor validado nominando lo que falta y adaptador real `core/dte.js` sobre @devlas/dte-sii (pendiente credenciales CAF/certificado para producción); vista 💳 Suscripción y Pagos en /sistema/.
+
+- Tests `npm test` en verde (214). CI en verde en cada push.
 
 ## 10. Conclusión del estado actual
 
 La base heredada es sólida para lo que fue diseñada: **obtener y analizar información tributaria del SII por cliente**. Sobre ella, el **software contable ya existe y está en producción del MVP**: empresas con dominio estricto, roles, plan de cuentas, partida doble, motor de reglas, bandeja con ciclo de vida, propuestas, conciliación, reportes, cierres, automatización, licencias, onboarding, **tesorería (FASE 6)** con libro banco respaldado asiento por asiento, **activos fijos (FASE 7)** con depreciación mensual propuesta→confirmada y venta/baja en un asiento, y **presentación NIIF (FASE 8)** por rubros con mapeo editable y SIN_CLASIFICAR nunca oculto. La integración SII existente se conserva tal cual; Geo Daniela no se toca (solo se reserva el contrato de entrada de asientos, ver INTEGRATIONS.md).
 
-El siguiente documento, [ARCHITECTURE.md](ARCHITECTURE.md), define cómo evolucionar de este estado al software contable sin reconstruir nada de lo que funciona.
+El siguiente documento, [ARCHITECTURE.md](ARCHITECTURE.md), define cómo evolucionar de este estado al software contable sin reconstruir nada de lo que funciona. El **manual de funcionalidades y procedimientos** (paso a paso, por rol y módulo, con troubleshooting) vive en [docs/MANUAL.md](docs/MANUAL.md) — mantenerlo al día con cada fase nueva.

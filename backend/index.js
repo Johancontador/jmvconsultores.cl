@@ -79,6 +79,10 @@ app.use('/api/contable', requireAuth, require('./routes/tesoreria'))
 app.use('/api/contable', requireAuth, require('./routes/activos'))
 app.use('/api/contable', requireAuth, require('./routes/niif'))
 app.use('/api/contable', requireAuth, require('./routes/asientos-externos'))
+// SAAS-3: pagos de la suscripción. SIN requireAuth global — el webhook de la
+// pasarela es público (validado por firma + re-consulta a la API); las demás
+// rutas piden requireAuth + RBAC dentro de routes/pagos.js.
+app.use('/api/pagos', require('./routes/pagos'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })

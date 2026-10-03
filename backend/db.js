@@ -347,5 +347,6 @@ require('./core/migraciones').migracionesMemoria(db)
 require('./core/migraciones').migracionesFase7(db)
 require('./core/migraciones').migracionesFase8(db)
 require('./core/migraciones').migracionesFase9(db)
+require('./core/migraciones').migracionesSaas3(db)
 
 module.exports = db

@@ -201,6 +201,7 @@ const MENU = [
       { key: 'onboarding', label: 'Onboarding desde el SII', permiso: 'documentos:ver' },
       { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
+      { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },
     ]
   },
   {

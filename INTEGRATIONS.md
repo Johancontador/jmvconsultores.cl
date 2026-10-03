@@ -122,12 +122,29 @@ Auxiliares del receptor (FASE 9.1):
 - CI (`.github/workflows/ci.yml`): `npm test` (11 tests) + `node --check` en backend + gitleaks + chequeo de que `.env`/`data/` no entren al repo. Las fases contables agregarán sus tests al mismo script (el core contable es puro y testeable por diseño, ARCHITECTURE §2).
 - Backups (operación crítica nueva del software contable): `sqlite3 data/iva_mensual.db ".backup ..."` diario con retención — se automatiza en fase 1 (ROADMAP).
 
-## 6. Integraciones explícitamente FUERA de alcance
+## 6. Pagos de la suscripción + factura electrónica — SAAS-3 (IMPLEMENTADO)
+
+### 6.1 Pasarela de pagos — adaptador con MercadoPago primero
+
+- **Contrato interno** (`core/pagos.js`, módulo puro): el adaptador de pasarela se INYECTA — `crearPreferencia({monto_clp, descripcion, external_reference, url_retorno, url_notificacion}) → {id, init_point}` y `obtenerPago(gatewayPagoId) → {estado, external_reference, monto, moneda, detalle}`. Transbank/Webpay queda como segundo adaptador con la misma interfaz.
+- **Checkout**: `POST /api/pagos/empresas/:id/checkout` (sesión + capacidad `licencias:pagar`; SIN gate de licencia — pagar debe ser posible incluso SUSPENDIDA). Crea la fila `pagos_suscripcion` PENDIENTE con `external_reference = pago_suscripcion:<id>` y devuelve el `init_point` de MercadoPago (Checkout Pro).
+- **Webhook** (PÚBLICO, la pasarela no tiene sesión): `POST /api/pagos/webhook/mercadopago`. Defensas en capas: (1) firma `x-signature` HMAC-SHA256 con la plantilla oficial `id:{dataId};request-id:{rid};ts:{ts};` si hay `MP_WEBHOOK_SECRET`; (2) el estado del pago SIEMPRE se re-consulta a la API de MP (`obtenerPago` — el body del webhook solo trae ids y jamás se confía en él); (3) idempotencia en dos espacios: `webhook_eventos` UNIQUE(gateway, evento_id) y `pagos_suscripcion` UNIQUE(gateway, gateway_pago_id). Respuesta 200 salvo error transitorio (500 → la pasarela re-intenta).
+- **Aprobado** → UNA transacción: pago APROBADO + licencia activada/renovada vía `licencias.activarPlan` (renovación suma al fin vigente) + factura de la suscripción PENDIENTE + auditoría. Rechazado → RECHAZADO sin tocar la licencia.
+- **Env**: `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET` (opcional), `MP_BASE_URL` (sandbox/prod), `PAGOS_NOTIFICATION_URL`, `PAGOS_URL_RETORNO`.
+
+### 6.2 Factura electrónica de la suscripción (DTE 33)
+
+- **Adaptador real**: `core/dte.js` sobre **@devlas/dte-sii** (librería chilena open-source: genera el XML, timbra con el CAF, firma con el certificado .pfx y envía al SII por SOAP). Lazy: el sistema arranca y todo lo demás funciona sin esta configuración.
+- **Config (env)**: `DTE_CERT_PFX` + `DTE_CERT_PASS` (firma electrónica), `DTE_CAF_XML` (folios tipo 33), `DTE_RUT_EMISOR/RAZON_SOCIAL/GIRO/DIRECCION/COMUNA/ACTECO`, `DTE_FCH_RESOL/NRO_RESOL` (resolución SII), `DTE_AMBIENTE` (certificación|producción). `configFaltante()` nombra EXACTAMENTE las que faltan.
+- **Receptor**: RUT y razón social de la ficha de la empresa; giro/dirección/comuna se piden en la emisión (se NOMINA lo que falta — jamás se adivina, §42). IVA 19% citado (D.L. 825, Ley 21.210). Folio = secuencia local del emisor, validada contra el rango del CAF.
+- **Endpoint**: `POST /api/pagos/empresas/:id/pagos/:pagoId/factura` (`facturacion:emitir`) — solo pagos APROBADO; una factura EMITIDA no se re-emite.
+- **Aceptación operativa**: cuenta MercadoPago real y firma+CAF de JMV — el flujo completo está probado con adaptadores falsos (17 tests).
+
+## 7. Integraciones explícitamente FUERA de alcance
 
 - SII: cualquier otra cosa distinta al RCV (boletas de honorarios electrónicas SII-web, F22, cartolas bancos) — fase futura, requiere decisión expresa.
 - Bancos: la cartola del portal entra como ARCHIVO con conector por formato — ✅ IMPLEMENTADO (FASE 9.2: `core/tesoreria-cartola-formatos.js`, detección por encabezado/estructura + mapeo manual guardado; cero scraping, el humano descarga el archivo). La integración directa vía agregador (XuMi) queda bajo decisión expresa del dueño (ROADMAP §9.3).
-- Facturación emisora (envío de DTE propios): fuera del alcance; el software es receptor/consumidor.
-- scraping de cualquier tipo: prohibido por mandato.
+- Facturación emisora COMO FUNCIÓN PARA CLIENTES (emitir los DTE de su contabilidad): fuera del alcance — el software es receptor/consumidor del RCV. EXCEPCIÓN ya implementada: la factura electrónica de la PROPIA SUSCRIPCIÓN del SaaS (§6.2).
 
 ---
 

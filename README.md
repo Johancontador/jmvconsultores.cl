@@ -12,6 +12,9 @@ exportables — todo self-hosted, sin costos de infraestructura.
 
 ## Qué hace
 
+> 📘 **Manual de funcionalidades y procedimientos paso a paso** (para dueños,
+> contadores y administración): [`docs/MANUAL.md`](docs/MANUAL.md)
+
 | Área | Capacidades |
 |---|---|
 | **🏠 Portafolio** | Landing tipo *Dashboard del Contador*: KPIs agregados de todas las empresas, vencimientos F29 con cuenta regresiva, estado de sincronización y accesos rápidos — cero consultas al SII al abrir. |
@@ -21,7 +24,7 @@ exportables — todo self-hosted, sin costos de infraestructura.
 | **🧰 Herramientas** | Generador de cobranza por WhatsApp (3 tonos), conversor XML DTE → Excel 100% client-side. |
 | **📚 Contabilidad** | Multiempresa con RBAC (5 roles), plan de cuentas PUC chileno, asientos con partida doble atómica, bandeja de documentos SII con motor de reglas, propuestas de asiento automáticas (compras/ventas/NC) con confirmación individual o en lote, conciliación SII ↔ contable con diferencias tipificadas, reportes financieros 100% derivados de asientos (balance con ΣD=ΣC, situación financiera con A = P + Patrimonio verificada, estado de resultados) y **cierre de período**: checklist, asientos de cierre por alias (IVA→F29, PPM devengado, resultado→patrimonio), confirmación humana, snapshot persistido y período bloqueado para mutaciones. **🧠 Memoria**: el sistema recuerda a qué cuenta se contabilizó cada proveedor/cliente y la aplica sola el mes siguiente (modo simple: compras y ventas se netean contra la cuenta regular sin conciliación). **📈 Reportes**: balance de 8 columnas (hoja de trabajo con cuadres), balance clasificado (corriente/no corriente), situación financiera, resultados y cuenta corriente de clientes/proveedores con pagos aplicados. **💰 Tesorería**: cuentas bancarias con saldo inicial contabilizado (asiento de apertura), pagos/cobros/transferencias que nacen con su asiento en partida doble (nada fuera de los libros), libro banco con saldo corrido y folio de asiento visible, importación de cartola idempotente y conciliación bancaria report-only (empareja ±3 días, reporta lo no conciliado de ambos lados — jamás corrige en silencio). **🏢 Activos fijos**: registro con alta contable opcional, depreciación mensual por línea recta (propuesta visible → confirmación en un clic, un asiento por período, jamás dos veces el mismo mes) y venta/baja con utilidad/pérdida en un asiento. **🌐 NIIF**: Estados de Situación Financiera y de Resultados por rubros de presentación (mapeo cuentas→rubros editable y auditado, PYE neto, lo sin mapear se reporta visible — jamás adivinado). **🔌 Integraciones**: receptor de asientos externos para sistemas de remuneraciones (Geo Daniela) — centralización cuadrada → asiento auditado con partida doble del núcleo, idempotencia de re-envío y rechazo completo si no cuadra; cero lógica de remuneraciones de este lado. Cartolas bancarias por archivo (Excel/CSV del portal del banco): detección de formato por encabezado o estructura, mapeo manual guardable por banco, dedupe idempotente. |
 | **👥 Multiusuario** | Cada usuario administra sus propias empresas; roles admin; sesiones httpOnly con expiración. |
-| **💳 SaaS** | Registro self-service desde jmvconsultores.cl: RUT + clave SII validados en vivo contra el SII, empresa armada sola (plan de cuentas, rol, prueba de 90 días). Licencias por empresa (PYME/PRO/DESPACHO) con gracia y suspensión auditadas; la lectura nunca se bloquea. |
+| **💳 SaaS** | Registro self-service desde jmvconsultores.cl: RUT + clave SII validados en vivo contra el SII, empresa armada sola (plan de cuentas, rol, prueba de 90 días). Licencias por empresa (PYME/PRO/DESPACHO) con gracia y suspensión auditadas; la lectura nunca se bloquea. **Pagos self-service**: checkout MercadoPago con webhook idempotente que activa/renueva la licencia solo (adaptador inyectable — Transbank/Webpay después); pagar funciona incluso con licencia suspendida. Factura electrónica (DTE 33) de cada pago vía @devlas/dte-sii, pendiente de credenciales (firma + CAF) para producción. |
 | **📦 Reporte Masivo** | Informe de todos los clientes de un período en un solo ZIP (Excel por empresa). |
 
 ## Arquitectura (30 segundos)
@@ -72,7 +75,7 @@ Variables clave: ver `.env.example` comentado (`SESSION_DIAS`, `RCV_PROVIDER`, e
 ## Pruebas
 
 ```bash
-npm test                    # 197 tests: cálculos, esquema, export, informes, fases contables 1-9, SaaS, dashboard, memoria, cartolas
+npm test                    # 214 tests: cálculos, esquema, export, informes, fases contables 1-9, SaaS (licencias, onboarding, pagos y facturación), dashboard, memoria, cartolas
 ```
 
 La suite incluye los módulos contables: fundación (fase1), núcleo de partida
@@ -133,7 +136,7 @@ frontend/
   shared/             layout, shell-router, shell-state, api, format, export,
                       datagrid, table, filters, rango, toast
   css/app.css         Design system (tokens, componentes, responsive)
-docs/                 PRD, TRD, MASTERPLAN, SEGURIDAD, DESPLIEGUE, ROADMAP
+docs/                 PRD, TRD, MASTERPLAN, SEGURIDAD, DESPLIEGUE, ROADMAP, MANUAL
 test/                 node:test — cálculos, esquema, export, listado, fase1-6,
                       saas1, saas2, automatizacion, dashboard
 ```
