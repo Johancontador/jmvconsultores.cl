@@ -1,7 +1,7 @@
 /**
  * VISTA ONBOARDING (SAAS-2) — ficha tributaria autónoma desde el SII.
  *
- * Checklist §43: cada dato muestra ✓ confirmado o ⚠ pendiente humano.
+ * Checklist §43: cada dato muestraconfirmado opendiente humano.
  * Acciones (requieren onboarding:ejecutar):
  *   - Consultar SII → propuesta de razón social + inicio de actividades
  *     (derivado del RCV) → confirmación humana antes de persistir.
@@ -34,47 +34,47 @@ VIEWS.onboarding = {
       documentos_historicos: 'Documentos históricos (RCV)',
     }
     const chip = (estado) => estado === 'confirmado'
-      ? '<span class="chip contabilizado">✓ Confirmado</span>'
+      ? '<span class="chip contabilizado">Confirmado</span>'
       : estado === 'parcial'
         ? '<span class="chip propuesto">◐ Parcial</span>'
-        : '<span class="chip pendiente">⚠ Pendiente</span>'
+        : '<span class="chip pendiente">Pendiente</span>'
 
     const fich = f.ficha || {}
     const desdeDef = window._onbDesde || ultimosPeriodos(12)[0]
     const hastaDef = window._onbHasta || periodoActual()
 
     cont.innerHTML = `
-      <div class="card">
-        <div class="flex" style="justify-content:space-between">
-          <div>
-            <h3 style="margin:0">🚀 Completa tu empresa</h3>
-            <p class="muted" style="font-size:var(--fs-sm);margin:var(--space-2) 0 0">
+     <div class="card">
+       <div class="flex" style="justify-content:space-between">
+         <div>
+           <h3 style="margin:0">Completa tu empresa</h3>
+           <p class="muted" style="font-size:var(--fs-sm);margin:var(--space-2) 0 0">
               Traemos lo que el SII puede entregarnos solo (con tu clave, sin scraping) y te pedimos
               confirmar lo demás. Al terminar, tu contabilidad queda operando sin intervención de JMV.
-            </p>
-          </div>
+           </p>
+         </div>
           ${f.completo ? '<span class="chip contabilizado">Completa</span>' : `<span class="chip pendiente">${f.pendientes_humano.length} pendiente(s)</span>`}
-        </div>
-        <div class="mt">
+       </div>
+       <div class="mt">
           ${Object.keys(LABELS).map((k) => `<div class="checkline ${f.checklist[k] === 'confirmado' ? 'ok' : 'warn'}">${LABELS[k]} ${chip(f.checklist[k])}</div>`).join('')}
-        </div>
-      </div>
+       </div>
+     </div>
 
-      <div class="grid-2 mt">
-        <div class="card">
-          <h3>📇 Ficha tributaria</h3>
-          <p class="hint" style="margin-top:0">Los datos ya confirmados quedan guardados; puedes corregirlos aquí.</p>
-          <div class="form-group">
-            <label class="form-label">Razón social (SII)</label>
-            <input id="ob-razon" class="form-input" value="${esc(fich.razon_social_sii || '')}" placeholder="Ej: Comercial SpA">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Inicio de actividades</label>
-            <input id="ob-inicio" type="date" class="form-input" value="${esc(fich.inicio_actividades || '')}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Régimen tributario</label>
-            <select id="ob-regimen" class="form-input">
+     <div class="grid-2 mt">
+       <div class="card">
+         <h3>Ficha tributaria</h3>
+         <p class="hint" style="margin-top:0">Los datos ya confirmados quedan guardados; puedes corregirlos aquí.</p>
+         <div class="form-group">
+           <label class="form-label">Razón social (SII)</label>
+           <input id="ob-razon" class="form-input" value="${esc(fich.razon_social_sii || '')}" placeholder="Ej: Comercial SpA">
+         </div>
+         <div class="form-group">
+           <label class="form-label">Inicio de actividades</label>
+           <input id="ob-inicio" type="date" class="form-input" value="${esc(fich.inicio_actividades || '')}">
+         </div>
+         <div class="form-group">
+           <label class="form-label">Régimen tributario</label>
+           <select id="ob-regimen" class="form-input">
               ${selectOptions([
                 { v: '', t: '— sin definir —' },
                 { v: 'Pro Pyme General (14 D)', t: 'Pro Pyme General (14 D)' },
@@ -82,37 +82,37 @@ VIEWS.onboarding = {
                 { v: 'Régimen General (14 A)', t: 'Régimen General (14 A)' },
                 { v: 'Régimen Semintegrado (14 A)', t: 'Régimen Semintegrado (14 A)' },
               ], 'v', (o) => o.t, fich.regimen_tributario)}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Actividades económicas (una por línea, con código si lo tienes)</label>
-            <textarea id="ob-actividades" class="form-input" rows="3" placeholder="620100 — Venta al por mayor de computadores">${esc((fich.actividades || []).join('\n'))}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Socios / representante (uno por línea: RUT — Nombre — rol)</label>
-            <textarea id="ob-socios" class="form-input" rows="3" placeholder="12.345.678-9 — María Pérez — Representante legal">${esc((fich.socios || []).join('\n'))}</textarea>
-          </div>
-          <div class="flex" style="gap:var(--space-2)">
+           </select>
+         </div>
+         <div class="form-group">
+           <label class="form-label">Actividades económicas (una por línea, con código si lo tienes)</label>
+           <textarea id="ob-actividades" class="form-input" rows="3" placeholder="620100 — Venta al por mayor de computadores">${esc((fich.actividades || []).join('\n'))}</textarea>
+         </div>
+         <div class="form-group">
+           <label class="form-label">Socios / representante (uno por línea: RUT — Nombre — rol)</label>
+           <textarea id="ob-socios" class="form-input" rows="3" placeholder="12.345.678-9 — María Pérez — Representante legal">${esc((fich.socios || []).join('\n'))}</textarea>
+         </div>
+         <div class="flex" style="gap:var(--space-2)">
             ${puede ? '<button class="btn btn-primary" id="ob-guardar">Guardar ficha</button>' : ''}
-            ${puede ? '<button class="btn btn-secondary" id="ob-sii">🔎 Consultar SII</button>' : '<span class="hint">Solo lectura: tu rol no ejecuta el onboarding.</span>'}
-          </div>
-        </div>
+            ${puede ? '<button class="btn btn-secondary" id="ob-sii">Consultar SII</button>' : '<span class="hint">Solo lectura: tu rol no ejecuta el onboarding.</span>'}
+         </div>
+       </div>
 
-        <div class="card">
-          <h3>⇅ Traer el histórico desde el SII</h3>
-          <p class="muted" style="font-size:var(--fs-sm);margin:0 0 var(--space-3)">
+       <div class="card">
+         <h3>⇅ Traer el histórico desde el SII</h3>
+         <p class="muted" style="font-size:var(--fs-sm);margin:0 0 var(--space-3)">
             Descarga el RCV de compras y ventas de cada período (idempotente: repetir no duplica).
-          </p>
+         </p>
           ${puede ? `
-          <div class="frm-row">
-            <div><span class="frm-label">Desde</span>${inputPeriodoHTML('ob-desde', desdeDef)}</div>
-            <div><span class="frm-label">Hasta</span>${inputPeriodoHTML('ob-hasta', hastaDef)}</div>
-            <div style="align-self:flex-end"><button class="btn btn-primary" id="ob-historico">Ingesta del histórico</button></div>
-          </div>
-          <div id="ob-progreso" class="mt"></div>` : '<p class="hint">Solo lectura: tu rol no ejecuta la ingesta.</p>'}
-          <p class="hint mt">Máximo 24 períodos por corrida. La primera vez puede tardar varios minutos (el SII se consulta con pausa entre consultas).</p>
-        </div>
-      </div>`
+         <div class="frm-row">
+           <div><span class="frm-label">Desde</span>${inputPeriodoHTML('ob-desde', desdeDef)}</div>
+           <div><span class="frm-label">Hasta</span>${inputPeriodoHTML('ob-hasta', hastaDef)}</div>
+           <div style="align-self:flex-end"><button class="btn btn-primary" id="ob-historico">Ingesta del histórico</button></div>
+         </div>
+         <div id="ob-progreso" class="mt"></div>` : '<p class="hint">Solo lectura: tu rol no ejecuta la ingesta.</p>'}
+         <p class="hint mt">Máximo 24 períodos por corrida. La primera vez puede tardar varios minutos (el SII se consulta con pausa entre consultas).</p>
+       </div>
+     </div>`
 
     if (!puede) return
 
@@ -137,15 +137,15 @@ VIEWS.onboarding = {
         const r = await apiPost(`/api/contable/empresas/${eid}/onboarding/consultar-sii`, {})
         const p = r.propuesta
         openModal(`
-          <h3>Propuesta desde el SII</h3>
-          <p class="sub">RCV ${esc(p.documentos_analizados?.periodo || '')}: ${p.documentos_analizados?.ventas || 0} ventas, ${p.documentos_analizados?.compras || 0} compras analizadas.</p>
-          <div class="checkline ok">Razón social: <b>${esc(p.razon_social_sii || '—')}</b></div>
-          <div class="checkline ${p.inicio_actividades_propuesto ? 'ok' : 'warn'}">Inicio de actividades propuesto: <b>${esc(p.inicio_actividades_propuesto || 'no determinable')}</b>${p.documentos_analizados?.periodo_historico ? ` (primer documento desde ${perDisplay(p.documentos_analizados.periodo_historico)})` : ''}</div>
-          ${(p.avisos || []).map((a) => `<div class="checkline warn">⚠ ${esc(a)}</div>`).join('')}
-          <div class="modal-foot">
-            <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-            <button class="btn btn-primary" id="ob-aplicar">Aplicar propuesta</button>
-          </div>`)
+         <h3>Propuesta desde el SII</h3>
+         <p class="sub">RCV ${esc(p.documentos_analizados?.periodo || '')}: ${p.documentos_analizados?.ventas || 0} ventas, ${p.documentos_analizados?.compras || 0} compras analizadas.</p>
+         <div class="checkline ok">Razón social: <b>${esc(p.razon_social_sii || '—')}</b></div>
+         <div class="checkline ${p.inicio_actividades_propuesto ? 'ok' : 'warn'}">Inicio de actividades propuesto: <b>${esc(p.inicio_actividades_propuesto || 'no determinable')}</b>${p.documentos_analizados?.periodo_historico ? ` (primer documento desde ${perDisplay(p.documentos_analizados.periodo_historico)})` : ''}</div>
+          ${(p.avisos || []).map((a) => `<div class="checkline warn">${esc(a)}</div>`).join('')}
+         <div class="modal-foot">
+           <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+           <button class="btn btn-primary" id="ob-aplicar">Aplicar propuesta</button>
+         </div>`)
         document.getElementById('ob-aplicar').addEventListener('click', async () => {
           try {
             await apiPost(`/api/contable/empresas/${eid}/onboarding/confirmar-ficha`, {
@@ -195,10 +195,10 @@ VIEWS.onboarding = {
             const j = d.job
             const pct = j.total ? Math.round((j.procesados / j.total) * 100) : 0
             zona.innerHTML = `
-              <div class="checkline ${j.estado === 'error' ? 'warn' : 'ok'}">Job <span class="mono">${esc(j.jobId)}</span> — ${esc(j.estado)} (${j.procesados}/${j.total})</div>
-              <div style="height:6px;background:var(--c-slate-200);border-radius:3px;overflow:hidden;margin:6px 0">
-                <div style="height:100%;width:${pct}%;background:var(--accent)"></div>
-              </div>
+             <div class="checkline ${j.estado === 'error' ? 'warn' : 'ok'}">Job <span class="mono">${esc(j.jobId)}</span> — ${esc(j.estado)} (${j.procesados}/${j.total})</div>
+             <div style="height:6px;background:var(--c-slate-200);border-radius:3px;overflow:hidden;margin:6px 0">
+               <div style="height:100%;width:${pct}%;background:var(--accent)"></div>
+             </div>
               ${j.periodo_actual ? `<p class="hint">Consultando ${perDisplay(j.periodo_actual)}…</p>` : ''}
               ${j.resultado?.periodos?.length ? j.resultado.periodos.map((pr) => {
                 const det = [pr.compra, pr.venta]

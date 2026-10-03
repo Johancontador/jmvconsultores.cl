@@ -146,26 +146,26 @@ function setEmpresa(id) {
 
 function renderLogin(mensaje = '') {
   $app().innerHTML = `
-    <div class="sys-login">
-      <div class="login-card">
-        <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
-        <h2>Ingresar</h2>
-        <p class="sub">Con tus credenciales de JMV Consultores</p>
-        <div class="login-err" id="login-err" hidden></div>
+   <div class="sys-login">
+     <div class="login-card">
+       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <h2>Ingresar</h2>
+       <p class="sub">Con tus credenciales de JMV Consultores</p>
+       <div class="login-err" id="login-err" hidden></div>
         ${mensaje ? `<div class="banner-lic" style="background:var(--success-soft);color:var(--success)">${esc(mensaje)}</div>` : ''}
-        <form id="login-form">
-          <div class="form-group">
-            <label class="form-label" for="lg-user">Usuario</label>
-            <input type="text" id="lg-user" class="form-input" autocomplete="username" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="lg-pass">Contraseña</label>
-            <input type="password" id="lg-pass" class="form-input" autocomplete="current-password" required>
-          </div>
-          <button type="submit" class="btn btn-primary" id="lg-btn" style="width:100%">Entrar →</button>
-        </form>
-      </div>
-    </div>`
+       <form id="login-form">
+         <div class="form-group">
+           <label class="form-label" for="lg-user">Usuario</label>
+           <input type="text" id="lg-user" class="form-input" autocomplete="username" required>
+         </div>
+         <div class="form-group">
+           <label class="form-label" for="lg-pass">Contraseña</label>
+           <input type="password" id="lg-pass" class="form-input" autocomplete="current-password" required>
+         </div>
+         <button type="submit" class="btn btn-primary" id="lg-btn" style="width:100%">Entrar</button>
+       </form>
+     </div>
+   </div>`
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault()
     const err = document.getElementById('login-err')
@@ -183,7 +183,7 @@ function renderLogin(mensaje = '') {
       err.textContent = ex.message
       err.hidden = false
       btn.disabled = false
-      btn.textContent = 'Entrar →'
+      btn.textContent = 'Entrar'
     }
   })
 }
@@ -244,10 +244,10 @@ const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
 function renderShell() {
   if (!S.empresa) {
     $app().innerHTML = `<div class="sys-login"><div class="login-card" style="max-width:460px">
-      <h2>Sin empresas asignadas</h2>
-      <p class="sub">Tu usuario (${esc(S.user.username)}) no tiene acceso a ninguna empresa. Contacta a JMV Consultores.</p>
-      <button class="btn btn-secondary" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>boot())">Salir</button>
-    </div></div>`
+     <h2>Sin empresas asignadas</h2>
+     <p class="sub">Tu usuario (${esc(S.user.username)}) no tiene acceso a ninguna empresa. Contacta a JMV Consultores.</p>
+     <button class="btn btn-secondary" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>boot())">Salir</button>
+   </div></div>`
     return
   }
 
@@ -256,9 +256,9 @@ function renderShell() {
   if (lic.estado === 'PRUEBA' && lic.dias_restantes <= 14) {
     banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">Licencia de prueba: quedan <b>${lic.dias_restantes}</b> día(s). Habla con JMV para activar tu plan.</div>`
   } else if (lic.en_gracia) {
-    banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">⚠ ${esc(lic.mensaje || 'Licencia vencida — activa un plan para evitar la suspensión')}</div>`
+    banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">${esc(lic.mensaje || 'Licencia vencida — activa un plan para evitar la suspensión')}</div>`
   } else if (['SUSPENDIDA', 'CANCELADA', 'VENCIDA'].includes(lic.estado)) {
-    banner = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">⛔ ${esc(lic.mensaje || `Licencia ${lic.estado}: puedes consultar, pero no registrar movimientos`)}</div>`
+    banner = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">${esc(lic.mensaje || `Licencia ${lic.estado}: puedes consultar, pero no registrar movimientos`)}</div>`
   }
 
   const seccionVisible = (sec) => sec.items.some((i) => !i.permiso || tiene(i.permiso))
@@ -267,36 +267,34 @@ function renderShell() {
     : '')
 
   $app().innerHTML = `
-    <div class="sys">
-      <nav class="sys-topnav">
-        <div class="sys-logo">
-          <img src="/assets/logo-light.svg" alt="JMV">
-          <div>Sistema Contable<small>JMV Consultores</small></div>
-        </div>
-        <div class="sys-menu" id="sys-menu">
+   <div class="sys">
+     <aside class="sys-side">
+       <div class="sys-logo">
+         <img src="/assets/logo-light.svg" alt="JMV">
+         <div>Sistema Contable<small>JMV Consultores</small></div>
+       </div>
+       <nav class="sys-nav" id="sys-nav">
           ${MENU.filter(seccionVisible).map((sec) => `
-            <div class="nav-item">
-              <button class="nav-label" type="button">${esc(sec.seccion)}</button>
-              <div class="nav-menu">${sec.items.map(itemHTML).join('')}</div>
-            </div>`).join('')}
-        </div>
-        <div class="sys-user">
-          <span class="u-name">${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</span>
-          <select id="sys-empresa" class="form-input">
+           <div class="nav-seccion">${esc(sec.seccion)}</div>
+            ${sec.items.map(itemHTML).join('')}`).join('')}
+       </nav>
+       <div class="sys-side-foot">
+         <select id="sys-empresa" class="form-input" aria-label="Empresa activa">
             ${S.empresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(S.empresa.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
-          </select>
-          <a href="#" id="sys-logout">Salir</a>
-        </div>
-      </nav>
-      <main class="sys-main">
-        <div class="sys-titlebar">
-          <h1 id="sys-title">Inicio</h1>
-          <span class="spacer"></span>
-        </div>
-        <div id="sys-banner">${banner}</div>
-        <div id="sys-view"></div>
-      </main>
-    </div>`
+         </select>
+         <div class="u-name">${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</div>
+         <a href="#" id="sys-logout">Salir</a>
+       </div>
+     </aside>
+     <main class="sys-main">
+       <div class="sys-titlebar">
+         <h1 id="sys-title">Inicio</h1>
+         <span class="spacer"></span>
+       </div>
+       <div id="sys-banner">${banner}</div>
+       <div id="sys-view"></div>
+     </main>
+   </div>`
 
   document.getElementById('sys-empresa').addEventListener('change', (e) => setEmpresa(e.target.value))
   document.getElementById('sys-logout').addEventListener('click', async (e) => {
@@ -323,7 +321,7 @@ function renderRoute() {
   const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
 
   const activos = new Set([route.key])
-  document.querySelectorAll('#sys-menu a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
+  document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
 
