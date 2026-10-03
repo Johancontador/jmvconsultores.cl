@@ -190,18 +190,54 @@ function renderLogin(mensaje = '') {
 
 /* ---------- shell ---------- */
 
-const NAV = [
-  { key: 'inicio', label: 'Inicio', ico: '🏠', permiso: null },
-  { key: 'automatizacion', label: 'Automatización', ico: '⚡', permiso: 'propuestas:ver' },
-  { key: 'libros', label: 'Libros Compras y Ventas', ico: '📚', permiso: 'documentos:ver' },
-  { key: 'documentos', label: 'Documentos', ico: '🧾', permiso: 'documentos:ver' },
-  { key: 'asientos', label: 'Contabilidad', ico: '⚖️', permiso: 'asientos:ver' },
-  { key: 'propuestas', label: 'Propuestas', ico: '⚡', permiso: 'propuestas:ver' },
-  { key: 'reportes', label: 'Reportes y Cierre', ico: '📈', permiso: 'reportes:ver' },
-  { key: 'onboarding', label: 'Onboarding', ico: '🚀', permiso: 'documentos:ver' },
-  { key: 'integraciones', label: 'Integraciones', ico: '🔌', permiso: 'empresas:ver' },
-  { key: 'admin', label: 'Administración', ico: '⚙️', permiso: 'periodos:ver' },
+/*
+ * MENÚ SUPERIOR HORIZONTAL — secciones con desplegable. Sin iconos: la
+ * jerarquía la da la tipografía. Cada sección se despliega al posarse encima.
+ */
+const MENU = [
+  {
+    seccion: 'Empresa', items: [
+      { key: 'inicio', label: 'Inicio — panel del período', permiso: null },
+      { key: 'onboarding', label: 'Onboarding desde el SII', permiso: 'documentos:ver' },
+      { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
+      { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
+    ]
+  },
+  {
+    seccion: 'SII', items: [
+      { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
+      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
+    ]
+  },
+  {
+    seccion: 'Contabilizaciones', items: [
+      { key: 'automatizacion', label: 'Automatización del período', permiso: 'propuestas:ver' },
+      { key: 'propuestas', label: 'Propuestas y Conciliación', permiso: 'propuestas:ver' },
+      { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
+      { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
+      { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
+    ]
+  },
+  {
+    seccion: 'Tesorería', items: [
+      { key: 'tesoreria', label: 'Bancos, Libro Banco y Conciliación', permiso: 'tesoreria:ver' },
+    ]
+  },
+  {
+    seccion: 'Reportes', items: [
+      { key: 'balance8', label: 'Balance de 8 Columnas', permiso: 'reportes:ver' },
+      { key: 'clasificado', label: 'Balance Clasificado', permiso: 'reportes:ver' },
+      { key: 'situacion', label: 'Situación Financiera', permiso: 'reportes:ver' },
+      { key: 'resultados', label: 'Estado de Resultados', permiso: 'reportes:ver' },
+      { key: 'niif', label: 'NIIF — Estados por Rubros', permiso: 'reportes:ver' },
+      { key: 'cclientes', label: 'Cuenta Corriente — Clientes', permiso: 'reportes:ver' },
+      { key: 'cproveedores', label: 'Cuenta Corriente — Proveedores', permiso: 'reportes:ver' },
+      { key: 'reportes', label: 'Cierre de Período', permiso: 'reportes:ver' },
+    ]
+  },
 ]
+
+const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
 
 function renderShell() {
   if (!S.empresa) {
@@ -216,38 +252,44 @@ function renderShell() {
   const lic = S.licencia || {}
   let banner = ''
   if (lic.estado === 'PRUEBA' && lic.dias_restantes <= 14) {
-    banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">⏳ Licencia de prueba: quedan <b>${lic.dias_restantes}</b> día(s). Habla con JMV para activar tu plan.</div>`
+    banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">Licencia de prueba: quedan <b>${lic.dias_restantes}</b> día(s). Habla con JMV para activar tu plan.</div>`
   } else if (lic.en_gracia) {
     banner = `<div class="banner-lic" style="background:var(--warning-soft);color:var(--warning)">⚠ ${esc(lic.mensaje || 'Licencia vencida — activa un plan para evitar la suspensión')}</div>`
   } else if (['SUSPENDIDA', 'CANCELADA', 'VENCIDA'].includes(lic.estado)) {
     banner = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">⛔ ${esc(lic.mensaje || `Licencia ${lic.estado}: puedes consultar, pero no registrar movimientos`)}</div>`
   }
 
+  const seccionVisible = (sec) => sec.items.some((i) => !i.permiso || tiene(i.permiso))
+  const itemHTML = (i) => (!i.permiso || tiene(i.permiso)
+    ? `<a href="#${i.key}" data-route="${i.key}">${esc(i.label)}<span class="pill" data-pill="${i.pill || i.key}"></span></a>`
+    : '')
+
   $app().innerHTML = `
     <div class="sys">
-      <button class="btn btn-secondary btn-sm sys-toggle" id="sys-toggle">☰</button>
-      <aside class="sys-sidebar" id="sys-sidebar">
+      <nav class="sys-topnav">
         <div class="sys-logo">
           <img src="/assets/logo-light.svg" alt="JMV">
-          <div class="t">Sistema Contable<small>JMV Consultores</small></div>
+          <div>Sistema Contable<small>JMV Consultores</small></div>
         </div>
-        <nav class="sys-nav" id="sys-nav">
-          ${NAV.map((n) => (!n.permiso || tiene(n.permiso)
-            ? `<a href="#${n.key}" data-route="${n.key}"><span class="ico">${n.ico}</span>${n.label}<span class="pill" data-pill="${n.key}"></span></a>`
-            : '')).join('')}
-        </nav>
-        <div class="sys-sidebar-foot">
-          <div>${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</div>
-          <div style="margin-top:2px"><a href="#" id="sys-logout" style="color:var(--accent)">Cerrar sesión</a></div>
+        <div class="sys-menu" id="sys-menu">
+          ${MENU.filter(seccionVisible).map((sec) => `
+            <div class="nav-item">
+              <button class="nav-label" type="button">${esc(sec.seccion)}</button>
+              <div class="nav-menu">${sec.items.map(itemHTML).join('')}</div>
+            </div>`).join('')}
         </div>
-      </aside>
-      <main class="sys-main">
-        <div class="sys-topbar">
-          <h1 id="sys-title">Inicio</h1>
-          <span class="spacer"></span>
-          <select id="sys-empresa" class="form-input" style="width:auto">
+        <div class="sys-user">
+          <span class="u-name">${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</span>
+          <select id="sys-empresa" class="form-input">
             ${S.empresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(S.empresa.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
           </select>
+          <a href="#" id="sys-logout">Salir</a>
+        </div>
+      </nav>
+      <main class="sys-main">
+        <div class="sys-titlebar">
+          <h1 id="sys-title">Inicio</h1>
+          <span class="spacer"></span>
         </div>
         <div id="sys-banner">${banner}</div>
         <div id="sys-view"></div>
@@ -260,9 +302,6 @@ function renderShell() {
     try { await apiPost('/api/auth/logout', {}) } catch { /* sesión ya inexistente */ }
     localStorage.removeItem('iva_empresa_activa')
     renderLogin()
-  })
-  document.getElementById('sys-toggle').addEventListener('click', () => {
-    document.getElementById('sys-sidebar').classList.toggle('open')
   })
 }
 
@@ -279,10 +318,11 @@ function renderRoute() {
   if (!S.user) return
   const key = (location.hash || '#inicio').slice(1)
   const view = VIEWS[key] || VIEWS.inicio
-  const route = NAV.find((n) => n.key === key) || NAV[0]
+  const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
 
-  document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === route.key))
-  document.getElementById('sys-sidebar')?.classList.remove('open')
+  const activos = new Set([route.key])
+  document.querySelectorAll('#sys-menu a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
+
   document.getElementById('sys-title').textContent = view.titulo || route.label
 
   if (route.permiso && !tiene(route.permiso)) {

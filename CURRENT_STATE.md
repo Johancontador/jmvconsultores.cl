@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-01 · Commit base: `89cf4ad` (master, replicado en VPS)
+> Fecha: 2026-10-02 · Commit base: `afd29ea` (master) · Suite: 175 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 11 tests verdes: `npm test` |
+| Tests | `node --test` | 18 archivos, 175 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -40,12 +40,31 @@
 ```text
 backend/
   index.js                  Express app: headers de seguridad, trust proxy, JSON 100kb,
-                            landing en /, static, 5 routers /api/* + /api/health
-  db.js                     Esquema SQLite + migraciones idempotentes (patrón PRAGMA table_info)
+                            landing en /, static, routers /api/* + /api/health
+  db.js                     Esquema SQLite + migraciones idempotentes (patrón PRAGMA table_info);
+                            FASES 1-6 + SAAS-1 + dashboard se aplican desde core/migraciones.js
   middleware/requireAuth.js requireAuth / requireAdmin / parseCookies
+  middleware/requirePermiso.js RBAC por capacidades + gate de licencia en escrituras (402)
+  core/                     Dominio contable puro (BD por parámetro, testeable): migraciones,
+                            empresas, permisos, periodos, auditoría, bóveda, licencias,
+                            plan-cuentas-plantilla, cuentas, asientos, documentos, ingesta,
+                            reglas + semillas, contrapartes, propuestas, conciliación,
+                            automatización, onboarding, reportes, dashboard, tesorería,
+                            activos, niif
   routes/
-    auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin)
-    clientes.js             CRUD clientes con scoping user_id, validación RUT/PPM/teléfono
+    auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin),
+                            registro self-service con validación SII en vivo (SAAS-1)
+    contable.js             empresas CRUD, usuarios/roles, períodos, auditoría, plan de cuentas,
+                            centros de costo, reglas
+    documentos.js           bandeja + ingesta RCV + reglas (FASE 3)
+    propuestas.js           propuestas + conciliación SII↔contable (FASE 4)
+    reportes.js             balance, situación, resultados, cierre de período (FASE 5)
+    automatizacion.js       pipeline de contabilización automática del período
+    onboarding.js           ficha tributaria SII + ingesta del histórico (SAAS-2)
+    tesoreria.js            bancos, pagos/cobros/transferencias, cartola, conciliación (FASE 6)
+    activos.js              activos fijos, depreciación mensual, venta/baja (FASE 7)
+    niif.js                 mapeo cuentas→rubros NIIF + estados por rubros (FASE 8)
+    clientes.js             CRUD clientes con scoping user_id, validación RUT/PPM/teléfono (legacy)
     informe.js              iniciar/consultar/listar/eliminar informes (async en background)
     proceso.js              proceso masivo por período (F29 + WhatsApp)
     exportacion-masiva.js   ZIP con excels por cliente/período
@@ -66,8 +85,20 @@ backend/
     exportacion-masiva.js   Excel por cliente/período
 frontend/
   landing.html              Landing pública (servida en /) con login embebido
-  index.html                Clientes (legacy del nav), dashboard.html es el shell real
-  dashboard.html            Shell: sidebar + router hash + topbar
+  sistema/                  SPA contable (shell real): router hash + vistas por módulo
+    index.html              app.js, views-fiscal/autom/teso/activos/onboarding/conta
+    app.js                  boot, login, shell (menú superior por secciones, pill de
+                            documentos), router, selector de empresa
+    views-teso.js           Tesorería: bancos, libro banco, conciliación (FASE 6)
+    views-activos.js        Activos fijos, venta/baja, depreciación del período (FASE 7)
+    views-niif.js           NIIF: situación/resultados por rubros + mapeo (FASE 8)
+    views-fiscal.js         Libros C/V, documentos, bandeja
+    views-autom.js          Automatización + propuestas/conciliación
+    views-onboarding.js     Onboarding autónomo (SAAS-2)
+    views-conta.js          Asientos, diario, mayor, memoria, balance 8 columnas,
+                            clasificado, situación, resultados, cuentas corrientes, admin
+  index.html                Clientes (legacy del nav), dashboard.html es el shell del legado
+  dashboard.html            Shell del sistema tributario legado
   js/  clientes.js informe.js libro.js proceso.js dashboard.js reportes.js
        tributario.js herramientas.js portafolio.js exportacion-masiva.js
   shared/ layout.js shell-router.js shell-state.js api.js format.js table.js
@@ -76,7 +107,9 @@ data/                       SQLite (no versionado)
 nginx/, Dockerfile, docker-compose.yml, migrations/, scripts/, iniciar.bat
 docs/                       PRD, TRD, BACKEND, APPFLOW, UI-UX, PLAN, MASTERPLAN,
                             SEGURIDAD, DESPLIEGUE, ROADMAP-FUNCIONALIDADES, REDISENO_PROPUESTA
-test/                       calculos, db-schema, export-fecha, informe-listar
+test/                       18 suites: calculos, db-schema, export-fecha, informe-listar,
+                            fase1-fase8, saas1, saas2, automatizacion, dashboard,
+                            memoria-reportes
 ```
 
 ## 4. Modelo de datos actual (resumen; detalle en DATA_MODEL.md)
@@ -88,14 +121,25 @@ test/                       calculos, db-schema, export-fecha, informe-listar
 - `rcv_cache` — JSON crudo por (rut, periodo, tipo), solo períodos cerrados; versionado vía tabla `meta` (`rcv_cache_version`, hoy `v4`).
 - `informes` + `informe_meses` + `informe_documentos` + `informe_top_contrapartes` + `informe_reclamadas` — persistencia de informes por rango, con detalle documento a documento (escrito por `guardarInformeEnBD` en transacción delete+insert).
 
-**No existen aún:** empresas como entidad, roles/permisos, planes de cuentas, asientos, períodos contables, centros de costo, auditoría.
+**Capa contable (FASES 1-6, detalle en DATA_MODEL.md):**
+- `empresas`, `roles`, `usuario_empresa`, `periodos_contables` (+ `cierre_json`), `auditoria`, `suscripciones` (licencias).
+- `cuentas` (plantilla PUC con alias de control), `centros_costo`, `asientos` (+ `origen`), `asiento_lineas` — núcleo de partida doble, INTEGER en pesos.
+- `documentos` (bandeja con dedupe `clave_dedupe`), `reglas_contables`, `contrapartes` — ingesta SII y clasificación.
+- `propuestas` (snapshot congelado de líneas), `conciliaciones` — automatización y conciliación SII↔contable.
+- `bancos_cuentas`, `teso_movimientos` (monto FIRMADO, UNIQUE banco+asiento), `teso_cartola` (dedupe idempotente; `movimiento_id` = match de conciliación) — tesorería de FASE 6: cada movimiento bancario queda respaldado por un asiento del núcleo (`asiento_id`) y el saldo inicial del banco se contabiliza como asiento de apertura.
+- `empresas.config_json` — memoria de contabilización: `modo_conciliacion` ('simple' | 'completa') + cuentas regulares de gastos/ingresos donde se netean compras/ventas en modo simple; la memoria RUT → cuenta vive en `contrapartes` (precedencia: regla > memoria RUT > cuenta regular > alias).
+- `activos_fijos` (código UNIQUE, cuenta clase 1, vida útil, residual, estado ACTIVO|VENDIDO|BAJA, asiento de alta/baja) + `activos_depreciaciones` (UNIQUE activo+período con `asiento_id`) — FASE 7: depreciación por línea recta respaldada asiento por asiento; la venta/baja limpia costo + depreciación acumulada contra utilidad/pérdida por alias.
+
+**Presentación NIIF (FASE 8):** `cuentas.rubro_niif` (defaults de la PLANTILLA PUC; backfill por código para empresas preexistentes) — mapeo editable y auditado; los estados por rubros derivan del mayor con `SIN_CLASIFICAR` visible y never-guess (ecuación A = P + PN verificada; PYE se presenta neto).
+
+**No existe aún:** NIIF avanzado tipo consolidación/moneda extranjera (la presentación por rubros de la FASE 8 cubre el estándar), integraciones bancarias automáticas (la cartola se importa a mano — report-only) ni receptor Geo Daniela.
 
 ## 5. Autenticación, autorización y aislamiento hoy
 
 - Login usuario/contraseña → sesión server-side en BD → cookie `sid` (httpOnly, SameSite=Lax, secure en producción). Rate-limit de login 5 intentos/15 min **en memoria** (se pierde al reiniciar el proceso).
 - Contraseñas con scrypt + salt y comparación en tiempo constante.
 - **Autorización real hoy:** solo dos niveles — dueño (`clientes.user_id`) y `is_admin`. Cada consulta de clientes/informes filtra por `user_id`; `informe.js` valida propiedad al cargar.
-- **Modelo conceptual actual:** "usuario = contador; clientes = empresas de ese contador". El aislamiento es por usuario, **no por empresa como entidad contable**. El Software Contable necesita el nivel intermedio "empresa" con aislamiento estricto y roles (SUPER ADMIN / CONTADOR / ADMIN EMPRESA / AUDITOR / TESORERÍA) — hoy no existe ni la tabla ni el middleware de permisos.
+- **Modelo conceptual actual:** "usuario = contador; clientes = empresas de ese contador" en la capa legacy. El Software Contable ya tiene el nivel intermedio "empresa" con aislamiento estricto y 5 roles (SUPER ADMIN / CONTADOR / ADMIN EMPRESA / AUDITOR / TESORERÍA) gestionados en `usuario_empresa` + `middleware/requirePermiso.js` (capacidades nombradas, gate de licencia en escrituras): **FASE 6 añadió las capacidades `tesoreria:ver` (contador, auditor, tesorería, super_admin), `tesoreria:operar` y `bancos:conciliar` (contador, tesorería, super_admin); admin_empresa no accede al módulo** — verificado por test.
 
 ## 6. Integración SII hoy (lo que el software contable debe CONSUMIR, no reconstruir)
 
@@ -119,7 +163,7 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 - Scrypt para passwords; sesiones revocables en BD; TTL configurable.
 - CI con gitleaks y chequeo de archivos sensibles. Modelo de amenazas y deuda priorizada en `docs/SEGURIDAD.md`.
 
-**Deuda de seguridad relevante para el software contable:** `clientes.clave_sii` en texto plano (cifrado en reposo pendiente); rate-limit en memoria; sin roles granulares; sin auditoría de acciones.
+**Deuda de seguridad relevante para el software contable:** `clientes.clave_sii` en texto plano en la capa LEGACY (las empresas del sistema contable SÍ están cifradas en bóveda AES-256-GCM desde FASE 1); rate-limit en memoria; sin roles granulares en la capa legacy; sin auditoría de acciones.
 
 ## 8. Deuda técnica y limitaciones conocidas (inventario honesto)
 
@@ -127,20 +171,33 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 2. **Estado en memoria en el proceso**: sesiones SII (`Map`), informes en curso (`Map`) y procesos (`Map`) se pierden al reiniciar. Los informes terminados sí quedan en BD. Un job largo reiniciado a media ejecución se pierde (el front re-inicia).
 3. **Rate-limit y sesiones por proceso único**: con más de un proceso/instancia se romperían (hoy hay un solo nodo; documentado para no olvidarlo al escalar).
 4. **SQLite single-writer**: correcto para la escala actual (un contador, decenas de clientes); el software contable multiusuario concurrente exigirá vigilar WAL/bloqueos y eventualmente migrar a Postgres (decisión en ARCHITECTURE.md).
-5. **Montos en REAL (float)**: aceptable para reportes tributarios informativos; **inaceptable para contabilidad**. El núcleo contable usará INTEGER en pesos. Decisión y migración en DATA_MODEL.md.
-6. **Sin framework de migraciones con versionado secuencial** — hay migraciones idempotentes ad-hoc en `db.js` (patrón que funciona y se replicará) + una carpeta `migrations/` con un SQL suelto.
-7. **Frontend sin build ni tests**: vanilla JS módulo a módulo con `window.*` como contratos. Funciona y es rápido; para el módulo contable se mantendrá el mismo shell, con lógica pesada (partida doble, saldos) testeada en el backend.
-8. **`informe_documentos` crece sin límite por informe** (delete+insert completo en cada regeneración); para la bandeja contable se requiere entidad documento persistente por empresa (no ligada a informes).
+5. **Montos en REAL (float)** en la capa tributaria LEGACY: aceptable para reportes informativos; la capa contable (FASES 2-6) ya opera en INTEGER con partida doble.
+6. **Sin framework de migraciones con versionado secuencial** — hay migraciones idempotentes ad-hoc en `db.js` + `core/migraciones.js` (patrón PRAGMA table_info que funciona y se replicará) + una carpeta `migrations/` con un SQL suelto.
+7. **Frontend sin build ni tests**: vanilla JS módulo a módulo con `window.*` como contratos. Funciona y es rápido; el módulo contable mantiene el mismo shell (`/sistema/`), con lógica pesada (partida doble, saldos, conciliación) testeada en el backend.
+8. **`informe_documentos` crece sin límite por informe** (delete+insert completo en cada regeneración). RESUELTO para el contable: la bandeja `documentos` es una entidad persistente por empresa, independiente de informes (FASE 3).
 9. **Node 25 rompe `node --test test/` en modo directorio** (preexistente); `npm test` con archivos explícitos funciona.
-10. **`/index.html` (Clientes) y `dashboard.html` coexisten** con nav legacy; el shell real es dashboard.html.
+10. **`/index.html` (Clientes), `dashboard.html` (legado) y `/sistema/` (contable) coexisten**; el shell contable real es `/sistema/`.
+11. **Tesorería sin integración bancaria automática**: la cartola se pega/importa a mano (CSV) y la conciliación es report-only — así lo exige el §22 hasta Fase 9 (integraciones con bancos).
+12. **Conciliación bancaria empareja 1↔1**: un pago que cubre varias facturas queda sin match individual; se reporta en `no_conciliado_libro` para ajuste manual. Mejora 1↔n post-MVP.
 
 ## 9. Qué funciona y está verificado (no asumir, comprobado en vivo)
 
 - Login y sesión; CRUD de clientes con validaciones; sincronización SII modo detalle; informe por rango con persistencia y rehidratación (incluye corrección del bug de `informe_documentos`); validador IVA conciliando a $0 con datos reales; calculadora PPM/F29; pendientes y observaciones; portafolio multi-empresa; las 6 herramientas; exportación Excel; landing pública con login.
-- Tests `npm test` en verde (11). CI en verde en cada push.
+
+- **Software contable (FASES 1-6 + SAAS, suite 146 verdes):** empresas con RBAC de 5 roles y períodos auditados; núcleo de partida doble (Σd=ΣH, folios, reversiones); bandeja SII con dedupe idempotente y motor de reglas; propuestas con confirmación humana y conciliación SII↔contable report-only; reportes financieros derivados del mayor (balance ΣD=ΣC, situación con A = P + Patrimonio verificada) y cierre de período con snapshot; pipeline de contabilización automática; licencias con gate en escrituras; onboarding autónomo desde el SII; dashboard operativo del Inicio.
+
+- **Tesorería (FASE 6, 15 tests):** alta de banco con saldo inicial contabilizado como apertura; pagos/cobros/transferencias que nacen con su asiento del núcleo (UNIQUE banco+asiento); libro banco con saldo corrido y folio visible; importación de cartola idempotente (re-importar no duplica); conciliación report-only que empareja ±3 días, persiste matches y reporta lo no conciliado de ambos lados, cuadrando cuando la cartola refleja todo el libro; aislamiento estricto por empresa; RBAC (contador/tesorería operan, auditor lee, admin_empresa no accede); la situación financiera incluye el saldo bancario y sigue cuadrando (A = P + P) con tesorería operando.
+
+- **Activos fijos (FASE 7, 14 tests):** registro con alta contable opcional (apertura activo↔contraparte); depreciación mensual por línea recta propuesta→confirmada (UN asiento por período, cuota final con depreciable exacto, UNIQUE activo+período, re-confirmar lanza); venta/baja con utilidad/pérdida por alias y aviso de cuota pendiente; períodos cerrados rechazados; la situación financiera sigue cuadrando (A = P + P) con depreciación y ventas operando. Además, los tests destaparon y corrigieron un bug del balance de 8 columnas (columnas deudor/acreedor por signo del neto, no por naturaleza).
+
+- **NIIF (FASE 8, 7 tests):** mapeo cuentas→rubros con defaults de plantilla (backfill idempotente por código), edición masiva auditada (solo cambios reales), situación financiera por rubros con PYE neto y ecuación A = P + PN verificada, resultados por naturaleza mes/acumulado, SIN_CLASIFICAR reportado sin romper el cuadre y aislamiento estricto por empresa.
+
+- **Memoria de contabilización + modo simple + reportes nuevos (8 tests):** config de empresa (`modo_conciliacion` simple/completa + cuentas regulares validadas, auditada); precedencia de contraparte regla > memoria RUT > cuenta regular > alias, con aprendizaje automático al confirmar propuestas (el RUT queda vinculado para el mes siguiente) y vista "contrapartes nuevas por ubicar"; balance de 8 columnas (hoja de trabajo con cuadres ΣD=ΣC, saldos y Pérdida/Utilidad); balance clasificado (corriente/no corriente por código del plan, capital de trabajo, A = P + P); cuenta corriente de clientes/proveedores con pagos/cobros aplicados y saldo corrido; mayor con filtro por RUT de contraparte (documento contabilizado o pago de tesorería). Shell `/sistema/` rediseñado a menú superior horizontal con secciones (Empresa / SII / Contabilizaciones / Tesorería / Reportes).
+
+- Tests `npm test` en verde (175). CI en verde en cada push.
 
 ## 10. Conclusión del estado actual
 
-La base es sólida para lo que fue diseñada: **obtener y analizar información tributaria del SII por cliente**. Lo que le falta para ser software contable no es calidad sino **dominio**: empresas como entidad con aislamiento estricto, roles, plan de cuentas, asientos con partida doble, motor de reglas, bandeja de documentos con ciclo de vida, períodos y cierres, y reportes financieros. La integración SII existente se conserva tal cual; Geo Daniela no se toca (solo se reserva el contrato de entrada de asientos, ver INTEGRATIONS.md).
+La base heredada es sólida para lo que fue diseñada: **obtener y analizar información tributaria del SII por cliente**. Sobre ella, el **software contable ya existe y está en producción del MVP**: empresas con dominio estricto, roles, plan de cuentas, partida doble, motor de reglas, bandeja con ciclo de vida, propuestas, conciliación, reportes, cierres, automatización, licencias, onboarding, **tesorería (FASE 6)** con libro banco respaldado asiento por asiento, **activos fijos (FASE 7)** con depreciación mensual propuesta→confirmada y venta/baja en un asiento, y **presentación NIIF (FASE 8)** por rubros con mapeo editable y SIN_CLASIFICAR nunca oculto. La integración SII existente se conserva tal cual; Geo Daniela no se toca (solo se reserva el contrato de entrada de asientos, ver INTEGRATIONS.md).
 
 El siguiente documento, [ARCHITECTURE.md](ARCHITECTURE.md), define cómo evolucionar de este estado al software contable sin reconstruir nada de lo que funciona.

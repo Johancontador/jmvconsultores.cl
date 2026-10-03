@@ -74,7 +74,62 @@ function toEmpresa(row) {
     id: row.id, rut: row.rut, nombre: row.nombre, tasa_ppm: row.tasa_ppm,
     telefono: row.telefono, exento: !!row.exento, activo: !!row.activo,
     creado_en: row.creado_en,
+    config: parseConfig(row.config_json),
   }
+}
+
+/**
+ * Configuración contable de la empresa (memoria de contabilización).
+ *  - modo_conciliacion: 'simple' (default — compras y ventas se netean contra
+ *    la cuenta regular, sin conciliación bancaria; la mayoría de las pymes)
+ *    | 'completa' (CxC/CxP por contraparte + conciliación bancaria).
+ *  - cuenta_regular_gastos_id / cuenta_regular_ingresos_id: la "cuenta regular"
+ *    donde se netean los gastos e ingresos (típicamente la cuenta contable del
+ *    banco). La memoria POR CONTRAPARTE (RUT → cuenta) vive en `contrapartes`.
+ */
+function parseConfig(json) {
+  let c = {}
+  try { c = JSON.parse(json || '{}') || {} } catch { c = {} }
+  return {
+    modo_conciliacion: c.modo_conciliacion === 'completa' ? 'completa' : 'simple',
+    cuenta_regular_gastos_id: Number(c.cuenta_regular_gastos_id) || null,
+    cuenta_regular_ingresos_id: Number(c.cuenta_regular_ingresos_id) || null,
+  }
+}
+
+function obtenerConfig(db, empresaId) {
+  const row = db.prepare(`SELECT config_json FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!row) throw new Error('Empresa no encontrada')
+  return parseConfig(row.config_json)
+}
+
+/**
+ * Actualiza la configuración contable. Valida que las cuentas regulares
+ * existan en la empresa (aislamiento) y audita antes/después.
+ */
+function actualizarConfig(db, { empresaId, usuarioId, config, ip = null }) {
+  if (!rolEnEmpresa(db, usuarioId, empresaId)) throw new Error('No tiene acceso a esta empresa')
+  const actual = obtenerConfig(db, empresaId)
+  const nuevo = {
+    modo_conciliacion: config && config.modo_conciliacion === 'completa' ? 'completa' : 'simple',
+    cuenta_regular_gastos_id: Number(config && config.cuenta_regular_gastos_id) || null,
+    cuenta_regular_ingresos_id: Number(config && config.cuenta_regular_ingresos_id) || null,
+  }
+  const cuentas = require('./cuentas')
+  for (const clave of ['cuenta_regular_gastos_id', 'cuenta_regular_ingresos_id']) {
+    if (nuevo[clave] && !cuentas.obtener(db, empresaId, nuevo[clave])) {
+      throw new Error('La cuenta regular configurada no existe en esta empresa')
+    }
+  }
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE empresas SET config_json = ? WHERE id = ?`).run(JSON.stringify(nuevo), empresaId)
+    registrarAccion(db, {
+      empresaId, usuarioId, accion: 'empresa.config_actualizar', entidad: 'empresas', entidadId: String(empresaId),
+      antes: actual, despues: nuevo, ip,
+    })
+  })
+  tx()
+  return nuevo
 }
 
 /** Lista de empresas visibles para el usuario (aislamiento garantizado aquí). */
@@ -223,4 +278,5 @@ module.exports = {
   esSuperAdmin, asignacionesDeUsuario, rolEnEmpresa,
   listarParaUsuario, obtenerParaUsuario, claveSiiDescifrada,
   crear, actualizar, desactivar, asignarRol,
+  obtenerConfig, actualizarConfig, parseConfig,
 }

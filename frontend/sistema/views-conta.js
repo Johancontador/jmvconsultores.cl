@@ -159,13 +159,21 @@ async function vistaMayor(body) {
   const imputables = await getCuentasImputables()
   const cuentaId = window._mayorCuenta || (imputables[0] && imputables[0].id)
   if (!cuentaId) { body.innerHTML = '<div class="empty">Sin cuentas imputables.</div>'; return }
-  const m = await apiGet(`/api/contable/empresas/${S.empresa.id}/mayor?cuenta_id=${cuentaId}`)
+  const qs = new URLSearchParams({ cuenta_id: cuentaId })
+  if (window._mayorDesde) qs.set('desde', window._mayorDesde)
+  if (window._mayorHasta) qs.set('hasta', window._mayorHasta)
+  if (window._mayorRut) qs.set('rut', window._mayorRut)
+  const m = await apiGet(`/api/contable/empresas/${S.empresa.id}/mayor?${qs}`)
   body.innerHTML = `
     <div class="frm-row mb">
-      <div style="flex:1;min-width:260px"><span class="frm-label">Cuenta</span>
+      <div style="flex:1;min-width:240px"><span class="frm-label">Cuenta</span>
         <select id="may-cuenta" class="form-input" style="width:100%">
           ${selectOptions(imputables, 'id', (c) => `${c.codigo} — ${c.nombre}`, cuentaId)}
         </select></div>
+      <div><span class="frm-label">Desde</span><input type="date" id="may-desde" class="form-input" value="${esc(window._mayorDesde || '')}"></div>
+      <div><span class="frm-label">Hasta</span><input type="date" id="may-hasta" class="form-input" value="${esc(window._mayorHasta || '')}"></div>
+      <div><span class="frm-label">Cliente / Proveedor (RUT)</span><input id="may-rut" class="form-input" placeholder="76.123.456-7" value="${esc(window._mayorRut || '')}" style="width:170px"></div>
+      <button class="btn btn-secondary btn-sm" id="may-limpiar">Limpiar filtros</button>
       <div class="kpi" style="min-width:200px"><small>Saldo (${esc(m.cuenta?.naturaleza || '')})</small>
         <strong style="color:var(--accent)">${fmtM(m.saldo)}</strong></div>
     </div>
@@ -175,15 +183,25 @@ async function vistaMayor(body) {
         <tbody>${(m.movimientos || []).map((mv) => `<tr>
           <td class="sub">${esc(mv.fecha)}</td>
           <td class="mono">#${mv.folio}</td>
-          <td>${esc(mv.glosa || '')}</td>
+          <td>${esc(mv.linea_glosa || mv.asiento_glosa || '')}</td>
           <td class="num">${mv.debe ? fmtM(mv.debe) : '—'}</td>
           <td class="num">${mv.haber ? fmtM(mv.haber) : '—'}</td>
           <td class="num"><b>${fmtM(mv.saldo)}</b></td>
-        </tr>`).join('') || '<tr><td colspan="6"><div class="empty">Sin movimientos.</div></td></tr>'}</tbody>
+        </tr>`).join('') || '<tr><td colspan="6"><div class="empty">Sin movimientos con esos filtros.</div></td></tr>'}</tbody>
       </table>
     </div>`
-  document.getElementById('may-cuenta').addEventListener('change', (e) => {
-    window._mayorCuenta = e.target.value
+  const aplicar = () => {
+    window._mayorDesde = document.getElementById('may-desde').value || null
+    window._mayorHasta = document.getElementById('may-hasta').value || null
+    window._mayorRut = document.getElementById('may-rut').value.trim() || null
+    renderRoute()
+  }
+  document.getElementById('may-cuenta').addEventListener('change', (e) => { window._mayorCuenta = e.target.value; renderRoute() })
+  document.getElementById('may-desde').addEventListener('change', aplicar)
+  document.getElementById('may-hasta').addEventListener('change', aplicar)
+  document.getElementById('may-rut').addEventListener('change', aplicar)
+  document.getElementById('may-limpiar').addEventListener('click', () => {
+    window._mayorDesde = null; window._mayorHasta = null; window._mayorRut = null
     renderRoute()
   })
 }
@@ -720,3 +738,349 @@ async function admAuditoria(body) {
       </tr>`).join('')}</tbody>
     </table></div>`
 }
+
+/* ==================== MEMORIA DE CONTABILIZACIÓN ====================
+ * La cuenta regular por empresa (gastos/ingresos) + la memoria RUT → cuenta:
+ * el auxiliar/proveedor/cliente se vincula solo el mes siguiente; si aparece
+ * uno nuevo, aquí se elige a dónde contabilizar y se recuerda.
+ */
+
+VIEWS.memoria = {
+  titulo: 'Memoria de Contabilización',
+  async render(cont) {
+    const eid = S.empresa.id
+    let config = null, mem = null
+    try {
+      config = (await apiGet(`/api/contable/empresas/${eid}/config`)).config
+      mem = await apiGet(`/api/contable/empresas/${eid}/memoria`)
+    } catch (err) {
+      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
+      return
+    }
+    const puedeConfig = tiene('config:editar')
+    const puedeClasificar = tiene('documentos:clasificar')
+    const imputables = await getCuentasImputables()
+    const selCuentas = (id) => `<option value="">— sin cuenta regular —</option>${selectOptions(imputables, 'id', (c) => `${c.codigo} — ${c.nombre}`, id)}`
+
+    cont.innerHTML = `
+      <p class="hint mb" style="max-width:760px">El sistema recuerda dónde se contabilizó cada proveedor y cliente: el próximo mes ese auxiliar se vincula automáticamente. Si aparece una contraparte nueva, se te ofrece elegir a dónde enviarla — y queda memorizada.</p>
+
+      <div class="card">
+        <h3>Cuenta regular de la empresa</h3>
+        <p class="hint" style="margin-top:-6px">La mayoría de las empresas pequeñas no concilia banco: en modo simple las compras y ventas se netean directamente contra estas cuentas (típicamente la cuenta del banco).</p>
+        <div class="frm-row mt">
+          <div><span class="frm-label">Modo</span>
+            <select id="cfg-modo" class="form-input" ${puedeConfig ? '' : 'disabled'}>
+              <option value="simple" ${config.modo_conciliacion === 'simple' ? 'selected' : ''}>Simple — neteo contra cuenta regular (sin conciliación)</option>
+              <option value="completa" ${config.modo_conciliacion === 'completa' ? 'selected' : ''}>Completa — CxC/CxP por contraparte + conciliación</option>
+            </select>
+          </div>
+          <div><span class="frm-label">Cuenta regular de GASTOS (compras)</span>
+            <select id="cfg-gastos" class="form-input" ${puedeConfig ? '' : 'disabled'}>${selCuentas(config.cuenta_regular_gastos_id)}</select>
+          </div>
+          <div><span class="frm-label">Cuenta regular de INGRESOS (ventas)</span>
+            <select id="cfg-ingresos" class="form-input" ${puedeConfig ? '' : 'disabled'}>${selCuentas(config.cuenta_regular_ingresos_id)}</select>
+          </div>
+          ${puedeConfig ? '<button class="btn btn-primary" id="cfg-guardar">Guardar</button>' : ''}
+        </div>
+      </div>
+
+      ${mem.nuevos.length ? `
+      <div class="card mt">
+        <h3>Contrapartes nuevas por ubicar (${mem.nuevos.length})</h3>
+        <p class="hint" style="margin-top:-6px">Documentos de clientes/proveedores sin memoria: elige la cuenta y el sistema la recuerda para siempre.</p>
+        <div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>RUT</th><th>Razón social</th><th>Flujo</th><th class="num">Total</th><th>Cuenta destino</th><th></th></tr></thead>
+          <tbody>${mem.nuevos.map((d) => `
+            <tr>
+              <td class="mono">${esc(d.rut_contraparte)}</td>
+              <td>${esc(d.razon_social || '—')}</td>
+              <td><span class="chip ${d.tipo_flujo === 'venta' ? 'contabilizado' : 'clasificado'}">${esc(d.tipo_flujo)}</span></td>
+              <td class="num">${fmtM(d.monto_total)}</td>
+              <td><select class="form-input mem-cuenta" data-rut="${esc(d.rut_contraparte)}" style="min-width:240px">
+                <option value="">— elegir cuenta —</option>${selectOptions(imputables, 'id', (c) => `${c.codigo} — ${c.nombre}`)}
+              </select></td>
+              <td>${puedeClasificar ? `<button class="btn btn-primary btn-sm mem-recordar" data-rut="${esc(d.rut_contraparte)}">Recordar</button>` : ''}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+      </div>` : ''}
+
+      <div class="card mt">
+        <h3>Memoria por contraparte (${mem.memoria.length})</h3>
+        <div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>RUT</th><th>Razón social</th><th>Tipo</th><th>Cuenta memorizada</th><th class="num">Documentos</th></tr></thead>
+          <tbody>${mem.memoria.map((m) => `
+            <tr>
+              <td class="mono">${esc(m.rut)}</td>
+              <td>${esc(m.razon_social || '—')}</td>
+              <td class="sub">${esc(m.clasificacion || '—')}</td>
+              <td>${m.cuenta_id ? `<span class="mono">${esc(m.cuenta_codigo || '')}</span> ${esc(m.cuenta_nombre || '')}` : '<span class="chip pendiente">sin memoria</span>'}</td>
+              <td class="num">${m.documentos}</td>
+            </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Aún no hay contrapartes. Ingresa documentos del SII primero.</div></td></tr>'}</tbody>
+        </table></div>
+      </div>`
+
+    const btnCfg = document.getElementById('cfg-guardar')
+    if (btnCfg) btnCfg.addEventListener('click', async () => {
+      try {
+        await apiPut(`/api/contable/empresas/${eid}/config`, {
+          modo_conciliacion: document.getElementById('cfg-modo').value,
+          cuenta_regular_gastos_id: Number(document.getElementById('cfg-gastos').value) || null,
+          cuenta_regular_ingresos_id: Number(document.getElementById('cfg-ingresos').value) || null,
+        })
+        showToast('Configuración guardada', 'success')
+        renderRoute()
+      } catch (err) { showToast(err.message, 'error') }
+    })
+
+    cont.querySelectorAll('.mem-recordar').forEach((btn) => btn.addEventListener('click', async () => {
+      const rut = btn.dataset.rut
+      const sel = cont.querySelector(`.mem-cuenta[data-rut="${rut}"]`)
+      if (!sel || !sel.value) { showToast('Elige primero la cuenta destino', 'error'); return }
+      try {
+        await apiPost(`/api/contable/empresas/${eid}/memoria`, { rut, cuenta_id: Number(sel.value) })
+        showToast(`Memoria guardada para ${rut}`, 'success')
+        renderRoute()
+      } catch (err) { showToast(err.message, 'error') }
+    }))
+  },
+}
+
+/* ========================= REPORTES NUEVOS ========================= */
+
+function filaCuenta8(f) {
+  const num = (v) => (v ? fmtM(v) : '—')
+  return `<tr>
+    <td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td>
+    <td class="num">${num(f.anterior_deudor)}</td><td class="num">${num(f.anterior_acreedor)}</td>
+    <td class="num">${num(f.debe)}</td><td class="num">${num(f.haber)}</td>
+    <td class="num">${num(f.saldo_deudor)}</td><td class="num">${num(f.saldo_acreedor)}</td>
+    <td class="num">${num(f.perdida)}</td><td class="num">${num(f.utilidad)}</td>
+  </tr>`
+}
+
+function vistaPeriodoPlantilla(body, titulo, vistaKey) {
+  const periodo = window[`_${vistaKey}Periodo`] || periodoActual()
+  body.innerHTML = `
+    <div class="frm-row mb">
+      <div><span class="frm-label">Período</span>${inputPeriodoHTML('rep-periodo', periodo)}</div>
+      <span class="sub">${esc(titulo)} — acumulado al último día del mes</span>
+    </div>
+    <div id="rep-body"></div>`
+  document.getElementById('rep-periodo').addEventListener('change', (e) => {
+    window[`_${vistaKey}Periodo`] = leerPeriodo('rep-periodo') || periodo
+    renderRoute()
+  })
+  return periodo
+}
+
+VIEWS.balance8 = {
+  titulo: 'Balance de 8 Columnas',
+  async render(cont) {
+    cont.innerHTML = '<div class="frm-row mb"><div class="tbl-wrap" style="flex:1;padding:var(--space-5)">Cargando…</div></div>'
+    const body = cont
+    const periodo = vistaPeriodoPlantilla(body, 'Balance de 8 columnas', 'balance8')
+    let b
+    try { b = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/balance8/${periodo}`)).balance8 }
+    catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const s = b.sumas
+    document.getElementById('rep-body').innerHTML = `
+      <div class="kpi-grid mb">
+        <div class="kpi ${b.cuadres.sumas_debe_haber ? 'up' : 'bad'}"><small>Débitos = Créditos</small><strong>${fmtM(s.debe)}</strong><span class="sub">${b.cuadres.sumas_debe_haber ? 'cuadrado' : 'DESCUADRADO'}</span></div>
+        <div class="kpi ${b.cuadres.saldos_cuadran ? 'up' : 'bad'}"><small>Saldos + Resultado</small><strong>${fmtM(s.saldo_deudor + s.perdida)}</strong><span class="sub">${b.cuadres.saldos_cuadran ? 'hoja cuadrada' : 'descuadrada'}</span></div>
+        <div class="kpi ${b.cuadres.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado del período</small><strong>${fmtM(b.cuadres.resultado)}</strong><span class="sub">utilidad ${fmtM(s.utilidad)} − pérdida ${fmtM(s.perdida)}</span></div>
+      </div>
+      <div class="card">
+        <h3>Sumas y saldos — ${esc(periodo)}</h3>
+        <div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Ant. Deudor</th><th class="num">Ant. Acreedor</th><th class="num">Débitos</th><th class="num">Créditos</th><th class="num">Saldo Deudor</th><th class="num">Saldo Acreedor</th><th class="num">Pérdida</th><th class="num">Utilidad</th></tr></thead>
+          <tbody>${b.filas.map(filaCuenta8).join('') || '<tr><td colspan="10"><div class="empty">Sin movimientos en este período.</div></td></tr>'}</tbody>
+          <tfoot><tr>
+            <td colspan="2">SUMAS IGUALES</td>
+            <td class="num">${fmtM(s.anterior_deudor)}</td><td class="num">${fmtM(s.anterior_acreedor)}</td>
+            <td class="num">${fmtM(s.debe)}</td><td class="num">${fmtM(s.haber)}</td>
+            <td class="num">${fmtM(s.saldo_deudor)}</td><td class="num">${fmtM(s.saldo_acreedor)}</td>
+            <td class="num">${fmtM(s.perdida)}</td><td class="num">${fmtM(s.utilidad)}</td>
+          </tr></tfoot>
+        </table></div>
+        <p class="hint mt">El cuadre clásico de la hoja de trabajo: saldos deudores + pérdidas = saldos acreedores + utilidades. Las columnas Pérdida/Utilidad muestran el neto de las cuentas de resultado (ingresos, costos y gastos) pendientes de cierre.</p>
+      </div>`
+  },
+}
+
+VIEWS.clasificado = {
+  titulo: 'Balance Clasificado',
+  async render(cont) {
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    const body = cont
+    const periodo = vistaPeriodoPlantilla(body, 'Balance clasificado', 'clasificado')
+    let c
+    try { c = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/clasificado/${periodo}`)).clasificado }
+    catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const seccion = (titulo, filas, total) => `
+      <div class="card mb">
+        <h3>${esc(titulo)} <span class="num" style="float:right;font-family:var(--font-mono)">${fmtM(total)}</span></h3>
+        ${filas.length ? `<div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
+          <tbody>${filas.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`).join('')}</tbody>
+        </table></div>` : '<p class="hint mt">Sin saldos en esta sección.</p>'}
+      </div>`
+    document.getElementById('rep-body').innerHTML = `
+      <div class="kpi-grid mb">
+        <div class="kpi"><small>Activo corriente</small><strong>${fmtM(c.activo.corriente.reduce((x, f) => x + f.saldo, 0))}</strong><span class="sub">disponible en el año</span></div>
+        <div class="kpi ${c.capital_trabajo >= 0 ? 'up' : 'bad'}"><small>Capital de trabajo</small><strong>${fmtM(c.capital_trabajo)}</strong><span class="sub">activo corriente − pasivo corriente</span></div>
+        <div class="kpi ${c.ecuacion.cuadra ? 'up' : 'bad'}"><small>A = P + Patrimonio</small><strong>${c.ecuacion.cuadra ? 'Cuadra' : fmtM(c.ecuacion.diferencia || 0)}</strong><span class="sub">activos ${fmtM(c.ecuacion.activos)}</span></div>
+      </div>
+      ${seccion('Activo corriente (1.1)', c.activo.corriente, c.activo.corriente.reduce((x, f) => x + f.saldo, 0))}
+      ${seccion('Activo no corriente (1.2+)', c.activo.no_corriente, c.activo.no_corriente.reduce((x, f) => x + f.saldo, 0))}
+      ${seccion('Pasivo corriente (2.1)', c.pasivo.corriente, c.pasivo.corriente.reduce((x, f) => x + f.saldo, 0))}
+      ${seccion('Pasivo no corriente (2.2+)', c.pasivo.no_corriente, c.pasivo.no_corriente.reduce((x, f) => x + f.saldo, 0))}
+      ${seccion('Patrimonio (3) + resultado del período', c.patrimonio.cuentas, c.patrimonio.total)}
+      <p class="hint">Resultado del período incluido en patrimonio: ${fmtM(c.patrimonio.resultado_periodo)} (sin asiento de cierre: la ecuación cuadra en todo estado).</p>`
+  },
+}
+
+VIEWS.situacion = {
+  titulo: 'Situación Financiera',
+  async render(cont) {
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    const body = cont
+    const periodo = vistaPeriodoPlantilla(body, 'Estado de situación financiera', 'situacion')
+    let s
+    try { s = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/situacion/${periodo}`)).situacion }
+    catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const tabla = (titulo, filas, total) => `
+      <div class="card mb"><h3>${esc(titulo)} <span class="num" style="float:right;font-family:var(--font-mono)">${fmtM(total)}</span></h3>
+        ${filas.length ? `<div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
+        <tbody>${filas.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint mt">Sin saldos.</p>'}
+      </div>`
+    document.getElementById('rep-body').innerHTML = `
+      <div class="kpi-grid mb">
+        <div class="kpi"><small>Activos</small><strong>${fmtM(s.totales.activos)}</strong></div>
+        <div class="kpi"><small>Pasivos</small><strong>${fmtM(s.totales.pasivos)}</strong></div>
+        <div class="kpi"><small>Patrimonio</small><strong>${fmtM(s.totales.patrimonio)}</strong></div>
+        <div class="kpi ${s.ecuacion.cuadra ? 'up' : 'bad'}"><small>Ecuación</small><strong>${s.ecuacion.cuadra ? 'A = P + P' : 'DESCUADRA'}</strong><span class="sub">dif. ${fmtM(s.ecuacion.diferencia)}</span></div>
+      </div>
+      ${tabla('Activos', s.activos, s.totales.activos)}
+      ${tabla('Pasivos', s.pasivos, s.totales.pasivos)}
+      ${tabla('Patrimonio', s.patrimonio, s.totales.patrimonio_cuentas)}
+      <div class="card"><h3>Resultado del período (clases 4/5/6)</h3>
+        <p>Ingresos ${fmtM(s.resultados.ingresos)} − costos ${fmtM(s.resultados.costos)} − gastos ${fmtM(s.resultados.gastos)} = <b class="mono">${fmtM(s.resultados.resultado)}</b></p>
+      </div>`
+  },
+}
+
+VIEWS.resultados = {
+  titulo: 'Estado de Resultados',
+  async render(cont) {
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    const body = cont
+    const periodo = vistaPeriodoPlantilla(body, 'Estado de resultados', 'resultados')
+    let r
+    try { r = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/resultados/${periodo}`)).resultados }
+    catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const bloque = (titulo, d) => `
+      <div class="card mb"><h3>${esc(titulo)}</h3>
+        <div class="tbl-wrap mt"><table class="tbl">
+          <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
+          <tbody>
+            ${d.detalle.ingresos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num up">${fmtM(f.saldo)}</td></tr>`).join('')}
+            ${d.detalle.costos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">(−) ${fmtM(f.saldo)}</td></tr>`).join('')}
+            ${d.detalle.gastos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">(−) ${fmtM(f.saldo)}</td></tr>`).join('')}
+            <tr><td colspan="2"><b>Resultado</b></td><td class="num"><b>${fmtM(d.resultado)}</b></td></tr>
+          </tbody>
+        </table></div>
+      </div>`
+    document.getElementById('rep-body').innerHTML = `
+      <div class="kpi-grid mb">
+        <div class="kpi up"><small>Ingresos del mes</small><strong>${fmtM(r.periodo_mes.ingresos)}</strong></div>
+        <div class="kpi ${r.periodo_mes.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado del mes</small><strong>${fmtM(r.periodo_mes.resultado)}</strong></div>
+        <div class="kpi ${r.acumulado.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado acumulado</small><strong>${fmtM(r.acumulado.resultado)}</strong><span class="sub">${esc(r.rango_acumulado.desde)} → ${esc(r.rango_acumulado.hasta)}</span></div>
+      </div>
+      ${bloque('Del período ' + r.periodo, r.periodo_mes)}
+      ${bloque('Acumulado del año ' + r.anio, r.acumulado)}`
+  },
+}
+
+function vistaCuentaCorriente(rol) {
+  return {
+    titulo: rol === 'proveedor' ? 'Cuenta Corriente — Proveedores' : 'Cuenta Corriente — Clientes',
+    async render(cont) {
+      const eid = S.empresa.id
+      const f = {
+        desde: window._ccDesde || '', hasta: window._ccHasta || '', rut: window._ccRut || '',
+      }
+      const qs = new URLSearchParams({ rol })
+      if (f.desde) qs.set('desde', f.desde)
+      if (f.hasta) qs.set('hasta', f.hasta)
+      if (f.rut) qs.set('rut', f.rut)
+      let cc
+      try { cc = (await apiGet(`/api/contable/empresas/${eid}/reportes/cuenta-corriente?${qs}`)).cuenta_corriente }
+      catch (err) { cont.innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+
+      cont.innerHTML = `
+        <div class="frm-row mb">
+          <div><span class="frm-label">Desde</span><input type="date" id="cc-desde" class="form-input" value="${esc(f.desde)}"></div>
+          <div><span class="frm-label">Hasta</span><input type="date" id="cc-hasta" class="form-input" value="${esc(f.hasta)}"></div>
+          <div><span class="frm-label">RUT de ${rol === 'proveedor' ? 'proveedor' : 'cliente'}</span><input id="cc-rut" class="form-input" placeholder="76.123.456-7" value="${esc(f.rut)}" style="width:180px"></div>
+          <button class="btn btn-secondary btn-sm" id="cc-aplicar">Aplicar</button>
+          <button class="btn btn-secondary btn-sm" id="cc-limpiar">Limpiar</button>
+        </div>
+        <div class="kpi-grid mb">
+          <div class="kpi"><small>Cargos (facturas)</small><strong>${fmtM(cc.total_cargos)}</strong></div>
+          <div class="kpi up"><small>Abonos (NC + ${rol === 'proveedor' ? 'pagos' : 'cobros'})</small><strong>${fmtM(cc.total_abonos)}</strong></div>
+          <div class="kpi ${cc.total_saldo > 0 ? 'warn' : 'up'}"><small>Saldo ${rol === 'proveedor' ? 'por pagar' : 'por cobrar'}</small><strong>${fmtM(cc.total_saldo)}</strong><span class="sub">${cc.resumen.length} contraparte(s)</span></div>
+        </div>
+        <div class="card">
+          <h3>Resumen por contraparte</h3>
+          <div class="tbl-wrap mt"><table class="tbl">
+            <thead><tr><th>RUT</th><th>Razón social</th><th class="num">Cargos</th><th class="num">Abonos</th><th class="num">Saldo</th><th></th></tr></thead>
+            <tbody>${cc.resumen.map((r) => `<tr>
+              <td class="mono">${esc(r.rut)}</td><td>${esc(r.razon_social || '—')}</td>
+              <td class="num">${fmtM(r.cargos)}</td><td class="num">${fmtM(r.abonos)}</td>
+              <td class="num"><b>${fmtM(r.saldo)}</b></td>
+              <td><button class="btn btn-secondary btn-sm cc-detalle" data-rut="${esc(r.rut)}">Ver detalle</button></td>
+            </tr>`).join('') || '<tr><td colspan="6"><div class="empty">Sin documentos contabilizados con esos filtros.</div></td></tr>'}</tbody>
+          </table></div>
+        </div>
+        ${cc.detalle ? `
+        <div class="card mt">
+          <h3>Detalle de ${esc(cc.rut)} — saldo corrido</h3>
+          <div class="tbl-wrap mt"><table class="tbl">
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th class="num">Cargo</th><th class="num">Abono</th><th class="num">Saldo</th></tr></thead>
+            <tbody>${cc.detalle.map((d) => `<tr>
+              <td class="sub">${esc(d.fecha || '')}</td>
+              <td><span class="chip ${d.tipo === 'DOCTO' ? 'clasificado' : d.tipo === 'NC' ? 'propuesto' : 'contabilizado'}">${esc(d.tipo)}</span></td>
+              <td class="mono sub">${esc(d.referencia || '')}</td>
+              <td class="num">${d.cargo ? fmtM(d.cargo) : '—'}</td>
+              <td class="num">${d.abono ? fmtM(d.abono) : '—'}</td>
+              <td class="num"><b>${fmtM(d.saldo_despues)}</b></td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+        </div>` : ''}
+        <p class="hint mt">Cargos/abonos derivados de la partida doble real: facturas contabilizadas (devengo en fecha_docto) y pagos/cobros de tesorería aplicados al documento.</p>`
+
+      const aplicar = () => {
+        window._ccDesde = document.getElementById('cc-desde').value || null
+        window._ccHasta = document.getElementById('cc-hasta').value || null
+        window._ccRut = document.getElementById('cc-rut').value.trim() || null
+        renderRoute()
+      }
+      document.getElementById('cc-aplicar').addEventListener('click', aplicar)
+      document.getElementById('cc-hasta').addEventListener('change', aplicar)
+      document.getElementById('cc-desde').addEventListener('change', aplicar)
+      document.getElementById('cc-rut').addEventListener('change', aplicar)
+      document.getElementById('cc-limpiar').addEventListener('click', () => {
+        window._ccDesde = null; window._ccHasta = null; window._ccRut = null; renderRoute()
+      })
+      cont.querySelectorAll('.cc-detalle').forEach((btn) => btn.addEventListener('click', () => {
+        window._ccRut = btn.dataset.rut
+        renderRoute()
+      }))
+    },
+  }
+}
+
+VIEWS.cclientes = vistaCuentaCorriente('cliente')
+VIEWS.cproveedores = vistaCuentaCorriente('proveedor')
+

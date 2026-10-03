@@ -67,7 +67,7 @@ function filasPlan(db, empresaId, agregado) {
     if (!c || c.es_resumen) continue
     filas.push({
       cuenta_id: c.id, codigo: c.codigo, nombre: c.nombre, clase: c.clase,
-      naturaleza: c.naturaleza, cierre: c.cierre, alias: c.alias || null,
+      naturaleza: c.naturaleza, cierre: c.cierre, alias: c.alias || null, rubro_niif: c.rubro_niif || null,
       debe: Number(a.debe) || 0, haber: Number(a.haber) || 0, movimientos: a.movimientos,
       saldo: c.naturaleza === 'deudora'
         ? (Number(a.debe) || 0) - (Number(a.haber) || 0)
@@ -456,6 +456,204 @@ function obtenerCierre(db, empresaId, periodo) {
   return JSON.parse(p.cierre_json)
 }
 
+// ============================================================
+// BALANCE DE 8 COLUMNAS (sumas y saldos con resultado)
+// Columnas por cuenta: saldo anterior (deudor/acreedor) + débitos y créditos
+// del período + saldo final (deudor/acreedor) + Pérdida / Utilidad de las
+// cuentas de resultado (clases 4/5/6 — el cuadre clásico de la hoja de trabajo:
+// Σ saldo deudor = Σ saldo acreedor y utilidad − pérdida = resultado del período).
+// ============================================================
+
+function mesAnteriorDe(periodo) {
+  const y = Number(periodo.slice(0, 4))
+  const m = Number(periodo.slice(4, 6))
+  const mm = m === 1 ? 12 : m - 1
+  const yy = m === 1 ? y - 1 : y
+  return `${yy}${String(mm).padStart(2, '0')}`
+}
+
+function balance8Columnas(db, empresaId, periodo) {
+  exigirPeriodoValido(periodo)
+  const finMes = ultimoDiaDe(periodo)
+  const finAnterior = ultimoDiaDe(mesAnteriorDe(periodo))
+
+  const aggAnterior = new Map(agregadoPorCuenta(db, empresaId, { hasta: finAnterior }).map((a) => [Number(a.cuenta_id), a]))
+  const aggFinal = new Map(agregadoPorCuenta(db, empresaId, { hasta: finMes }).map((a) => [Number(a.cuenta_id), a]))
+  const plan = new Map(cuentas.listar(db, empresaId).map((c) => [Number(c.id), c]))
+
+  const filas = []
+  for (const [id, a] of aggFinal) {
+    const c = plan.get(id)
+    if (!c || c.es_resumen) continue
+    const ant = aggAnterior.get(id) || { debe: 0, haber: 0 }
+    // En la hoja de trabajo las columnas deudor/acreedor se determinan por el
+    // SIGNO del neto (debe − haber), NO por la naturaleza de la cuenta: una
+    // cuenta de patrimonio con saldo acreedor va a la columna acreedora y una
+    // cuenta de banco sobregirada a la acreedora igual.
+    const antNeto = (Number(ant.debe) || 0) - (Number(ant.haber) || 0)
+    const finNeto = (Number(a.debe) || 0) - (Number(a.haber) || 0)
+    filas.push({
+      cuenta_id: c.id, codigo: c.codigo, nombre: c.nombre, clase: c.clase,
+      anterior_deudor: Math.max(antNeto, 0), anterior_acreedor: Math.max(-antNeto, 0),
+      debe: Number(a.debe) || 0, haber: Number(a.haber) || 0,
+      saldo_deudor: Math.max(finNeto, 0), saldo_acreedor: Math.max(-finNeto, 0),
+      perdida: 0, utilidad: 0,
+    })
+  }
+  filas.sort((x, y) => String(x.codigo).localeCompare(String(y.codigo)))
+
+  // Pérdida (costos/gastos deudores) y Utilidad (ingresos acreedores) del período:
+  // el saldo natural de las clases 4/5/6 se traslada a estas columnas (hoja de trabajo).
+  for (const f of filas) {
+    if ([4, 5, 6].includes(f.clase)) {
+      if (f.saldo_deudor > 0) { f.perdida = f.saldo_deudor; f.saldo_deudor = 0 }
+      else if (f.saldo_acreedor > 0) { f.utilidad = f.saldo_acreedor; f.saldo_acreedor = 0 }
+    }
+  }
+
+  const sumar = (clave) => filas.reduce((s, f) => s + f[clave], 0)
+  const sumas = {
+    anterior_deudor: sumar('anterior_deudor'), anterior_acreedor: sumar('anterior_acreedor'),
+    debe: sumar('debe'), haber: sumar('haber'),
+    saldo_deudor: sumar('saldo_deudor'), saldo_acreedor: sumar('saldo_acreedor'),
+    perdida: sumar('perdida'), utilidad: sumar('utilidad'),
+  }
+  return {
+    periodo,
+    filas,
+    sumas,
+    cuadres: {
+      sumas_debe_haber: sumas.debe === sumas.haber,
+      // Hoja de trabajo clásica: con las cuentas de resultado abiertas, el
+      // cuadre de saldos incluye las columnas de Pérdida/Utilidad.
+      saldos_cuadran: (sumas.saldo_deudor + sumas.perdida) === (sumas.saldo_acreedor + sumas.utilidad),
+      resultado: sumas.utilidad - sumas.perdida,
+    },
+  }
+}
+
+// ============================================================
+// BALANCE CLASIFICADO (presentación §8): activo corriente/no corriente,
+// pasivo corriente/no corriente y patrimonio, derivado del CÓDIGO del plan
+// (1.1 corriente, 1.2+ no corriente; 2.1 corriente, 2.2+ no corriente).
+// Incluye el resultado del período para que A = P + Pat cuadre.
+// ============================================================
+
+function balanceClasificado(db, empresaId, periodo) {
+  exigirPeriodoValido(periodo)
+  const filas = filasPlan(db, empresaId, agregadoPorCuenta(db, empresaId, { hasta: ultimoDiaDe(periodo) }))
+  const seccion = (filtro) => filas
+    .filter(filtro)
+    .map((f) => ({ cuenta_id: f.cuenta_id, codigo: f.codigo, nombre: f.nombre, saldo: f.saldo }))
+
+  const activoCorriente = seccion((f) => f.clase === 1 && String(f.codigo).startsWith('1.1'))
+  const activoNoCorriente = seccion((f) => f.clase === 1 && !String(f.codigo).startsWith('1.1'))
+  const pasivoCorriente = seccion((f) => f.clase === 2 && String(f.codigo).startsWith('2.1'))
+  const pasivoNoCorriente = seccion((f) => f.clase === 2 && !String(f.codigo).startsWith('2.1'))
+  const patrimonio = seccion((f) => f.clase === 3)
+
+  const t = (secciones) => secciones.flat().reduce((s, x) => s + x.saldo, 0)
+  const resultados = resultadoDesdeFilas(filas)
+  const totalActivo = t([activoCorriente, activoNoCorriente])
+  const totalPasivo = t([pasivoCorriente, pasivoNoCorriente])
+  const totalPasivoCorriente = t([pasivoCorriente])
+  const totalPatrimonio = t([patrimonio]) + resultados.resultado
+
+  return {
+    periodo,
+    activo: { corriente: activoCorriente, no_corriente: activoNoCorriente, total: totalActivo },
+    pasivo: { corriente: pasivoCorriente, no_corriente: pasivoNoCorriente, total: totalPasivo },
+    patrimonio: { cuentas: patrimonio, resultado_periodo: resultados.resultado, total: totalPatrimonio },
+    capital_trabajo: totalActivo - totalPasivoCorriente,
+    ecuacion: {
+      activos: totalActivo,
+      pasivo_patrimonio: totalPasivo + totalPatrimonio,
+      cuadra: totalActivo === totalPasivo + totalPatrimonio,
+    },
+  }
+}
+
+// ============================================================
+// CUENTA CORRIENTE de clientes y proveedores (§8): lo que cada contraparte
+// debe a la empresa (clientes) o lo que la empresa le debe (proveedores).
+// Cargos/abonos derivados de la partida doble real:
+//  - Cliente: venta normal = cargo; NC de venta (60/61) = abono; cobro aplicado = abono.
+//  - Proveedor: compra normal = cargo; NC de compra = abono; pago aplicado = abono.
+// Fuente: documentos CONTABILIZADOS (asiento_id) + movimientos de tesorería
+// aplicados a documentos. Solo-lectura, con filtros de fecha y RUT.
+// ============================================================
+
+function cuentaCorriente(db, empresaId, { rol = 'cliente', desde = null, hasta = null, rut = null, limit = 500 } = {}) {
+  const tipoFlujo = rol === 'proveedor' ? 'compra' : 'venta'
+  const where = [`d.empresa_id = ?`, `d.tipo_flujo = ?`, `d.estado = 'CONTABILIZADO'`, 'd.asiento_id IS NOT NULL']
+  const params = [empresaId, tipoFlujo]
+  if (rut) { where.push('d.rut_contraparte = ?'); params.push(rut) }
+  if (desde) { where.push('d.fecha_docto >= ?'); params.push(desde) }
+  if (hasta) { where.push('d.fecha_docto <= ?'); params.push(hasta) }
+
+  const filas = []
+  // 1) Documentos (facturas y NC) — la fecha efectiva es el DEVENGO (fecha_docto).
+  const docs = db.prepare(`
+    SELECT d.id, d.rut_contraparte, d.razon_social, d.tipo_doc, d.folio, d.fecha_docto, d.monto_total
+    FROM documentos d WHERE ${where.join(' AND ')} ORDER BY d.fecha_docto, d.id
+    LIMIT ?
+  `).all(...params, Math.min(Number(limit) || 500, 2000))
+  for (const d of docs) {
+    const esNC = [60, 61].includes(Number(d.tipo_doc))
+    const monto = Math.round(Number(d.monto_total) || 0)
+    filas.push({
+      rut: d.rut_contraparte, razon_social: d.razon_social, fecha: d.fecha_docto || d.periodo_ingesta,
+      tipo: esNC ? 'NC' : 'DOCTO', referencia: `${d.tipo_doc}/${d.folio}`,
+      cargo: esNC ? 0 : monto, abono: esNC ? monto : 0, documento_id: d.id,
+    })
+  }
+  // 2) Pagos/cobros aplicados (tesorería) — la fecha es la del movimiento bancario.
+  const whereTeso = [`d.empresa_id = ?`, `d.tipo_flujo = ?`, `m.documento_id IS NOT NULL`]
+  const paramsTeso = [empresaId, tipoFlujo]
+  if (rut) { whereTeso.push('d.rut_contraparte = ?'); paramsTeso.push(rut) }
+  if (desde) { whereTeso.push('m.fecha >= ?'); paramsTeso.push(desde) }
+  if (hasta) { whereTeso.push('m.fecha <= ?'); paramsTeso.push(hasta) }
+  const pagos = db.prepare(`
+    SELECT m.id, m.tipo, m.fecha, m.monto, d.rut_contraparte, d.razon_social,
+           d.tipo_doc AS doc_tipo, d.folio AS doc_folio
+    FROM teso_movimientos m JOIN documentos d ON d.id = m.documento_id
+    WHERE ${whereTeso.join(' AND ')}
+    ORDER BY m.fecha, m.id
+    LIMIT ?
+  `).all(...paramsTeso, Math.min(Number(limit) || 500, 2000))
+  for (const m of pagos) {
+    const monto = Math.abs(Math.round(Number(m.monto) || 0))
+    filas.push({
+      rut: m.rut_contraparte, razon_social: m.razon_social, fecha: m.fecha,
+      tipo: m.tipo === 'COBRO' ? 'COBRO' : 'PAGO',
+      referencia: `${m.doc_tipo || ''}/${m.doc_folio || ''}`.replace(/^\//, ''),
+      cargo: 0, abono: monto, movimiento_id: m.id,
+    })
+  }
+
+  filas.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || (a.documento_id || a.movimiento_id || 0) - (b.documento_id || b.movimiento_id || 0))
+
+  // Resumen por RUT + saldo corrido si se filtró por una contraparte.
+  const mapa = new Map()
+  let corrido = 0
+  const detalle = []
+  for (const f of filas) {
+    const k = mapa.get(f.rut) || { rut: f.rut, razon_social: f.razon_social, cargos: 0, abonos: 0, saldo: 0 }
+    k.cargos += f.cargo; k.abonos += f.abono; k.saldo = k.cargos - k.abonos
+    mapa.set(f.rut, k)
+    if (rut) { corrido += f.cargo - f.abono; detalle.push({ ...f, saldo_despues: corrido }) }
+  }
+  const resumen = [...mapa.values()].sort((a, b) => b.saldo - a.saldo)
+  return {
+    rol, desde, hasta, rut,
+    resumen,
+    detalle: rut ? detalle : null,
+    total_cargos: resumen.reduce((s, r) => s + r.cargos, 0),
+    total_abonos: resumen.reduce((s, r) => s + r.abonos, 0),
+    total_saldo: resumen.reduce((s, r) => s + r.saldo, 0),
+  }
+}
+
 module.exports = {
   balanceComprobacion,
   situacionFinanciera,
@@ -463,4 +661,11 @@ module.exports = {
   prepararCierre,
   ejecutarCierre,
   obtenerCierre,
+  balance8Columnas,
+  balanceClasificado,
+  cuentaCorriente,
+  // helpers de derivación compartidos (presentación NIIF, FASE 8)
+  agregadoPorCuenta,
+  filasPlan,
+  ultimoDiaDe,
 }

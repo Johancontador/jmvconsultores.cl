@@ -26,6 +26,7 @@ function toCuenta(row) {
     id: row.id, codigo: row.codigo, nombre: row.nombre, clase: row.clase,
     naturaleza: row.naturaleza, es_resumen: !!row.es_resumen, cierre: row.cierre,
     alias: row.alias, activa: !!row.activa,
+    rubro_niif: row.rubro_niif || null,
   }
 }
 

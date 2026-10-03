@@ -261,8 +261,52 @@ router.get('/empresas/:empresaId/mayor', requirePermiso('asientos:ver'), (req, r
       cuentaId: Number(req.query.cuenta_id),
       desde: req.query.desde || null,
       hasta: req.query.hasta || null,
+      rutContraparte: req.query.rut || null,
     })
     res.json({ ok: true, ...m })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Configuración contable (memoria de contabilización / modo simple) ----------
+
+router.get('/empresas/:empresaId/config', requirePermiso('empresas:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, config: empresas.obtenerConfig(db, req.empresaId) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.put('/empresas/:empresaId/config', requirePermiso('config:editar'), (req, res) => {
+  try {
+    const config = empresas.actualizarConfig(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id, config: req.body, ip: ip(req),
+    })
+    res.json({ ok: true, config })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Memoria de contabilización (RUT → cuenta regular) ----------
+
+router.get('/empresas/:empresaId/memoria', requirePermiso('documentos:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, ...require('../core/propuestas').memoria(db, req.empresaId) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.post('/empresas/:empresaId/memoria', requirePermiso('documentos:clasificar'), (req, res) => {
+  try {
+    const r = require('../core/propuestas').recordarMemoria(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      rut: req.body.rut, cuentaId: req.body.cuenta_id, ip: ip(req),
+    })
+    res.json({ ok: true, memoria: r })
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

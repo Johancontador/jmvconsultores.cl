@@ -36,6 +36,11 @@ const CATALOGO_CAPACIDADES = {
   'conciliacion:ejecutar': 'Ejecutar la conciliación de un período',
   'onboarding:ejecutar': 'Consultar el SII y confirmar la ficha tributaria + ingesta del histórico (onboarding autónomo)',
   'reportes:ver': 'Ver reportes financieros',
+  'tesoreria:ver': 'Ver cuentas bancarias, libro banco y conciliación bancaria',
+  'tesoreria:operar': 'Registrar pagos, cobros y transferencias con asiento contable',
+  'bancos:conciliar': 'Importar cartolas y conciliar banco ↔ libro',
+  'activos:ver': 'Ver activos fijos, su plan de depreciación y las depreciaciones registradas',
+  'activos:operar': 'Registrar activos fijos, ejecutar la depreciación mensual y registrar ventas/bajas',
   'config:editar': 'Editar configuración de la empresa',
 }
 
@@ -59,6 +64,10 @@ const PERMISOS_POR_ROL = {
     'conciliacion:ver', 'conciliacion:ejecutar',
     'onboarding:ejecutar',
     'reportes:ver', 'config:editar',
+    // Fase 6: el contador opera tesorería completa (puede delegarla al rol TESORERÍA)
+    'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
+    // Fase 7: activos fijos y depreciación mensual
+    'activos:ver', 'activos:operar',
   ],
 
   admin_empresa: [
@@ -73,6 +82,8 @@ const PERMISOS_POR_ROL = {
     'conciliacion:ver',
     'onboarding:ejecutar',
     'reportes:ver', 'config:editar',
+    // Fase 7: el dueño ve sus activos y depreciaciones, sin operarlos
+    'activos:ver',
   ],
 
   auditor: [
@@ -86,6 +97,10 @@ const PERMISOS_POR_ROL = {
     'propuestas:ver',
     'conciliacion:ver',
     'reportes:ver',
+    // Fase 6: el auditor ve el libro banco pero no opera ni concilia
+    'tesoreria:ver',
+    // Fase 7: el auditor ve activos fijos pero no opera
+    'activos:ver',
   ],
 
   tesoreria: [
@@ -97,7 +112,7 @@ const PERMISOS_POR_ROL = {
     'propuestas:ver',
     'conciliacion:ver',
     'reportes:ver',
-    // Fase 6 añadirá: 'tesoreria:pagar', 'tesoreria:cobrar', 'bancos:conciliar'
+    'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
   ],
 }
 

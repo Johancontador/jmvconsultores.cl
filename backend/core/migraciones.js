@@ -209,8 +209,8 @@ function migracionesFase2(db) {
   `).all()
   if (sinPlan.length) {
     const insertar = db.prepare(`
-      INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias, rubro_niif)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     for (const { id: empresaId } of sinPlan) {
       seedPlanCuentas(db, empresaId, insertar)
@@ -221,15 +221,15 @@ function migracionesFase2(db) {
 /** Inserta la plantilla PUC para una empresa (asume que no tiene cuentas aún). */
 function seedPlanCuentas(db, empresaId, stmtInsertar = null) {
   const insertar = stmtInsertar || db.prepare(`
-    INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias, rubro_niif)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const tx = db.transaction(() => {
     for (const item of PLANTILLA) {
       const { clase, naturaleza, cierre } = clasificar(item.codigo)
       insertar.run(
         empresaId, item.codigo, item.nombre, clase, naturaleza,
-        item.esResumen ? 1 : 0, cierre, item.alias || null
+        item.esResumen ? 1 : 0, cierre, item.alias || null, item.rubro || null
       )
     }
   })
@@ -455,4 +455,167 @@ function migracionesSaas1(db) {
   `)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, seedPlanCuentas }
+// ============================================================
+// FASE 6 — TESORERÍA (§22): dominio de bancos SIN integraciones bancarias
+// todavía. El libro banco vive en teso_movimientos respaldado SIEMPRE por un
+// asiento del núcleo (partida doble, mismo asiento para las dos patas de una
+// transferencia). La cartola se importa y la conciliación REPORTA — jamás
+// corrige (ajustes por asiento manual, mismo principio que la conciliación SII).
+// ============================================================
+function migracionesFase6(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bancos_cuentas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      banco TEXT NOT NULL,
+      numero TEXT NOT NULL DEFAULT '',
+      moneda TEXT NOT NULL DEFAULT 'CLP',
+      cuenta_contable_id INTEGER NOT NULL REFERENCES cuentas(id),
+      saldo_inicial INTEGER NOT NULL DEFAULT 0,
+      activa INTEGER NOT NULL DEFAULT 1,
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, cuenta_contable_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bancos_empresa ON bancos_cuentas(empresa_id);
+
+    CREATE TABLE IF NOT EXISTS teso_movimientos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      banco_cuenta_id INTEGER NOT NULL REFERENCES bancos_cuentas(id),
+      tipo TEXT NOT NULL,                 -- PAGO | COBRO | TRANSFERENCIA
+      fecha TEXT NOT NULL,
+      monto INTEGER NOT NULL,             -- FIRMADO: egreso negativo, ingreso positivo
+      glosa TEXT NOT NULL,
+      documento_id INTEGER REFERENCES documentos(id),          -- factura aplicada (opcional)
+      banco_destino_id INTEGER REFERENCES bancos_cuentas(id),  -- solo TRANSFERENCIA (fila origen)
+      asiento_id INTEGER NOT NULL REFERENCES asientos(id),
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(banco_cuenta_id, asiento_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_teso_mov_banco ON teso_movimientos(empresa_id, banco_cuenta_id, fecha);
+
+    CREATE TABLE IF NOT EXISTS teso_cartola (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      banco_cuenta_id INTEGER NOT NULL REFERENCES bancos_cuentas(id),
+      fecha TEXT NOT NULL,
+      monto INTEGER NOT NULL,             -- FIRMADO según cartola del banco
+      glosa TEXT NOT NULL DEFAULT '',
+      movimiento_id INTEGER REFERENCES teso_movimientos(id),   -- match de conciliación
+      importado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(banco_cuenta_id, fecha, monto, glosa)
+    );
+    CREATE INDEX IF NOT EXISTS idx_teso_cartola_banco ON teso_cartola(empresa_id, banco_cuenta_id);
+  `)
+}
+
+/**
+ * MEMORIA DE CONTABILIZACIÓN + MODO SIMPLE — configuración por empresa.
+ *  - `config_json` en empresas: modo_conciliacion ('simple' | 'completa'),
+ *    cuenta_regular_gastos_id / cuenta_regular_ingresos_id (la "cuenta regular"
+ *    donde las compras y ventas se netean — típica cuenta del banco en empresas
+ *    pequeñas que no concilian). La memoria POR CONTRAPARTE ya vive en la tabla
+ *    `contrapartes` (FASE 3): aquí solo se agrega el ajuste fino de la empresa.
+ */
+function migracionesMemoria(db) {
+  const cols = db.prepare(`PRAGMA table_info(empresas)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'config_json')) {
+    db.exec(`ALTER TABLE empresas ADD COLUMN config_json TEXT`)
+  }
+}
+
+// ============================================================
+// FASE 7 — ACTIVOS FIJOS: registro con cuenta contable del plan,
+// depreciación mensual por línea recta respaldada SIEMPRE por un asiento
+// del núcleo (UNIQUE activo+período: jamás se deprecia dos veces el mismo
+// mes) y venta/baja con su asiento (baja del costo + depreciación acumulada
+// + utilidad/pérdida). La venta/baja detiene la depreciación (estado).
+// ============================================================
+function migracionesFase7(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS activos_fijos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      codigo TEXT NOT NULL,
+      descripcion TEXT NOT NULL,
+      cuenta_activo_id INTEGER NOT NULL REFERENCES cuentas(id),
+      fecha_adquisicion TEXT NOT NULL,
+      valor_adquisicion INTEGER NOT NULL,
+      vida_util_meses INTEGER NOT NULL,
+      valor_residual INTEGER NOT NULL DEFAULT 0,
+      cuenta_dep_id INTEGER REFERENCES cuentas(id),
+      cuenta_gasto_id INTEGER REFERENCES cuentas(id),
+      estado TEXT NOT NULL DEFAULT 'ACTIVO',   -- ACTIVO | VENDIDO | BAJA
+      fecha_baja TEXT,
+      precio_venta INTEGER,
+      cuenta_destino_id INTEGER REFERENCES cuentas(id),
+      asiento_alta_id INTEGER REFERENCES asientos(id),
+      asiento_baja_id INTEGER REFERENCES asientos(id),
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, codigo)
+    );
+    CREATE INDEX IF NOT EXISTS idx_activos_empresa ON activos_fijos(empresa_id, estado);
+
+    CREATE TABLE IF NOT EXISTS activos_depreciaciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      activo_id INTEGER NOT NULL REFERENCES activos_fijos(id),
+      periodo TEXT NOT NULL,
+      monto INTEGER NOT NULL,
+      asiento_id INTEGER NOT NULL REFERENCES asientos(id),
+      creado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(activo_id, periodo)
+    );
+    CREATE INDEX IF NOT EXISTS idx_activos_dep_empresa ON activos_depreciaciones(empresa_id, periodo);
+  `)
+
+  // Backfill idempotente del plan para empresas preexistentes: alias de la
+  // depreciación acumulada + las cuentas de utilidad/pérdida en venta o baja
+  // (las empresas nuevas ya nacen con ellas vía seedPlanCuentas).
+  const empresas = db.prepare(`SELECT id FROM empresas WHERE activo = 1`).all()
+  const backfillAlias = db.prepare(`
+    UPDATE cuentas SET alias = 'DEPRECIACION_ACUMULADA'
+    WHERE empresa_id = ? AND codigo = '1.2.2.01' AND alias IS NULL
+      AND NOT EXISTS (SELECT 1 FROM cuentas x WHERE x.empresa_id = cuentas.empresa_id AND x.alias = 'DEPRECIACION_ACUMULADA')
+  `)
+  const insertarCuenta = db.prepare(`
+    INSERT INTO cuentas (empresa_id, codigo, nombre, clase, naturaleza, es_resumen, cierre, alias)
+    SELECT ?, ?, ?, ?, ?, 0, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM cuentas WHERE empresa_id = ? AND codigo = ?)
+  `)
+  for (const { id: empresaId } of empresas) {
+    backfillAlias.run(empresaId)
+    insertarCuenta.run(empresaId, '4.2.1.03', 'Utilidad en venta de activos fijos', 4, 'acreedora', 'resultado', 'UTILIDAD_VENTA_ACTIVO', empresaId, '4.2.1.03')
+    insertarCuenta.run(empresaId, '6.1.5.03', 'Pérdida en venta o baja de activos fijos', 6, 'deudora', 'resultado', 'PERDIDA_BAJA_ACTIVO', empresaId, '6.1.5.03')
+  }
+}
+
+// ============================================================
+// FASE 8 — NIIF: mapeo cuentas → rubros de presentación. La columna
+// `rubro_niif` vive en la propia cuenta (una cuenta pertenece a UN rubro) y
+// el backfill siembra defaults por código del plan: la presentación NUNCA
+// adivina — una cuenta sin rubro se reporta en SIN_CLASIFICAR (report-only).
+// ============================================================
+function migracionesFase8(db) {
+  const cols = db.prepare(`PRAGMA table_info(cuentas)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'rubro_niif')) {
+    db.exec(`ALTER TABLE cuentas ADD COLUMN rubro_niif TEXT`)
+  }
+
+  // Backfill para empresas PREEXISTENTES: el default de cada cuenta viene de
+  // la MISMA plantilla (única fuente de verdad). Las empresas nuevas ya nacen
+  // con el rubro vía seedPlanCuentas; las creadas a mano quedan sin rubro
+  // (SIN_CLASIFICAR) hasta que el contador las mapee.
+  const empresas = db.prepare(`SELECT id FROM empresas WHERE activo = 1`).all()
+  const update = db.prepare(`
+    UPDATE cuentas SET rubro_niif = ?
+    WHERE empresa_id = ? AND rubro_niif IS NULL AND es_resumen = 0 AND codigo = ?
+  `)
+  for (const { id: empresaId } of empresas) {
+    for (const item of PLANTILLA) {
+      if (item.rubro) update.run(item.rubro, empresaId, item.codigo)
+    }
+  }
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, seedPlanCuentas }

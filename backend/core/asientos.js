@@ -261,8 +261,11 @@ function diario(db, { empresaId, periodo = null, desde = null, hasta = null, cue
 /**
  * Libro mayor de una cuenta: agregados + movimientos con saldo corrido.
  * El saldo respeta la NATURALEZA: deudora → Σdebe − Σhaber; acreedora → Σhaber − Σdebe.
+ * Filtro opcional por contraparte (`rutContraparte`): solo asientos vinculados a
+ * esa cliente/proveedor — vía el documento contabilizado (documentos.asiento_id)
+ * o vía el pago/cobro de tesorería aplicado a ese documento.
  */
-function mayor(db, { empresaId, cuentaId, desde = null, hasta = null }) {
+function mayor(db, { empresaId, cuentaId, desde = null, hasta = null, rutContraparte = null }) {
   const cuenta = cuentas.obtener(db, empresaId, cuentaId)
   if (!cuenta) throw new Error('Cuenta no encontrada en esta empresa')
 
@@ -270,7 +273,18 @@ function mayor(db, { empresaId, cuentaId, desde = null, hasta = null }) {
   const paramsFecha = [cuentaId, empresaId]
   if (desde) { whereFecha.push('a.fecha >= ?'); paramsFecha.push(desde) }
   if (hasta) { whereFecha.push('a.fecha <= ?'); paramsFecha.push(hasta) }
-  const filtroFecha = whereFecha.length ? `AND ${whereFecha.join(' AND ')}` : ''
+  let filtroFecha = whereFecha.length ? `AND ${whereFecha.join(' AND ')}` : ''
+  if (rutContraparte) {
+    // Los RUT en BD llegan con el formato del SII (con puntos): se compara normalizado.
+    const rutNorm = String(rutContraparte).replace(/[.\-\s]/g, '').toUpperCase()
+    filtroFecha += ` AND (
+      a.id IN (SELECT d.asiento_id FROM documentos d WHERE d.empresa_id = a.empresa_id AND d.asiento_id IS NOT NULL
+               AND REPLACE(REPLACE(REPLACE(d.rut_contraparte, '.', ''), '-', ''), ' ', '') = ?)
+      OR a.id IN (SELECT m.asiento_id FROM teso_movimientos m JOIN documentos d2 ON d2.id = m.documento_id
+               WHERE REPLACE(REPLACE(REPLACE(d2.rut_contraparte, '.', ''), '-', ''), ' ', '') = ?)
+    )`
+    paramsFecha.push(rutNorm, rutNorm)
+  }
 
   const agg = db.prepare(`
     SELECT COALESCE(SUM(al.debe), 0) AS debe, COALESCE(SUM(al.haber), 0) AS haber, COUNT(*) AS movimientos

@@ -43,25 +43,110 @@ const SELECT_BASE = `
   LEFT JOIN asientos a ON a.id = p.aplicada_asiento_id
 `
 
+/** Compara RUTs en cualquiera de sus formas (con puntos/guion o normalizado). */
+function rutNormalizado(rut) {
+  return String(rut || '').replace(/[.\-\s]/g, '').toUpperCase()
+}
+
 /**
- * Resuelve la cuenta contraparte por orden de precedencia (§6):
+ * Resuelve la cuenta contraparte por orden de precedencia (§6 + memoria):
  *  1. cuenta_contraparte_id de la regla aplicada (configuración explícita)
- *  2. clasificación recordada en `contrapartes` (aprendida en FASE 3)
- *  3. alias de control PROVEEDORES (compra) / CLIENTES (venta)
+ *  2. MEMORIA de contabilización: cuenta recordada para ese RUT en `contrapartes`
+ *     (el auxiliar/proveedor/cliente se vincula solo el mes siguiente)
+ *  3. MODO SIMPLE: la "cuenta regular" de la empresa (gastos para compras,
+ *     ingresos para ventas) — pymes que no concilian: se netean contra el banco
+ *  4. alias de control PROVEEDORES (compra) / CLIENTES (venta)
  */
 function resolverContraparte(db, empresaId, { reglaId = null, rutContraparte, tipoFlujo }) {
   if (reglaId) {
     const regla = db.prepare(`SELECT cuenta_contraparte_id FROM reglas_contables WHERE id = ? AND empresa_id = ?`).get(reglaId, empresaId)
     if (regla && regla.cuenta_contraparte_id) return Number(regla.cuenta_contraparte_id)
   }
-  const cp = db.prepare(`SELECT cuenta_id FROM contrapartes WHERE empresa_id = ? AND rut = ?`).get(empresaId, rutContraparte)
+  const cp = db.prepare(`
+    SELECT cuenta_id FROM contrapartes
+    WHERE empresa_id = ? AND REPLACE(REPLACE(REPLACE(rut, '.', ''), '-', ''), ' ', '') = ?
+  `).get(empresaId, rutNormalizado(rutContraparte))
   if (cp && cp.cuenta_id) return Number(cp.cuenta_id)
+  const config = require('./empresas').obtenerConfig(db, empresaId)
+  if (config.modo_conciliacion === 'simple') {
+    const regularId = tipoFlujo === 'venta' ? config.cuenta_regular_ingresos_id : config.cuenta_regular_gastos_id
+    if (regularId) {
+      const cta = cuentas.obtener(db, empresaId, regularId)
+      if (cta && cta.activa) return cta.id
+    }
+  }
   const alias = tipoFlujo === 'venta' ? 'CLIENTES' : 'PROVEEDORES'
   const cta = cuentas.cuentaPorAlias(db, empresaId, alias)
   if (!cta) {
-    throw new Error(`Cuenta contraparte no resuelta: la regla no la define, la contraparte no tiene clasificación recordada y falta el alias ${alias}`)
+    throw new Error(`Cuenta contraparte no resuelta: la regla no la define, la contraparte no tiene memoria recordada y falta el alias ${alias}`)
   }
   return cta.id
+}
+
+/**
+ * MEMORIA DE CONTABILIZACIÓN — vista para la UI:
+ *  - memoria: cada RUT con la cuenta recordada a la que se contabiliza
+ *    (el vínculo automático del mes siguiente).
+ *  - nuevos: documentos CLASIFICADO/PROPUESTO de un RUT SIN memoria y sin regla
+ *    con contraparte → la UI debe ofrecer ELEGIR a dónde contabilizar (y
+ *    recordarlo). Es el prompt que pide el flujo del §6 para contrapartes nuevas.
+ */
+function memoria(db, empresaId) {
+  const recordadas = db.prepare(`
+    SELECT cp.rut, cp.razon_social, cp.clasificacion, cp.cuenta_id,
+           c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
+           (SELECT COUNT(*) FROM documentos d WHERE d.empresa_id = cp.empresa_id AND d.rut_contraparte = cp.rut) AS documentos
+    FROM contrapartes cp LEFT JOIN cuentas c ON c.id = cp.cuenta_id
+    WHERE cp.empresa_id = ?
+    ORDER BY CASE WHEN cp.cuenta_id IS NULL THEN 0 ELSE 1 END, documentos DESC, cp.rut
+  `).all(empresaId)
+
+  const nuevos = db.prepare(`
+    SELECT d.id, d.tipo_flujo, d.tipo_doc, d.folio, d.rut_contraparte, d.razon_social,
+           d.monto_total, d.periodo_ingesta, d.estado,
+           ci.codigo AS cuenta_codigo, ci.nombre AS cuenta_nombre
+    FROM documentos d
+    LEFT JOIN cuentas ci ON ci.id = d.cuenta_id
+    WHERE d.empresa_id = ? AND d.estado IN ('CLASIFICADO', 'PROPUESTO')
+      AND NOT EXISTS (SELECT 1 FROM contrapartes cp WHERE cp.empresa_id = d.empresa_id AND cp.rut = d.rut_contraparte AND cp.cuenta_id IS NOT NULL)
+      AND NOT EXISTS (SELECT 1 FROM reglas_contables r WHERE r.id = d.regla_id AND r.cuenta_contraparte_id IS NOT NULL)
+    ORDER BY d.monto_total DESC
+    LIMIT 200
+  `).all(empresaId)
+
+  return { memoria: recordadas, nuevos }
+}
+
+/**
+ * Memoriza (o cambia) la cuenta regular de una contraparte: desde el próximo
+ * documento, ese proveedor/cliente se contabiliza automáticamente contra esa
+ * cuenta (precedencia 2 de resolverContraparte). Crea la contraparte si aún no
+ * existe (p. ej. elegida desde la lista de "nuevos"). Auditado.
+ */
+function recordarMemoria(db, { empresaId, usuarioId, rut, cuentaId, ip = null }) {
+  const cta = cuentas.obtener(db, empresaId, Number(cuentaId))
+  if (!cta || !cta.activa) throw new Error('Cuenta de memoria inválida para esta empresa')
+  // Reutiliza la fila existente (el RUT con el formato exacto que ingesta
+  // guardó del SII) para no duplicar contrapartes con variantes del mismo RUT.
+  const existente = db.prepare(`
+    SELECT rut FROM contrapartes
+    WHERE empresa_id = ? AND REPLACE(REPLACE(REPLACE(rut, '.', ''), '-', ''), ' ', '') = ?
+  `).get(empresaId, rutNormalizado(rut))
+  const rutNorm = existente ? existente.rut : require('./empresas').normalizarRut(rut)
+  const nombre = db.prepare(`SELECT razon_social FROM documentos WHERE empresa_id = ? AND rut_contraparte = ? AND razon_social IS NOT NULL ORDER BY id DESC LIMIT 1`).get(empresaId, rutNorm)
+  const tx = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO contrapartes (empresa_id, rut, razon_social, clasificacion, cuenta_id, ultima_vez_en)
+      VALUES (?, ?, ?, 'desconocida', ?, datetime('now'))
+      ON CONFLICT(empresa_id, rut) DO UPDATE SET cuenta_id = excluded.cuenta_id, ultima_vez_en = datetime('now')
+    `).run(empresaId, rutNorm, nombre ? nombre.razon_social : null, cta.id)
+    registrarAccion(db, {
+      empresaId, usuarioId, accion: 'memoria.contraparte', entidad: 'contrapartes', entidadId: rutNorm,
+      despues: { rut: rutNorm, cuenta_id: cta.id, cuenta_codigo: cta.codigo }, ip,
+    })
+  })
+  tx()
+  return { rut: rutNorm, cuenta_id: cta.id, cuenta_codigo: cta.codigo, cuenta_nombre: cta.nombre }
 }
 
 function glosaLinea(doc, tipo) {
@@ -247,6 +332,19 @@ function obtener(db, empresaId, propuestaId) {
   return db.prepare(`${SELECT_BASE} WHERE p.id = ? AND d.empresa_id = ?`).get(propuestaId, empresaId) || null
 }
 
+/** Cuenta de contraparte aplicada en la confirmación: la que viene en el snapshot de líneas (patas de pasivo/cliente). */
+function construidaContraparteDe(p) {
+  try {
+    const lineas = JSON.parse(p.lineas_json || '[]')
+    const candidatas = lineas.filter((l) => Number(l.cuenta_id) === Number(p.cuenta_contraparte_id))
+    if (candidatas.length) return Number(p.cuenta_contraparte_id)
+    // Sin coincidencia por id (plan pudo cambiar): la pata del total del documento.
+    const total = Number(p.doc_monto_total) || 0
+    const pata = lineas.find((l) => (l.debe || 0) === total || (l.haber || 0) === total)
+    return pata ? Number(pata.cuenta_id) : null
+  } catch { return null }
+}
+
 /** Valida el snapshot guardado y decora con códigos de cuenta (para UI/confirmación). */
 function validarLineasSnapshot(db, empresaId, lineasJson) {
   const lineas = JSON.parse(lineasJson)
@@ -307,6 +405,19 @@ function confirmar(db, { empresaId, usuarioId, propuestaId, fecha = null, glosa 
     `).run(asiento.id, p.documento_id, empresaId)
     if (updP.changes !== 1 || updD.changes !== 1) {
       throw new Error('La confirmación no pudo actualizar propuesta/documento (carrera de estados)')
+    }
+    // MEMORIA DE CONTABILIZACIÓN: la contraparte usada queda vinculada al RUT
+    // (solo si aún no tenía memoria — jamás pisa una decisión ya recordada).
+    // El próximo mes ese proveedor/cliente se contabiliza automáticamente ahí.
+    const usada = db.prepare(`SELECT cuenta_id FROM contrapartes WHERE empresa_id = ? AND rut = ?`).get(empresaId, p.rut_contraparte)
+    if (!usada || !usada.cuenta_id) {
+      const contraUsada = construidaContraparteDe(p)
+      if (contraUsada) {
+        db.prepare(`
+          UPDATE contrapartes SET cuenta_id = ?, ultima_vez_en = datetime('now')
+          WHERE empresa_id = ? AND rut = ?
+        `).run(contraUsada, empresaId, p.rut_contraparte)
+      }
     }
     registrarAccion(db, {
       empresaId, usuarioId,
@@ -402,4 +513,5 @@ module.exports = {
   ESTADOS_PROPUESTA,
   generar, listar, obtener, confirmar, confirmarLote, descartar,
   validarLineasSnapshot, resolverContraparte, construirLineas,
+  memoria, recordarMemoria,
 }

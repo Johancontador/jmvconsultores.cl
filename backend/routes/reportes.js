@@ -57,6 +57,43 @@ router.get('/empresas/:empresaId/reportes/resultados/:periodo', requirePermiso('
   }
 })
 
+// Balance de 8 columnas (sumas y saldos con resultado del período).
+router.get('/empresas/:empresaId/reportes/balance8/:periodo', requirePermiso('reportes:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, balance8: reportes.balance8Columnas(db, req.empresaId, req.params.periodo) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// Balance clasificado (corriente/no corriente por código del plan).
+router.get('/empresas/:empresaId/reportes/clasificado/:periodo', requirePermiso('reportes:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, clasificado: reportes.balanceClasificado(db, req.empresaId, req.params.periodo) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// Cuenta corriente de clientes o proveedores (rol=cliente|proveedor), con
+// filtros de fecha y RUT; detalle con saldo corrido al filtrar por RUT.
+router.get('/empresas/:empresaId/reportes/cuenta-corriente', requirePermiso('reportes:ver'), (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      cuenta_corriente: reportes.cuentaCorriente(db, req.empresaId, {
+        rol: req.query.rol === 'proveedor' ? 'proveedor' : 'cliente',
+        desde: req.query.desde || null,
+        hasta: req.query.hasta || null,
+        rut: req.query.rut || null,
+        limit: req.query.limit,
+      }),
+    })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
 // ---------- Cierre de período (§7) ----------
 
 // Checklist + asientos de cierre PROPUESTOS (sin mutar nada).
