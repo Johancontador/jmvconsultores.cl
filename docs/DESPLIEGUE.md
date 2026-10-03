@@ -5,6 +5,25 @@ caminos para exponer la app públicamente con dominio, y recomienda uno.
 
 ## Opción A — VPS actual + Cloudflare Tunnel ⭐ recomendada
 
+### Compartir RÁPIDO (Quick Tunnel — sin cuenta, URL temporal)
+
+Para compartir una demo al instante sin dominio ni login de Cloudflare:
+
+```bash
+# en el VPS (la URL sale en el log y cambia en cada reinicio):
+nohup cloudflared tunnel --url http://127.0.0.1:3500 --no-autoupdate \
+  > /home/johan/cloudflared-iva.log 2>&1 &
+grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /home/johan/cloudflared-iva.log | head -1
+```
+
+- **APUNTAR AL 3500 (Express directo), NO al 8080**: nginx-iva redirige
+  `http → https://$host:8443` y ese puerto no es alcanzable a través de
+  trycloudflare (loop de redirección). Express en 3500 sirve frontend + API.
+- La URL es ALEATORIA y muere si el proceso muere o el VPS reinicia —
+  es para compartir/compartir-demo, no para producción.
+- Túnel PERMANENTE con tu dominio: `cloudflared tunnel login` (interactivo,
+  abre navegador), crear túnel con nombre y ruta DNS — ver pasos abajo.
+
 **Por qué:** mantienes tu VPS y su BD local, publicas con dominio real, **cero puertos
 abiertos**, TLS automático de Cloudflare, WAF y DDoS gratis.
 
