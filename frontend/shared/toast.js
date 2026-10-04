@@ -25,7 +25,10 @@ function _toastEl() {
 function showToast(msg, type = 'success') {
   const el = _toastEl()
   el.textContent = msg
-  el.className = `toast toast-${type} show`
+  // Alias 'ok' → 'success' (el CSS define toast-success/-error/-warning/-info;
+  // 'ok' caía sin color de borde). Normaliza llamadas nuevas y viejas.
+  const t = type === 'ok' ? 'success' : type
+  el.className = `toast toast-${t} show`
   el.hidden = false
   clearTimeout(el._timer)
   el._timer = setTimeout(() => {
