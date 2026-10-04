@@ -13,7 +13,8 @@
  *   de su empresa; el admin global (users.is_admin) queda además super_admin.
  */
 
-const { cifrar } = require('./boveda')
+const { cifrar, descifrar } = require('./boveda')
+const { registrarAccion } = require('./auditoria')
 const { PLANTILLA, clasificar } = require('./plan-cuentas-plantilla')
 
 function migracionesFase1(db) {
@@ -727,4 +728,178 @@ function migracionesSaas3(db) {
   `)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, seedPlanCuentas }
+// ============================================================
+// BLOQUE 1 (seguridad) — Bóveda para clientes.clave_sii legacy.
+//
+// La capa tributaria legacy guardaba la clave SII en TEXTO PLANO
+// (DATA_MODEL §B.7 la contemplaba; aquí se ejecuta). Migración ONE-WAY:
+//
+//  - Solo convierte valores NO vacíos que NO sean 'v1:' (idempotente).
+//  - Round-trip en memoria ANTES de abrir la transacción: cada valor debe
+//    cifrar y descifrar idéntico con la clave maestra vigente — si algo
+//    falla, aborta SIN tocar la BD.
+//  - Transaccional: o se cifran todas o ninguna.
+//  - Reversible mediante backup previo (scripts/backup-db.js — ops).
+//  - JAMÁS imprime claves: solo conteos. Trazabilidad en auditoria (§29).
+//  - Los lectores ya son tolerantes (boveda.descifrar acepta ambos formatos),
+//    así que la migración puede correr antes o después de un deploy.
+// ============================================================
+function migracionesBovedaClientes(db) {
+  const filas = db.prepare(`
+    SELECT id, clave_sii FROM clientes
+    WHERE clave_sii IS NOT NULL AND clave_sii != '' AND clave_sii NOT LIKE 'v1:%'
+  `).all()
+  if (!filas.length) return { migradas: 0 }
+
+  // Round-trip en memoria ANTES de tocar BD.
+  const cifradas = filas.map((f) => {
+    const valor = cifrar(f.clave_sii)
+    if (descifrar(valor) !== f.clave_sii) {
+      throw new Error(`Round-trip de bóveda falló para cliente id=${f.id} — migración abortada sin cambios`)
+    }
+    return { id: f.id, valor }
+  })
+
+  const tx = db.transaction(() => {
+    const upd = db.prepare(`UPDATE clientes SET clave_sii = ? WHERE id = ?`)
+    for (const c of cifradas) upd.run(c.valor, c.id)
+
+    // Trazabilidad (HANDOFF §29): UN registro de auditoría de la migración,
+    // atribuido al admin semilla. El registro contiene solo el conteo — jamás
+    // la clave. Defensivo: si esta función corriera sin la tabla auditoria
+    // (orden de migraciones), se omite el registro sin fallar.
+    const hayAuditoria = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auditoria'`).get()
+    if (hayAuditoria) {
+      const sistema = db.prepare(`SELECT id FROM users WHERE is_admin = 1 AND activo = 1 ORDER BY id LIMIT 1`).get()
+      if (sistema) {
+        registrarAccion(db, {
+          empresaId: null, usuarioId: sistema.id,
+          accion: 'migracion.boveda_clientes', entidad: 'clientes', entidadId: 'migracion',
+          despues: { migradas: cifradas.length, formato: 'v1 (AES-256-GCM)' },
+          ip: 'migracion:boveda',
+        })
+      }
+    }
+  })
+  tx()
+
+  // Verificación post-commit: no debe quedar plaintext (guard T4).
+  const restantes = db.prepare(`
+    SELECT COUNT(*) AS n FROM clientes
+    WHERE clave_sii IS NOT NULL AND clave_sii != '' AND clave_sii NOT LIKE 'v1:%'
+  `).get().n
+  if (restantes !== 0) {
+    throw new Error(`Migración bóveda clientes: quedan ${restantes} clave(s) en plaintext — REVISAR con backup`)
+  }
+
+  console.log(`[MIGRACIÓN] Bóveda clientes: ${cifradas.length} clave(s) SII cifrada(s) en reposo (AES-256-GCM).`)
+  return { migradas: cifradas.length }
+}
+
+// ============================================================
+// BLOQUE 3 — DTE → CONTABILIDAD: idempotencia de emisión. Columna
+// `dte_emitidos.idempotencia` (clave provista por el cliente HTTP) con UNIQUE
+// parcial (mismo patrón que asientos FASE 9): re-envío de la misma intención
+// de emisión NO duplica DTE. Índice ADDITIVO: nunca toca datos existentes.
+// ============================================================
+function migracionesDte2(db) {
+  const cols = db.prepare(`PRAGMA table_info(dte_emitidos)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'idempotencia')) {
+    db.exec(`ALTER TABLE dte_emitidos ADD COLUMN idempotencia TEXT`)
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_dte_emitidos_idempotencia
+      ON dte_emitidos(empresa_id, idempotencia) WHERE idempotencia IS NOT NULL
+  `)
+}
+
+// ============================================================
+// BLOQUE 2 — EMISIÓN DE DTE (fase 1 del roadmap del handoff):
+// capacidad de emisión de DTEs para las EMPRESAS CLIENTES
+// (factura 33, factura exenta 34, nota de débito 56, nota de crédito 61).
+//
+//  - `dte_config`: ficha del EMISOR tributario por empresa (UNIQUE empresa_id).
+//    El certificado .pfx y su contraseña se guardan CIFRADOS con la bóveda
+//    (v1:, AES-256-GCM) — son los secretos más sensibles del módulo. El RUT
+//    del emisor NO se duplica: es empresas.rut.
+//  - `dte_folios`: CAFs cargados por empresa (varios por tipo — el SII entrega
+//    rangos que se agotan). El XML del CAF contiene la CLAVE PRIVADA de los
+//    folios: SIEMPRE cifrado v1. `siguienteFolio` recorre los rangos en orden.
+//  - `dte_emitidos`: cada DTE emitido, ligado a empresa + documento de la
+//    bandeja (opcional) + asiento (opcional) + folio + estado del SII.
+//    Los códigos SII (EPR, RPR, DOK, FAU…) se guardan VERBATIM en
+//    sii_codigo/sii_respuesta_json — jamás se inventan ni se mapean aquí;
+//    `estado` es SOLO el ciclo de vida local del pipeline (PENDIENTE →
+//    ENVIADO → ACEPTADO|RECHAZADO, ERROR si el envío no partió).
+// ============================================================
+function migracionesDte(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dte_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      razon_social TEXT,
+      giro TEXT,
+      direccion TEXT,
+      comuna TEXT,
+      acteco TEXT,
+      fch_resol TEXT,
+      nro_resol TEXT,
+      ambiente TEXT NOT NULL DEFAULT 'certificacion',
+      cert_pfx TEXT,
+      cert_pass TEXT,
+      creado_en TEXT DEFAULT (datetime('now')),
+      actualizado_en TEXT,
+      UNIQUE(empresa_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS dte_folios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      tipo_dte INTEGER NOT NULL,
+      rut_emisor TEXT NOT NULL,
+      folio_desde INTEGER NOT NULL,
+      folio_hasta INTEGER NOT NULL,
+      caf_xml TEXT NOT NULL,
+      activo INTEGER NOT NULL DEFAULT 1,
+      creado_en TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_dte_folios_empresa_tipo ON dte_folios(empresa_id, tipo_dte, activo);
+
+    CREATE TABLE IF NOT EXISTS dte_emitidos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      tipo_dte INTEGER NOT NULL,
+      folio INTEGER NOT NULL,
+      fecha_emision TEXT NOT NULL,
+      receptor_rut TEXT NOT NULL,
+      receptor_razon_social TEXT,
+      receptor_giro TEXT,
+      receptor_direccion TEXT,
+      receptor_comuna TEXT,
+      monto_exento INTEGER NOT NULL DEFAULT 0,
+      monto_neto INTEGER NOT NULL DEFAULT 0,
+      monto_iva INTEGER NOT NULL DEFAULT 0,
+      monto_total INTEGER NOT NULL DEFAULT 0,
+      items_json TEXT,
+      referencia_json TEXT,
+      documento_id INTEGER REFERENCES documentos(id),
+      estado TEXT NOT NULL DEFAULT 'PENDIENTE',
+      track_id TEXT,
+      sii_codigo TEXT,
+      sii_glosa TEXT,
+      sii_respuesta_json TEXT,
+      xml TEXT,
+      intentos INTEGER NOT NULL DEFAULT 0,
+      motivo_error TEXT,
+      asiento_id INTEGER REFERENCES asientos(id),
+      emitido_por INTEGER REFERENCES users(id),
+      consultado_en TEXT,
+      creado_en TEXT DEFAULT (datetime('now')),
+      actualizado_en TEXT,
+      UNIQUE(empresa_id, tipo_dte, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_dte_emitidos_empresa ON dte_emitidos(empresa_id, creado_en);
+  `)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, seedPlanCuentas }

@@ -555,6 +555,7 @@ VIEWS.admin = {
        <button data-t="periodos" class="${tab === 'periodos' ? 'active' : ''}">Períodos</button>
         ${S.user.is_admin ? `<button data-t="usuarios" class="${tab === 'usuarios' ? 'active' : ''}">Usuarios y roles</button>` : ''}
         ${tiene('auditoria:ver') ? `<button data-t="auditoria" class="${tab === 'auditoria' ? 'active' : ''}">Auditoría</button>` : ''}
+       <button data-t="seguridad" class="${tab === 'seguridad' ? 'active' : ''}">Seguridad</button>
      </div>
      <div id="adm-body"></div>`
     cont.querySelector('.tabs').addEventListener('click', (e) => {
@@ -564,6 +565,7 @@ VIEWS.admin = {
     if (tab === 'periodos') return admPeriodos(body)
     if (tab === 'usuarios' && S.user.is_admin) return admUsuarios(body)
     if (tab === 'auditoria') return admAuditoria(body)
+    if (tab === 'seguridad') return admSeguridad(body)
     return admEmpresas(body)
   },
 }
@@ -612,6 +614,50 @@ async function admEmpresas(body) {
         boot()
       } catch (err) { showToast(err.message, 'error') }
     })
+  })
+}
+
+/* P5 (BLOQUE 1bis): cambio de contraseña propio + revocación de sesiones. */
+async function admSeguridad(body) {
+  body.innerHTML = `
+   <div class="card" style="max-width:520px">
+     <h3>Cambiar contraseña</h3>
+     <p class="hint" style="margin:0 0 var(--space-4)">Al cambiarla se cierran TODAS tus sesiones (incluida esta) y deberás volver a ingresar.</p>
+     <div class="form-group"><label class="frm-label" for="pw-actual">Contraseña actual</label>
+       <input id="pw-actual" type="password" class="form-input" autocomplete="current-password"></div>
+     <div class="form-group"><label class="frm-label" for="pw-nueva">Nueva contraseña (mínimo 8 caracteres)</label>
+       <input id="pw-nueva" type="password" class="form-input" autocomplete="new-password"></div>
+     <div class="form-group"><label class="frm-label" for="pw-conf">Confirmar nueva contraseña</label>
+       <input id="pw-conf" type="password" class="form-input" autocomplete="new-password"></div>
+     <div class="login-err" id="pw-err" hidden style="margin:var(--space-3) 0"></div>
+     <div class="login-err" id="pw-ok" hidden style="margin:var(--space-3) 0;background:var(--success-soft);color:var(--success)">Contraseña actualizada. Se cerraron todas tus sesiones; redirigiendo al login…</div>
+     <button class="btn btn-primary" id="pw-btn">Cambiar contraseña</button>
+   </div>`
+  document.getElementById('pw-btn').addEventListener('click', async () => {
+    const err = document.getElementById('pw-err')
+    const ok = document.getElementById('pw-ok')
+    const btn = document.getElementById('pw-btn')
+    const actual = document.getElementById('pw-actual').value
+    const nueva = document.getElementById('pw-nueva').value
+    const conf = document.getElementById('pw-conf').value
+    err.hidden = true
+    if (!actual || !nueva) { err.textContent = 'Completa todos los campos.'; err.hidden = false; return }
+    if (nueva.length < 8) { err.textContent = 'La nueva contraseña debe tener al menos 8 caracteres.'; err.hidden = false; return }
+    if (nueva !== conf) { err.textContent = 'La confirmación no coincide con la nueva contraseña.'; err.hidden = false; return }
+    btn.disabled = true
+    btn.textContent = 'Procesando…'
+    try {
+      const r = await apiPost('/api/auth/password', { password_actual: actual, password_nueva: nueva })
+      ok.hidden = false
+      showToast(r.mensaje || 'Contraseña actualizada', 'success')
+      localStorage.removeItem('iva_empresa_activa')
+      setTimeout(() => renderLogin(r.mensaje || 'Contraseña actualizada. Ingresa con tu nueva contraseña.'), 1200)
+    } catch (ex) {
+      err.textContent = ex.message
+      err.hidden = false
+      btn.disabled = false
+      btn.textContent = 'Cambiar contraseña'
+    }
   })
 }
 

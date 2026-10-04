@@ -50,7 +50,9 @@ backend/
                             plan-cuentas-plantilla, cuentas, asientos, documentos, ingesta,
                             reglas + semillas, contrapartes, propuestas, conciliación,
                             automatización, onboarding, reportes, dashboard, tesorería,
-                            tesoreria-cartola-formatos, activos, niif, asientos-externos
+                            tesoreria-cartola-formatos, activos, niif, asientos-externos,
+                            dte-emisor (BLOQUE 2: emisión de DTEs por empresa cliente),
+                            dte-contable (BLOQUE 3: DTE ACEPTADO → bandeja → propuesta → asiento)
   routes/
     auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin),
                             registro self-service con validación SII en vivo (SAAS-1)
@@ -65,6 +67,8 @@ backend/
     activos.js              activos fijos, depreciación mensual, venta/baja (FASE 7)
     niif.js                 mapeo cuentas→rubros NIIF + estados por rubros (FASE 8)
     asientos-externos.js    receptor de centralizaciones externas — Geo Daniela (FASE 9.1)
+    dte.js                  emisión de DTE para empresas cliente: config del emisor (certificado/CAF
+                            cifrados), folios, emitir 33/34/56/61, estado SII real, reintentos (BLOQUE 2)
     tesoreria-cartola-formatos.js   conectores de cartolas por formato CSV/XLSX (FASE 9.2)
     clientes.js             CRUD clientes con scoping user_id, validación RUT/PPM/teléfono (legacy)
     informe.js              iniciar/consultar/listar/eliminar informes (async en background)
@@ -204,7 +208,11 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Pagos y facturación de la suscripción (SAAS-3, 17 tests):** checkout con adaptador de pasarela inyectable (MercadoPago primero, Transbank/Webpay después), webhook PÚBLICO idempotente en dos espacios (evento y pago) que re-confirma SIEMPRE contra la API de la pasarela y activa/renueva la licencia vía `activarPlan` en una transacción auditada; el gate de licencia NO aplica a pagar (una empresa SUSPENDIDA puede reactivarse sola); factura electrónica (DTE 33) con desglose IVA citado, receptor validado nominando lo que falta y adaptador real `core/dte.js` sobre @devlas/dte-sii (pendiente credenciales CAF/certificado para producción); vista 💳 Suscripción y Pagos en /sistema/.
 
-- Tests `npm test` en verde (214). CI en verde en cada push.
+- **Emisión de DTE para empresas cliente (BLOQUE 2, 29 tests):** `/api/dte` con RBAC `dte:ver/dte:emitir/dte:configurar` + gate de licencia; config del emisor por empresa (giro/dirección/comuna/ACTECO/resolución/ambiente) con certificado .pfx y contraseña CIFRADOS (bóveda v1); CAFs por tipo con XML cifrado (contiene la clave privada de folios), parseo/validación de RUT y rango al cargar, idempotentes por rango; emisión de Factura (33), Factura Exenta (34), Nota de Débito (56) y Nota de Crédito (61, referencia obligatoria con CodRef 1/2/3 del XSD); folio correlativo por empresa+tipo validado contra los CAFs (hueco entre rangos → 422 nombrándolo); estados SII VERBATIM (`sii_codigo`/`sii_respuesta_json` — EPR, RPR, DOK… según tabla oficial QueryEstUp de la librería; el `estado` local es solo el pipeline PENDIENTE→ENVIADO→ACEPTADO/RECHAZADO); errores y reintentos con el mismo folio; cada DTE ligado a empresa+documento de la bandeja (opcional)+folio+estado SII; adaptador inyectable (tests sin red) y real lazy; test offline del XML real con PKCS12+CAF generados que corrigió un bug latente del camelCase en `core/dte.js` (la suscripción habría emitido con emisor vacío/receptor 'Consumidor Final'); pendiente UI y credenciales reales para producción.
+
+- **DTE → Contabilidad (BLOQUE 3, 12 tests — tras auditoría 2A):** `sincronizar-contabilidad` lleva cada DTE ACEPTADO a la bandeja como documento `origen='dte'` con la MISMA `clave_dedupe` de la ingesta RCV (UNA sola representación: re-ingestar el RCV del período lo dedupea; si el RCV llegó primero, se apunta a él), auto-clasifica con las reglas del contador y genera PROPUESTA PENDIENTE — la confirmación humana sigue siendo la única puerta al asiento (§6); sin regla → documento PENDIENTE visible (nada inventado); segunda pasada vincula `dte_emitidos.asiento_id` (vínculo bidireccional DTE↔asiento). Devengo por `fecha_emision`. Flujo probado 33 (Debe CLIENTES / Haber VENTAS_SERVICIOS + IVA_DEBITO), 34 sin IVA y 61 invertido. Idempotencia de emisión: `idempotencia` opcional en `POST /emitir` (UNIQUE parcial empresa+clave → `deduplicado: true`). La conciliación FASE 4 ve los DTE automáticamente vía bandeja (sin tocarla).
+
+- Tests `npm test` en verde (279). CI en verde en cada push.
 
 ## 10. Conclusión del estado actual
 

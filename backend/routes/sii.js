@@ -2,8 +2,39 @@ const express = require('express')
 const db = require('../db')
 const { probarConexion, consultarResumen, consultarRCV } = require('../services/sii-rcv')
 const { getProvider } = require('../services/rcv')
+const { descifrar } = require('../core/boveda')
 
 const router = express.Router()
+
+// Rate-limit específico de /probar (BLOQUE 1bis — P8.A): este endpoint lanza
+// logins REALES contra el SII con credenciales — sin límite local sería un
+// vector de fuerza bruta. 10/15min por IP: sobrado para uso legítimo (probar
+// conexión ocasional), hostil para enumeración de credenciales. Purga perezosa
+// con el mismo patrón de auth (P2) — estado de un solo proceso.
+const siiProbIntentos = new Map()
+const LIMITE_SII_PROBAR = 10
+const VENTANA_SII_PROBAR_MS = 15 * 60 * 1000
+
+function rateLimitSiiProbar(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown'
+  const ahora = Date.now()
+  if (siiProbIntentos.size > 500) {
+    for (const [k, reg] of siiProbIntentos) {
+      if (!reg || ahora - reg.inicio > VENTANA_SII_PROBAR_MS) siiProbIntentos.delete(k)
+    }
+  }
+  const registro = siiProbIntentos.get(ip) || { count: 0, inicio: ahora }
+  if (ahora - registro.inicio > VENTANA_SII_PROBAR_MS) {
+    registro.count = 0
+    registro.inicio = ahora
+  }
+  if (registro.count >= LIMITE_SII_PROBAR) {
+    return res.status(429).json({ ok: false, error: 'Demasiadas pruebas de conexión SII. Intente de nuevo en 15 minutos.' })
+  }
+  registro.count++
+  siiProbIntentos.set(ip, registro)
+  next()
+}
 
 router.get('/config', (req, res) => {
   res.json({
@@ -17,7 +48,7 @@ router.get('/config', (req, res) => {
   })
 })
 
-router.post('/probar', async (req, res) => {
+router.post('/probar', rateLimitSiiProbar, async (req, res) => {
   try {
     let rut, clave
 
@@ -31,7 +62,8 @@ router.post('/probar', async (req, res) => {
         return res.status(404).json({ ok: false, error: 'Cliente no encontrado' })
       }
       rut = cliente.rut
-      clave = cliente.clave_sii
+      // BLOQUE 1 (seguridad): descifrar acepta plaintext legacy y v1: de la bóveda.
+      clave = descifrar(cliente.clave_sii)
     } else {
       rut = req.body.rut
       clave = req.body.clave_sii
@@ -84,9 +116,11 @@ router.get('/libro', async (req, res) => {
       .get(clienteId, req.user.id)
     if (!cliente) return res.status(404).json({ ok: false, error: 'Cliente no encontrado' })
 
+    // BLOQUE 1 (seguridad): descifrar acepta plaintext legacy y v1: de la bóveda.
+    const claveReal = descifrar(cliente.clave_sii)
     const [resumen, detalle] = await Promise.all([
-      consultarResumen(cliente.rut, cliente.clave_sii, periodo, tipo),
-      consultarRCV(cliente.rut, cliente.clave_sii, tipo, periodo),
+      consultarResumen(cliente.rut, claveReal, periodo, tipo),
+      consultarRCV(cliente.rut, claveReal, tipo, periodo),
     ])
 
     const esNotaCredito = (tipoDoc) => Number(tipoDoc) === 60 || Number(tipoDoc) === 61

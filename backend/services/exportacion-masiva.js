@@ -6,6 +6,8 @@ const { ZipArchive } = require('archiver')
 const db = require('../db')
 const { consultarRCV } = require('./rcv')
 const { generarPeriodos, nombreMes } = require('./calculos')
+const { descifrar } = require('../core/boveda')
+const jobsMemoria = require('../core/jobs-memoria')
 
 const NOMBRES_TIPO_DOC = {
   30: 'Factura', 32: 'Factura de Ventas y Servicios No Afectos o Exentos de IVA',
@@ -109,8 +111,11 @@ async function construirWorkbookCliente(cliente, periodos) {
   const todasCompras = []
 
   for (const p of periodos) {
-    const ventasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'ventas', p.periodo)
-    const comprasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'compras', p.periodo)
+    // BLOQUE 1 (seguridad): la clave SII se descifra al vuelo — acepta plaintext
+    // legacy y valores v1: de la bóveda. Nunca se loggea ni se expone por API.
+    const claveReal = descifrar(cliente.clave_sii)
+    const ventasDocs = await consultarRCV(cliente.rut, claveReal, 'ventas', p.periodo)
+    const comprasDocs = await consultarRCV(cliente.rut, claveReal, 'compras', p.periodo)
     const tag = (docs) => docs.map((d) => ({ ...d, mes_nombre: `${nombreMes(p.mes)} ${p.anio}` }))
     todasVentas.push(...tag(ventasDocs))
     todasCompras.push(...tag(comprasDocs))
@@ -170,7 +175,7 @@ async function ejecutarExportacion(exportId, userId, rango) {
 
 function iniciarExportacion(userId, rango) {
   const exportId = crearExportacionId()
-  exportaciones.set(exportId, {
+  jobsMemoria.registrar(exportaciones, exportId, {
     id: exportId,
     userId,
     estado: 'procesando',
@@ -193,6 +198,7 @@ function iniciarExportacion(userId, rango) {
 }
 
 function obtenerEstado(exportId, userId) {
+  jobsMemoria.purgar(exportaciones)
   const e = exportaciones.get(exportId)
   if (!e || e.userId !== userId) return null
   return {

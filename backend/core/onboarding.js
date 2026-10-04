@@ -237,7 +237,8 @@ function marcarChecklist(db, { empresaId, usuarioId, clave, valor, ip = null }) 
 
 // ---------------- Ingesta del histórico (background) ----------------
 
-const trabajos = new Map() // jobId → estado interno
+const trabajos = new Map() // jobId → estado interno (purga: jobs-memoria)
+const jobsMemoria = require('./jobs-memoria')
 
 function generarJobId() {
   return `onb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -245,6 +246,7 @@ function generarJobId() {
 
 /** Estado seguro para exponer por API (sin claves ni objetos internos). */
 function estadoIngestaHistorica(jobId, usuarioId) {
+  jobsMemoria.purgar(trabajos)
   const t = trabajos.get(jobId)
   if (!t || t.usuarioId !== usuarioId) return null
   return {
@@ -290,7 +292,7 @@ function ingestarHistorico(dbParam, { empresaId, usuarioId, desde, hasta, ip = n
   }
 
   const jobId = generarJobId()
-  trabajos.set(jobId, {
+  jobsMemoria.registrar(trabajos, jobId, {
     jobId, empresaId, usuarioId, desde: String(desde), hasta: String(hasta), ip,
     periodos, total: periodos.length, procesados: 0, periodoActual: null,
     estado: 'procesando', resultado: [], error: null,

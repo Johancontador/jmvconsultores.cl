@@ -3,6 +3,7 @@ const db = require('../db')
 const { hashPassword, verifyPassword } = require('../services/password')
 const { crearSesion, obtenerSesion, destruirSesion, SESSION_TTL_MS } = require('../services/session')
 const { requireAuth, requireAdmin, parseCookies } = require('../middleware/requireAuth')
+const { registrarAccion } = require('../core/auditoria')
 
 const router = express.Router()
 
@@ -11,9 +12,31 @@ const loginIntentos = new Map()
 const LIMITE_LOGIN = 5
 const VENTANA_LOGIN_MS = 15 * 60 * 1000 // 15 min
 
+/**
+ * Purga perezosa de los Map de rate-limit (BLOQUE 1 — P2): sin esto crecen
+ * una entrada por IP para siempre. Se ejecuta en cada request (barato: solo
+ * actúa sobre el umbral) con tope duro ante flooding con IPs falsas.
+ * Restricción explícita: sigue siendo estado de UN proceso (mono-proceso).
+ */
+function purgarLimites(mapa, ventanaMs, ahora = Date.now()) {
+  if (mapa.size > 500) {
+    for (const [ip, reg] of mapa) {
+      if (!reg || ahora - reg.inicio > ventanaMs) mapa.delete(ip)
+    }
+  }
+  if (mapa.size > 2000) {
+    let exceso = mapa.size - 2000
+    for (const ip of mapa.keys()) {
+      if (exceso-- <= 0) break
+      mapa.delete(ip)
+    }
+  }
+}
+
 function rateLimitLogin(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown'
   const ahora = Date.now()
+  purgarLimites(loginIntentos, VENTANA_LOGIN_MS, ahora)
   const registro = loginIntentos.get(ip) || { count: 0, inicio: ahora }
   if (ahora - registro.inicio > VENTANA_LOGIN_MS) {
     registro.count = 0
@@ -38,6 +61,12 @@ router.post('/login', rateLimitLogin, (req, res) => {
     return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
   }
 
+  // BLOQUE 1 (P3): purga batch de sesiones expiradas — hasta ahora solo se
+  // purgaban perezosamente una a una cuando el MISMO sid se presentaba.
+  try {
+    db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString())
+  } catch { /* la purga no puede bloquear jamás un login */ }
+
   const sid = crearSesion(user.id)
   const isSecure = process.env.NODE_ENV === 'production'
   res.cookie('sid', sid, {
@@ -58,6 +87,7 @@ const VENTANA_REGISTRO_MS = 60 * 60 * 1000
 function rateLimitRegistro(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress || 'unknown'
   const ahora = Date.now()
+  purgarLimites(registroIntentos, VENTANA_REGISTRO_MS, ahora)
   const registro = registroIntentos.get(ip) || { count: 0, inicio: ahora }
   if (ahora - registro.inicio > VENTANA_REGISTRO_MS) {
     registro.count = 0
@@ -87,6 +117,71 @@ router.post('/registro', rateLimitRegistro, async (req, res) => {
     const code = /inválid|ya |obligator|debe |no aceptó|rechazado|existe/.test(err.message) ? 400 : 500
     res.status(code).json({ ok: false, error: err.message })
   }
+})
+
+// ---- P5 (BLOQUE 1bis): cambio de contraseña propio + revocación total ----
+// Rate-limit propio (reusa el patrón de login): protege contra fuerza bruta
+// de la contraseña ACTUAL vía este endpoint, aun con sesión válida.
+const passwordIntentos = new Map()
+const LIMITE_PASSWORD = 5
+const VENTANA_PASSWORD_MS = 15 * 60 * 1000
+
+function rateLimitPassword(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown'
+  const ahora = Date.now()
+  purgarLimites(passwordIntentos, VENTANA_PASSWORD_MS, ahora)
+  const registro = passwordIntentos.get(ip) || { count: 0, inicio: ahora }
+  if (ahora - registro.inicio > VENTANA_PASSWORD_MS) {
+    registro.count = 0
+    registro.inicio = ahora
+  }
+  if (registro.count >= LIMITE_PASSWORD) {
+    return res.status(429).json({ ok: false, error: 'Demasiados intentos. Intente de nuevo en 15 minutos.' })
+  }
+  registro.count++
+  passwordIntentos.set(ip, registro)
+  next()
+}
+
+router.post('/password', requireAuth, rateLimitPassword, (req, res) => {
+  const { password_actual, password_nueva } = req.body
+  if (!password_actual || !password_nueva) {
+    return res.status(400).json({ ok: false, error: 'Contraseña actual y nueva requeridas' })
+  }
+  if (String(password_nueva).length < 8) {
+    return res.status(400).json({ ok: false, error: 'La nueva contraseña debe tener al menos 8 caracteres' })
+  }
+  if (String(password_nueva) === String(password_actual)) {
+    return res.status(400).json({ ok: false, error: 'La nueva contraseña debe ser distinta de la actual' })
+  }
+
+  const user = db
+    .prepare(`SELECT id, password_hash FROM users WHERE id = ? AND activo = 1`)
+    .get(req.user.id)
+  if (!user) return res.status(401).json({ ok: false, error: 'Usuario no encontrado' })
+
+  // Comparación segura (scrypt + timingSafeEqual) — jamás plaintext ni hashes en logs.
+  if (!verifyPassword(String(password_actual), user.password_hash)) {
+    return res.status(401).json({ ok: false, error: 'La contraseña actual es incorrecta' })
+  }
+
+  const nuevoHash = hashPassword(String(password_nueva))
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(nuevoHash, user.id)
+    // REVOCAR TODAS las sesiones del usuario (incluida la actual): un cambio
+    // de credencial exige re-autenticación en todos los dispositivos.
+    const revocadas = db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id).changes
+    registrarAccion(db, {
+      empresaId: null, usuarioId: user.id,
+      accion: 'usuario.password_cambiar', entidad: 'users', entidadId: String(user.id),
+      despues: { sesiones_revocadas: revocadas }, ip: req.ip || null,
+    })
+  })
+  tx()
+
+  // La cookie apunta a una sesión ya eliminada: se limpia.
+  res.clearCookie('sid')
+  res.json({ ok: true, mensaje: 'Contraseña actualizada. Se cerraron todas tus sesiones; vuelve a iniciar sesión.' })
 })
 
 // Disponibilidad en vivo para el formulario (usuario y RUT, sin crear nada).
@@ -170,6 +265,9 @@ router.post('/usuarios', requireAuth, requireAdmin, (req, res) => {
 
   res.status(201).json({ ok: true, id: info.lastInsertRowid })
 })
+
+// Exportado para tests (el router ES la export del módulo).
+router.purgarLimites = purgarLimites
 
 router.delete('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
   const id = Number(req.params.id)

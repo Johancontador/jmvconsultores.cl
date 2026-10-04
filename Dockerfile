@@ -19,4 +19,10 @@ COPY scripts ./scripts
 ENV NODE_ENV=production
 EXPOSE 3500
 
+# BLOQUE 1bis (P8): ejecutar como usuario NO-root. La imagen oficial node
+# trae el usuario 'node' (uid 1000). El volumen ./data del compose debe ser
+# escribible por ese uid en el host (en el VPS: chown -R 1000:1000 data).
+RUN chown -R node:node /app
+USER node
+
 CMD ["node", "backend/index.js"]

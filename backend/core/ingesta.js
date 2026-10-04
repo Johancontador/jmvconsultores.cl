@@ -18,6 +18,7 @@ const rcv = require('../services/rcv')
 const { claveSiiDescifrada } = require('./empresas')
 const documentosCore = require('./documentos')
 const { registrarAccion } = require('./auditoria')
+const jobsMemoria = require('./jobs-memoria')
 
 // claveSiiDescifrada y registrarAccion reciben la BD como parámetro en el core;
 // aquí el módulo de ingesta trabaja con la BD del proceso (singleton db.js).
@@ -30,11 +31,13 @@ function generarJobId() {
 }
 
 function estadoInterno(jobId) {
+  jobsMemoria.purgar(trabajos)
   return trabajos.get(jobId) || null
 }
 
 /** Estado seguro para exponer por API (sin claves ni datos internos). */
 function obtenerEstado(jobId, usuarioId) {
+  jobsMemoria.purgar(trabajos)
   const t = trabajos.get(jobId)
   if (!t || t.usuarioId !== usuarioId) return null
   return {
@@ -62,7 +65,7 @@ function iniciar(dbParam, { empresaId, usuarioId, periodo, ip = null }) {
   if (!clave) throw new Error('La empresa no tiene clave SII configurada')
 
   const jobId = generarJobId()
-  trabajos.set(jobId, {
+  jobsMemoria.registrar(trabajos, jobId, {
     jobId, empresaId, usuarioId, periodo, ip,
     estado: 'procesando', total: 2, procesados: 0,
     resultado: null, error: null,

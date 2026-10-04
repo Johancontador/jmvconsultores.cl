@@ -258,6 +258,16 @@ Estados del documento sin tabla de catálogo: constantes en `backend/core/docume
 - Mayor: `(empresa_id, cuenta_id)` en líneas.
 - Auditoría: `(empresa_id, creado_en DESC)`.
 - Reglas: `(empresa_id, prioridad DESC)`.
+- DTE: `(empresa_id, tipo_dte, activo)` en folios, `(empresa_id, creado_en)` en emitidos.
+
+### B.10 Emisión de DTE para empresas cliente (BLOQUE 2)
+
+Contrato API en [INTEGRATIONS.md](INTEGRATIONS.md) §8; implementación en `core/dte-emisor.js` + `routes/dte.js`.
+
+- **`dte_config`** (UNIQUE `empresa_id`): ficha del EMISOR tributario — `razon_social`, `giro`, `direccion`, `comuna`, `acteco`, `fch_resol`, `nro_resol`, `ambiente` ('certificacion'|'produccion'). El RUT del emisor NO se duplica: es `empresas.rut`. `cert_pfx` (base64 del .pfx) y `cert_pass` se guardan CIFRADOS con la bóveda (`v1:`, AES-256-GCM, mismo mecanismo de §B.7).
+- **`dte_folios`**: CAFs cargados por empresa — `tipo_dte` (33/34/56/61), `rut_emisor`, `folio_desde`, `folio_hasta`, `caf_xml` **CIFRADO SIEMPRE** (el XML del CAF contiene la CLAVE PRIVADA de los folios), `activo`. Varios CAFs por tipo (los rangos del SII se agotan); re-cargar un rango existente es idempotente (update).
+- **`dte_emitidos`** (UNIQUE `empresa_id, tipo_dte, folio`): cada DTE emitido, ligado a empresa + `documento_id` de la bandeja (opcional) + `asiento_id` del núcleo (opcional, para uso futuro) + folio + estado del SII. Snapshot del receptor (`receptor_*`), montos INTEGER, `items_json`, `referencia_json` (NC/ND: TpoDocRef/FolioRef/CodRef/RazonRef — códigos 1/2/3 del XSD SII), `xml` firmado, `track_id`, `intentos`, `motivo_error`, `emitido_por`, auditoría en la bitácora (sin XML ni secretos).
+- **Estados**: `estado` es SOLO el ciclo de vida local (PENDIENTE → ENVIADO → ACEPTADO | RECHAZADO; ERROR si el envío nunca partió). Los códigos REALES del SII (EPR, RPR, RSC, DOK, FAU…) se guardan VERBATIM en `sii_codigo`/`sii_glosa`/`sii_respuesta_json` — jamás se inventan ni se mapean en el código; la clasificación exitoso/rechazado la calcula la librería (@devlas/dte-sii, tabla oficial QueryEstUp).
 
 ---
 

@@ -1,5 +1,7 @@
 const db = require('../db')
 const { consultarRCV } = require('./rcv')
+const { descifrar } = require('../core/boveda')
+const jobsMemoria = require('../core/jobs-memoria')
 const {
   sumarDocumentos,
   calcularIVA,
@@ -161,8 +163,11 @@ function toResultado(cliente, datos, periodo, estado, errorMsg = null) {
 }
 
 async function procesarUnCliente(cliente, periodo) {
-  const ventasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'ventas', periodo)
-  const comprasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'compras', periodo)
+  // BLOQUE 1 (seguridad): la clave SII se descifra al vuelo — acepta plaintext
+  // legacy y valores v1: de la bóveda. Nunca se loggea ni se expone por API.
+  const claveReal = descifrar(cliente.clave_sii)
+  const ventasDocs = await consultarRCV(cliente.rut, claveReal, 'ventas', periodo)
+  const comprasDocs = await consultarRCV(cliente.rut, claveReal, 'compras', periodo)
   const datos = calcularResultado(cliente, ventasDocs, comprasDocs)
   guardarProcesoBD(periodo, cliente.id, datos, 'ok')
   return toResultado(cliente, datos, periodo, 'ok')
@@ -207,7 +212,7 @@ function iniciarProceso(periodo, userId) {
     .all(userId)
 
   const procesoId = crearProcesoId()
-  procesos.set(procesoId, {
+  jobsMemoria.registrar(procesos, procesoId, {
     id: procesoId,
     userId,
     estado: 'procesando',
@@ -249,6 +254,7 @@ async function reintentarCliente(clienteId, periodo, userId) {
 }
 
 function obtenerEstado(procesoId, userId) {
+  jobsMemoria.purgar(procesos)
   const estado = procesos.get(procesoId)
   if (!estado || estado.userId !== userId) return null
   return {

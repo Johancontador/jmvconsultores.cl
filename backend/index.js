@@ -40,18 +40,10 @@ app.use(express.json({ limit: '100kb' }))
 // y el rate-limit del login no trata a todo Internet como una sola IP.
 app.set('trust proxy', 1)
 
-// Headers de seguridad básicos (defensa en profundidad — no hay ningún dato
-// de terceros embebido ni se necesita CSP elaborada, solo cerrar los vectores
-// obvios: clickjacking, MIME-sniffing, filtración de referrer entre sitios).
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.setHeader('X-Frame-Options', 'DENY')
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-  res.setHeader('X-DNS-Prefetch-Control', 'off')
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  next()
-})
+// Headers de seguridad centralizados (BLOQUE 1bis P8): nosniff, XFO, CSP
+// incremental, CORP y HSTS SOLO con HTTPS real (ver middleware para el
+// detalle y la deuda documentada del 'unsafe-inline').
+app.use(require('./middleware/seguridad-headers').headersSeguridad)
 
 app.use('/api/auth', require('./routes/auth'))
 
@@ -83,6 +75,9 @@ app.use('/api/contable', requireAuth, require('./routes/asientos-externos'))
 // pasarela es público (validado por firma + re-consulta a la API); las demás
 // rutas piden requireAuth + RBAC dentro de routes/pagos.js.
 app.use('/api/pagos', require('./routes/pagos'))
+// BLOQUE 2: emisión de DTE para las empresas cliente (config del emisor, CAFs
+// de folios, emisión 33/34/56/61, estado SII real, reintentos).
+app.use('/api/dte', requireAuth, require('./routes/dte'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })

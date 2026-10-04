@@ -75,25 +75,32 @@ async function emitirFactura({ emisor, receptor, folio, items, monto_neto, monto
     throw new Error(`Folio ${folio} fuera del rango autorizado del CAF (${caf.getFolioDesde()}–${caf.getFolioHasta()})`)
   }
 
+  // Formas exigidas por @devlas/dte-sii v2.36 (formato simplificado): claves
+  // nativas del XSD del SII — RUTEmisor/RznSoc/GiroEmis/DirOrigen/CmnaOrigen/
+  // Acteco, RUTRecep/RznSocRecep/GiroRecep/DirRecep/CmnaRecep e ítems
+  // { NmbItem, QtyItem, PrcItem }. (Antes se pasaban claves camelCase que la
+  // librería no reconoce: el XML salía con emisor vacío y receptor
+  // 'Consumidor Final' — bug latente: la emisión real nunca había corrido
+  // pendiente las credenciales. BLOQUE 2.)
   const dte = new DTE({
     tipo: 33,
     folio,
     emisor: {
-      rut: emisor.rut,
-      razonSocial: emisor.razon_social,
-      giro: emisor.giro,
-      direccion: emisor.direccion,
-      comuna: emisor.comuna,
-      actividadEconomica: emisor.actividad_economica,
+      RUTEmisor: emisor.rut,
+      RznSoc: emisor.razon_social,
+      GiroEmis: emisor.giro,
+      DirOrigen: emisor.direccion,
+      CmnaOrigen: emisor.comuna,
+      ...(emisor.actividad_economica ? { Acteco: emisor.actividad_economica } : {}),
     },
     receptor: {
-      rut: receptor.rut,
-      razonSocial: receptor.razon_social,
-      giro: receptor.giro,
-      direccion: receptor.direccion,
-      comuna: receptor.comuna,
+      RUTRecep: receptor.rut,
+      RznSocRecep: receptor.razon_social,
+      ...(receptor.giro ? { GiroRecep: receptor.giro } : {}),
+      DirRecep: receptor.direccion,
+      CmnaRecep: receptor.comuna,
     },
-    items: items.map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, precio: i.precio })),
+    items: items.map((i) => ({ NmbItem: i.nombre, QtyItem: i.cantidad, PrcItem: i.precio })),
     resolucion: {
       fecha: emisor.resolucion.fecha,
       numero: emisor.resolucion.numero,

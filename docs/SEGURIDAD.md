@@ -55,3 +55,69 @@ Cuando la app se publique vía Cloudflare Tunnel:
 5. Backup automático cifrado de `data/` a un bucket externo — alto.
 
 > Regla de oro del repo: **si un dato puede identificar un negocio real, no va a git ni a issues**.
+
+---
+
+## P6 — Backups cifrados y restauración verificada (BLOQUE 1bis)
+
+**Estado del arte:** claves SII SIEMPRE cifradas en reposo (`v1:` AES-256-GCM, bóveda BLOQUE 1). Los backups se generan cifrados.
+
+### Cómo crear backup
+
+```bash
+node scripts/backup-db.js          # usa DB_PATH/BACKUP_DIR/BACKUP_ENCRYPTION_KEY desde .env
+```
+
+Genera 3 artefactos en `data/backups/`:
+
+| Archivo | Contenido |
+|---|---|
+| `iva_mensual_<stamp>.db.enc` | BD cifrada AES-256-GCM (formato binario `JMVBACKUP1`: magic + iv + tag + ciphertext) |
+| `iva_mensual_<stamp>.manifest.json` | archivo, sha256, tamaño, timestamp, formato `jmv-backup-v1`, `cifrado`, `sha256_original`, `secretos: "ninguno"` |
+| `iva_mensual_<stamp>.sha256` | hash en formato `sha256sum` para verificación externa |
+
+Retención por defecto: 30 backups (todos sus artefactos), configurable con `BACKUP_RETENCION`. El `.db` en claro se elimina tras verificar el round-trip de cifrado.
+
+### Secretos requeridos
+
+| Variable | Uso | Si no está disponible |
+|---|---|---|
+| `BACKUP_ENCRYPTION_KEY` | cifrar/descifrar BACKUPS (salt propia `jmv-backup-v1`) | backup SIN cifrar + warning; restore de `.enc` falla con error claro |
+| `SECRETOS_MASTER_KEY` | descifrar claves SII `v1:` en el restore (bóveda, salt `jmv-iva-mensual-boveda-v1`) | restore funciona pero reporta `claves: error` — las claves SII no se pueden verificar |
+
+Separación de responsabilidades: dos claves, dos salt — rotar una no afecta la otra.
+
+**Si `SECRETOS_MASTER_KEY` se pierde:** los secretos de la bóveda NO son recuperables; restaurar desde un backup previo no ayuda (están cifrados con la misma clave). Rotar = volver a pedir las claves SII. **Si `BACKUP_ENCRYPTION_KEY` se pierde:** los backups cifrados existentes NO son recuperables; conservar la clave en el gestor de secretos del VPS.
+
+### Cómo verificar integridad
+
+```bash
+sha256sum -c data/backups/iva_mensual_<stamp>.sha256    # verificación externa
+cat data/backups/iva_mensual_<stamp>.manifest.json       # metadatos (sin secretos)
+```
+
+### Cómo restaurar (procedimiento REAL, probado en BLOQUE 1bis)
+
+```bash
+node scripts/restore-db.js --backup data/backups/iva_mensual_<stamp>.db.enc --dest /tmp/restore-$(date +%s)
+```
+
+El script ejecuta y reporta: SHA-256 del archivo vs manifest → descifrado → SHA-256 del original → escritura en destino AISLADO → `PRAGMA integrity_check` → conteos de tablas críticas (`users, empresas, clientes, auditoria, asientos, asiento_lineas, documentos, periodos_contables, bancos_cuentas, suscripciones`) → descifrado de TODAS las claves SII `v1:` con `SECRETOS_MASTER_KEY`. Sale 0 si todo ok.
+
+Arrancar la app desde la copia restaurada (nunca sobre la BD real):
+
+```bash
+DB_PATH=/tmp/restore-XXXX/iva_mensual_restaurada.db PORT=3997 node backend/index.js
+# curl /api/health → 200; luego cerrar y migrar el archivo a data/ tras detener el server
+```
+
+Restore verificado en vivo (BLOQUE 1bis): usuarios 2, empresas 2, clientes 3, auditoría 5.540, asientos 738, líneas 2.173, documentos 3.672; 5/5 claves v1 descifrables; app arrancando desde la copia con 0 errores; BD de producción intacta.
+
+## BLOQUE 2 — Secretos del emisor de DTE por empresa (certificado, CAF)
+
+Con la emisión de DTE para empresas cliente (`/api/dte`, BLOQUE 2) entran los secretos MÁS sensibles por empresa: la **firma electrónica** (certificado .pfx + contraseña) y los **CAF de folios** (su XML contiene la CLAVE PRIVADA RSA que timbra los documentos). Modelo de custodia:
+
+- **En reposo, SIEMPRE cifrados** con la bóveda existente (`core/boveda.js`, `v1:` = AES-256-GCM con `SECRETOS_MASTER_KEY`): `dte_config.cert_pfx`, `dte_config.cert_pass` y `dte_folios.caf_xml`. Guardas de test: la BD jamás contiene plaintext del .pfx ni `RSASK` del CAF.
+- **En tránsito**: nunca salen por HTTP — `GET /config` devuelve solo `tiene_certificado` (flag); `GET /folios` devuelve rangos y conteos, jamás `caf_xml`. Las respuestas y la auditoría se testean para no contener ni ciphertext ni plaintext.
+- **En memoria**: solo al emitir — `obtenerConfigDescifrada()` y `descifrar(caf_xml)` alimentan el adaptador (`core/dte-emisor.adaptadorReal`, @devlas/dte-sii) y no se loggean.
+- **Rotación de SECRETOS_MASTER_KEY**: invalida también certificados/CAFs ya cifrados (mismo compromiso que las claves SII — re-cargar tras rotar; el sistema lo nombra en los errores de descifrado).

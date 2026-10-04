@@ -1,5 +1,6 @@
 const express = require('express')
 const db = require('../db')
+const { cifrar, esCifrado } = require('../core/boveda')
 
 const router = express.Router()
 
@@ -91,12 +92,16 @@ router.post('/', (req, res) => {
       return res.status(409).json({ ok: false, error: 'Ya existe un cliente con ese RUT' })
     }
 
+    // BLOQUE 1 (seguridad): la clave SII NUNCA se persiste en texto plano —
+    // siempre a la bóveda (v1: AES-256-GCM). Si ya viniera cifrada, no se re-cifra.
+    const claveAlmacenar = esCifrado(String(clave_sii)) ? String(clave_sii) : cifrar(String(clave_sii))
+
     const result = db
       .prepare(
         `INSERT INTO clientes (rut, nombre, clave_sii, tasa_ppm, telefono, exento, user_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(rutNorm, nombre.trim(), clave_sii, Number(tasa_ppm), telefonoSanitizado, exento ? 1 : 0, req.user.id)
+      .run(rutNorm, nombre.trim(), claveAlmacenar, Number(tasa_ppm), telefonoSanitizado, exento ? 1 : 0, req.user.id)
 
     res.status(201).json({ ok: true, id: result.lastInsertRowid })
   } catch (err) {
@@ -140,8 +145,9 @@ router.put('/:id', (req, res) => {
       valores.push(nombre.trim())
     }
     if (clave_sii !== undefined) {
+      // BLOQUE 1 (seguridad): cifrar siempre en la bóveda (si ya viene v1:, no se re-cifra).
       campos.push('clave_sii = ?')
-      valores.push(clave_sii)
+      valores.push(esCifrado(String(clave_sii)) ? String(clave_sii) : cifrar(String(clave_sii)))
     }
     if (tasa_ppm !== undefined) {
           if (!validarTasaPPM(tasa_ppm)) {

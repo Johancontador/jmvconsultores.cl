@@ -46,6 +46,10 @@ const CATALOGO_CAPACIDADES = {
   'licencias:ver': 'Ver la suscripción, su estado y el historial de pagos de la empresa',
   'licencias:pagar': 'Contratar o renovar el plan de la empresa (checkout de la pasarela)',
   'facturacion:emitir': 'Emitir la factura electrónica (DTE) de los pagos de la suscripción',
+  // BLOQUE 2: emisión de DTE para las empresas cliente (factura 33/34, NC 61, ND 56)
+  'dte:ver': 'Ver la configuración de emisión, los CAFs de folios y los DTEs emitidos de la empresa',
+  'dte:emitir': 'Emitir DTEs, reintentar envíos rechazados y consultar su estado real en el SII',
+  'dte:configurar': 'Configurar el emisor tributario de la empresa: certificado de firma, CAFs de folios, resolución SII y ambiente',
 }
 
 const TODAS_LAS_CAPACIDADES = Object.keys(CATALOGO_CAPACIDADES)
@@ -74,6 +78,8 @@ const PERMISOS_POR_ROL = {
     'activos:ver', 'activos:operar',
     // SAAS-3: JMV (contador del despacho) ve pagos y emite la factura de la suscripción
     'licencias:ver', 'facturacion:emitir',
+    // BLOQUE 2: el contador emite y configura la emisión de DTEs de sus clientes
+    'dte:ver', 'dte:emitir', 'dte:configurar',
   ],
 
   admin_empresa: [
@@ -94,6 +100,8 @@ const PERMISOS_POR_ROL = {
     // por el estado de la propia licencia (si no, una empresa SUSPENDIDA no
     // podría reactivarse sola); el gate de licencia no aplica a este módulo.
     'licencias:ver', 'licencias:pagar',
+    // BLOQUE 2: el dueño configura SU emisor (su certificado es suyo) y emite
+    'dte:ver', 'dte:emitir', 'dte:configurar',
   ],
 
   auditor: [
@@ -113,6 +121,8 @@ const PERMISOS_POR_ROL = {
     'activos:ver',
     // SAAS-3: el auditor consulta suscripción y pagos, no paga ni factura
     'licencias:ver',
+    // BLOQUE 2: el auditor ve los DTEs emitidos, no emite ni configura
+    'dte:ver',
   ],
 
   tesoreria: [
@@ -126,6 +136,8 @@ const PERMISOS_POR_ROL = {
     'reportes:ver',
     'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
     'licencias:ver',
+    // BLOQUE 2: tesorería consulta los DTEs emitidos, no emite ni configura
+    'dte:ver',
   ],
 }
 

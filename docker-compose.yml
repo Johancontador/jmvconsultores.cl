@@ -10,6 +10,9 @@ services:
     env_file:
       - .env
     volumes:
+      # BLOQUE 1bis (P8): el contenedor corre como usuario 'node' (uid 1000).
+      # En el VPS, el directorio del host debe ser escribible por ese uid:
+      #   chown -R 1000:1000 ./data
       - ./data:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3500/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]

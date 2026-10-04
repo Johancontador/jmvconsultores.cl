@@ -1,5 +1,7 @@
 const db = require('../db')
 const { consultarRCV } = require('./rcv')
+const { descifrar } = require('../core/boveda')
+const jobsMemoria = require('../core/jobs-memoria')
 const {
   sumarDocumentos,
   agruparPorContraparte,
@@ -256,8 +258,11 @@ function obtenerCliente(clienteId, userId) {
 async function procesarMes(cliente, periodoInfo, modo) {
   const { anio, mes, periodo } = periodoInfo
 
-  const ventasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'ventas', periodo)
-  const comprasDocs = await consultarRCV(cliente.rut, cliente.clave_sii, 'compras', periodo)
+  // BLOQUE 1 (seguridad): la clave SII se descifra al vuelo — acepta plaintext
+  // legacy y valores v1: de la bóveda. Nunca se loggea ni se expone por API.
+  const claveReal = descifrar(cliente.clave_sii)
+  const ventasDocs = await consultarRCV(cliente.rut, claveReal, 'ventas', periodo)
+  const comprasDocs = await consultarRCV(cliente.rut, claveReal, 'compras', periodo)
 
   const ventas = sumarDocumentos(ventasDocs)
   const compras = sumarDocumentos(comprasDocs)
@@ -460,7 +465,7 @@ function iniciarInforme(clienteId, anioInicio, anioFin, modo = 'resumen', mesIni
   const consultasEstimadas = periodos.length * 2
 
   const informeId = crearInformeId()
-  informes.set(informeId, {
+  jobsMemoria.registrar(informes, informeId, {
     id: informeId,
     userId,
     estado: 'procesando',
@@ -500,6 +505,7 @@ function iniciarInforme(clienteId, anioInicio, anioFin, modo = 'resumen', mesIni
 }
 
 function obtenerEstado(informeId, userId) {
+  jobsMemoria.purgar(informes)
   const estado = informes.get(informeId)
   if (!estado || estado.userId !== userId) return null
 

@@ -4,7 +4,8 @@
  * IVA Mensual queda OCULTO: actúa solo como la integración que ingesta los
  * documentos del SII (conexión RCV). Este sistema consume las mismas APIs
  * /api/contable/* pero con identidad y navegación propias.
- * Las vistas se registran en window.VIEWS desde views-fiscal.js y views-conta.js.
+ * Las vistas se registran en window.VIEWS desde views-*.js (fiscal, conta,
+ * teso, suscripcion, activos, niif, onboarding, autom y dte).
  */
 
 const S = {
@@ -208,6 +209,13 @@ const MENU = [
     seccion: 'SII', items: [
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
+    ]
+  },
+  {
+    seccion: 'Facturación', items: [
+      { key: 'dte', label: 'Bandeja de DTEs Emitidos', permiso: 'dte:ver' },
+      { key: 'dte-emision', label: 'Emitir Factura o Nota', permiso: 'dte:emitir' },
+      { key: 'dte-config', label: 'Configuración del Emisor', permiso: 'dte:ver' },
     ]
   },
   {

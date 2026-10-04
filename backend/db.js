@@ -348,5 +348,11 @@ require('./core/migraciones').migracionesFase7(db)
 require('./core/migraciones').migracionesFase8(db)
 require('./core/migraciones').migracionesFase9(db)
 require('./core/migraciones').migracionesSaas3(db)
+// BLOQUE 1 (seguridad): bóveda para clientes.clave_sii legacy (one-way, idempotente).
+require('./core/migraciones').migracionesBovedaClientes(db)
+// BLOQUE 2 (emisión de DTE para clientes): config del emisor, CAFs y DTEs emitidos.
+require('./core/migraciones').migracionesDte(db)
+// BLOQUE 3 (DTE → contabilidad): idempotencia de emisión en dte_emitidos.
+require('./core/migraciones').migracionesDte2(db)
 
 module.exports = db
