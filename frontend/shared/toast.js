@@ -6,11 +6,18 @@
 function _toastEl() {
   let el = document.getElementById('toast')
   if (!el) {
+    // El estilo .toast de app.css lo posiciona DENTRO de .toast-container
+    // (fixed, esquina inferior derecha): sin el contenedor queda static al
+    // final del body — infla el scrollWidth de la página y en páginas largas
+    // el aviso aparece bajo el pliegue (bug hallado por /qa 2026-10-04).
+    const cont = document.createElement('div')
+    cont.className = 'toast-container'
     el = document.createElement('div')
     el.id = 'toast'
     el.className = 'toast'
     el.hidden = true
-    document.body.appendChild(el)
+    cont.appendChild(el)
+    document.body.appendChild(cont)
   }
   return el
 }
