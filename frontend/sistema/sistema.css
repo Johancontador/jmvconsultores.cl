@@ -162,6 +162,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .chip.error, .chip.anulado { background: var(--danger-soft); color: var(--danger); }
 .chip.neutral { background: var(--bg-elevated); color: var(--fg-secondary); }
 
+/* Números tabulares para montos fuera de tablas (coherente con .tbl .num) */
+.mono { font-family: var(--font-mono); }
+
 /* Formularios */
 .frm-row { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; }
 .frm-row .form-group { margin: 0; }

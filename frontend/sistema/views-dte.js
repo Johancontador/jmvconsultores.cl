@@ -81,7 +81,7 @@ VIEWS.dte = {
        </div>
        <span class="spacer"></span>
        <a class="btn btn-secondary" href="#dte-emision">Emitir DTE</a>
-        ${puedeEmitir ? `<button class="btn btn-primary" id="dte-sync">Sincronizar contabilidad</button>` : ''}
+        ${puedeEmitir ? `       <button class="btn btn-primary" id="dte-sync">Sincronizar contabilidad</button>` : ''}
      </div>
 
       ${alertaConfig ? `
@@ -97,7 +97,7 @@ VIEWS.dte = {
        <div class="kpi"><small>Aceptados por el SII</small><strong>${porEstado('ACEPTADO')}</strong><span class="sub">${dtes.filter((d) => d.estado === 'ACEPTADO' && !d.asiento_id).length} sin contabilizar vía sincronización</span></div>
        <div class="kpi warn"><small>Enviados / pendientes</small><strong>${porEstado('ENVIADO') + porEstado('PENDIENTE')}</strong><span class="sub">${porEstado('ENVIADO')} esperando consulta SII · ${porEstado('PENDIENTE')} sin track-id</span></div>
        <div class="kpi bad"><small>Rechazados o con error</small><strong>${porEstado('RECHAZADO') + porEstado('ERROR')}</strong><span class="sub">reintento con el mismo folio</span></div>
-       <div class="kpi acc"><small>Total emitido (filtro actual)</small><strong>${fmt(dtes.reduce((a, d) => a + (d.monto_total || 0), 0))}</strong><span class="sub">${dtes.length} documento(s) listado(s)</span></div>
+       <div class="kpi acc"><small>Total emitido (filtro actual)</small><strong class="mono">${fmt(dtes.reduce((a, d) => a + (d.monto_total || 0), 0))}</strong><span class="sub">${dtes.length} documento(s) listado(s)</span></div>
      </div>
 
      <div class="card mt">
@@ -428,10 +428,10 @@ VIEWS['dte-emision'] = {
        <button class="btn btn-ghost btn-sm mt" id="de-add">+ Agregar ítem</button>
 
        <div class="kpi-grid mt">
-         <div class="kpi"><small>Neto</small><strong id="de-neto">$0</strong></div>
-         <div class="kpi warn"><small>IVA (${TASA_IVA_UI * 100}%)</small><strong id="de-iva">$0</strong></div>
-         <div class="kpi"><small>Exento</small><strong id="de-exento">$0</strong></div>
-         <div class="kpi acc"><small>Total</small><strong id="de-total">$0</strong></div>
+         <div class="kpi"><small>Neto</small><strong class="mono" id="de-neto">$0</strong></div>
+         <div class="kpi warn"><small>IVA (${TASA_IVA_UI * 100}%)</small><strong class="mono" id="de-iva">$0</strong></div>
+         <div class="kpi"><small>Exento</small><strong class="mono" id="de-exento">$0</strong></div>
+         <div class="kpi acc"><small>Total</small><strong class="mono" id="de-total">$0</strong></div>
        </div>
 
        <button class="btn btn-primary btn-lg mt" id="de-emitir">Emitir DTE al SII</button>
