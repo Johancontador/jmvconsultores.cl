@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-03 · Commit base: `63a862b` (master) · Suite: 214 verdes
+> Fecha: 2026-10-04 · Commit base: `3089001` (master) · Suite: 279 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 21 archivos, 214 tests verdes: `npm test` |
+| Tests | `node --test` | 27 archivos, 279 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -92,9 +92,15 @@ backend/
 frontend/
   landing.html              Landing pública (servida en /) con login embebido
   sistema/                  SPA contable (shell real): router hash + vistas por módulo
-    index.html              app.js, views-fiscal/autom/teso/activos/onboarding/conta
-    app.js                  boot, login, shell (menú superior por secciones, pill de
-                            documentos), router, selector de empresa
+    index.html              app.js, views-fiscal/autom/teso/activos/onboarding/dte/conta
+    app.js                  boot, login, shell (secciones verticales: Empresa / SII /
+                            Facturación / Contabilizaciones / Tesorería / Reportes, pill de
+                            documentos), router (query de vista soportada en el hash:
+                            #dte?tipo=33), selector de empresa
+    views-dte.js            Facturación Electrónica (BLOQUE 4): bandeja de DTEs emitidos con
+                            filtros/estado SII/vínculo contable y sincronización DTE→contabilidad,
+                            matriz de requisitos del emisor, configuración (certificado/CAFs) y
+                            emisión 33/34/56/61 con totales en vivo e idempotencia por envío
     views-teso.js           Tesorería: bancos, libro banco, conciliación (FASE 6)
     views-activos.js        Activos fijos, venta/baja, depreciación del período (FASE 7)
     views-niif.js           NIIF: situación/resultados por rubros + mapeo (FASE 8)
@@ -110,12 +116,13 @@ frontend/
   shared/ layout.js shell-router.js shell-state.js api.js format.js table.js
           datagrid.js filters.js rango.js export.js toast.js
 data/                       SQLite (no versionado)
-nginx/, Dockerfile, docker-compose.yml, migrations/, scripts/, iniciar.bat
+nginx/, Dockerfile, docker-compose.yml, scripts/, iniciar.bat
 docs/                       PRD, TRD, BACKEND, APPFLOW, UI-UX, PLAN, MASTERPLAN,
                             SEGURIDAD, DESPLIEGUE, ROADMAP-FUNCIONALIDADES, REDISENO_PROPUESTA
-test/                       20 suites: calculos, db-schema, export-fecha, informe-listar,
-                            fase1-fase9, saas1, saas2, automatizacion, dashboard,
-                            memoria-reportes, cartola-formatos
+test/                       27 suites: calculos, db-schema, export-fecha, informe-listar,
+                            fase1-fase9, saas1-saas3, automatizacion, dashboard, backup-seguro,
+                            boveda-clientes, dte-emision, dte-contable, hardening,
+                            memoria-limpieza, memoria-reportes, password, cartola-formatos
 ```
 
 ## 4. Modelo de datos actual (resumen; detalle en DATA_MODEL.md)
@@ -180,7 +187,7 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 3. **Rate-limit y sesiones por proceso único**: con más de un proceso/instancia se romperían (hoy hay un solo nodo; documentado para no olvidarlo al escalar).
 4. **SQLite single-writer**: correcto para la escala actual (un contador, decenas de clientes); el software contable multiusuario concurrente exigirá vigilar WAL/bloqueos y eventualmente migrar a Postgres (decisión en ARCHITECTURE.md).
 5. **Montos en REAL (float)** en la capa tributaria LEGACY: aceptable para reportes informativos; la capa contable (FASES 2-6) ya opera en INTEGER con partida doble.
-6. **Sin framework de migraciones con versionado secuencial** — hay migraciones idempotentes ad-hoc en `db.js` + `core/migraciones.js` (patrón PRAGMA table_info que funciona y se replicará) + una carpeta `migrations/` con un SQL suelto.
+6. **Sin framework de migraciones con versionado secuencial** — hay migraciones idempotentes ad-hoc en `db.js` + `core/migraciones.js` (patrón PRAGMA table_info que funciona y se replicará; la carpeta `migrations/` con SQL suelto fue eliminada — el esquema vive íntegro en el core).
 7. **Frontend sin build ni tests**: vanilla JS módulo a módulo con `window.*` como contratos. Funciona y es rápido; el módulo contable mantiene el mismo shell (`/sistema/`), con lógica pesada (partida doble, saldos, conciliación) testeada en el backend.
 8. **`informe_documentos` crece sin límite por informe** (delete+insert completo en cada regeneración). RESUELTO para el contable: la bandeja `documentos` es una entidad persistente por empresa, independiente de informes (FASE 3).
 9. **Node 25 rompe `node --test test/` en modo directorio** (preexistente); `npm test` con archivos explícitos funciona.
@@ -208,11 +215,13 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Pagos y facturación de la suscripción (SAAS-3, 17 tests):** checkout con adaptador de pasarela inyectable (MercadoPago primero, Transbank/Webpay después), webhook PÚBLICO idempotente en dos espacios (evento y pago) que re-confirma SIEMPRE contra la API de la pasarela y activa/renueva la licencia vía `activarPlan` en una transacción auditada; el gate de licencia NO aplica a pagar (una empresa SUSPENDIDA puede reactivarse sola); factura electrónica (DTE 33) con desglose IVA citado, receptor validado nominando lo que falta y adaptador real `core/dte.js` sobre @devlas/dte-sii (pendiente credenciales CAF/certificado para producción); vista 💳 Suscripción y Pagos en /sistema/.
 
-- **Emisión de DTE para empresas cliente (BLOQUE 2, 29 tests):** `/api/dte` con RBAC `dte:ver/dte:emitir/dte:configurar` + gate de licencia; config del emisor por empresa (giro/dirección/comuna/ACTECO/resolución/ambiente) con certificado .pfx y contraseña CIFRADOS (bóveda v1); CAFs por tipo con XML cifrado (contiene la clave privada de folios), parseo/validación de RUT y rango al cargar, idempotentes por rango; emisión de Factura (33), Factura Exenta (34), Nota de Débito (56) y Nota de Crédito (61, referencia obligatoria con CodRef 1/2/3 del XSD); folio correlativo por empresa+tipo validado contra los CAFs (hueco entre rangos → 422 nombrándolo); estados SII VERBATIM (`sii_codigo`/`sii_respuesta_json` — EPR, RPR, DOK… según tabla oficial QueryEstUp de la librería; el `estado` local es solo el pipeline PENDIENTE→ENVIADO→ACEPTADO/RECHAZADO); errores y reintentos con el mismo folio; cada DTE ligado a empresa+documento de la bandeja (opcional)+folio+estado SII; adaptador inyectable (tests sin red) y real lazy; test offline del XML real con PKCS12+CAF generados que corrigió un bug latente del camelCase en `core/dte.js` (la suscripción habría emitido con emisor vacío/receptor 'Consumidor Final'); pendiente UI y credenciales reales para producción.
+- **Emisión de DTE para empresas cliente (BLOQUE 2, 29 tests):** `/api/dte` con RBAC `dte:ver/dte:emitir/dte:configurar` + gate de licencia; config del emisor por empresa (giro/dirección/comuna/ACTECO/resolución/ambiente) con certificado .pfx y contraseña CIFRADOS (bóveda v1); CAFs por tipo con XML cifrado (contiene la clave privada de folios), parseo/validación de RUT y rango al cargar, idempotentes por rango; emisión de Factura (33), Factura Exenta (34), Nota de Débito (56) y Nota de Crédito (61, referencia obligatoria con CodRef 1/2/3 del XSD); folio correlativo por empresa+tipo validado contra los CAFs (hueco entre rangos → 422 nombrándolo); estados SII VERBATIM (`sii_codigo`/`sii_respuesta_json` — EPR, RPR, DOK… según tabla oficial QueryEstUp de la librería; el `estado` local es solo el pipeline PENDIENTE→ENVIADO→ACEPTADO/RECHAZADO); errores y reintentos con el mismo folio; cada DTE ligado a empresa+documento de la bandeja (opcional)+folio+estado SII; adaptador inyectable (tests sin red) y real lazy; test offline del XML real con PKCS12+CAF generados que corrigió un bug latente del camelCase en `core/dte.js` (la suscripción habría emitido con emisor vacío/receptor 'Consumidor Final'); UI operable desde el BLOQUE 4 (ver abajo); pendiente credenciales reales para producción.
 
 - **DTE → Contabilidad (BLOQUE 3, 12 tests — tras auditoría 2A):** `sincronizar-contabilidad` lleva cada DTE ACEPTADO a la bandeja como documento `origen='dte'` con la MISMA `clave_dedupe` de la ingesta RCV (UNA sola representación: re-ingestar el RCV del período lo dedupea; si el RCV llegó primero, se apunta a él), auto-clasifica con las reglas del contador y genera PROPUESTA PENDIENTE — la confirmación humana sigue siendo la única puerta al asiento (§6); sin regla → documento PENDIENTE visible (nada inventado); segunda pasada vincula `dte_emitidos.asiento_id` (vínculo bidireccional DTE↔asiento). Devengo por `fecha_emision`. Flujo probado 33 (Debe CLIENTES / Haber VENTAS_SERVICIOS + IVA_DEBITO), 34 sin IVA y 61 invertido. Idempotencia de emisión: `idempotencia` opcional en `POST /emitir` (UNIQUE parcial empresa+clave → `deduplicado: true`). La conciliación FASE 4 ve los DTE automáticamente vía bandeja (sin tocarla).
 
 - Tests `npm test` en verde (279). CI en verde en cada push.
+
+- **UI de Facturación Electrónica (BLOQUE 4, frontend) + design audit:** las tres vistas en `/sistema/` (`views-dte.js`): bandeja de DTEs emitidos (KPIs por estado, filtros tipo/estado con query en el hash, acciones por fila: consultar estado SII verbatim y reintentar con el mismo folio, botón de sincronización DTE→contabilidad con resumen de ambas pasadas), configuración del emisor (ficha con certificado .pfx subido desde archivo y contraseña — cifrados en el servidor, jamás releídos —, tabla de CAFs con folios usados y carga por pegado del XML, idempotente) y emisión 33/34/56/61 (receptor completo, referencia condicional para notas con CodRef 1/2/3, ítems dinámicos con totales en vivo idénticos a `calcularMontos`, clave de idempotencia generada al abrir el formulario). Design audit documentado en [docs/DESIGN-AUDIT-DTE.md](docs/DESIGN-AUDIT-DTE.md): 5 hallazgos corregidos (bug del router con query en el hash compartido por todas las vistas, matriz de faltantes en vez del muro repetido ×4, jerarquía de acciones, montos en mono tabular, base tipográfica de la app a 16px) — Design Score B → A, suite 279/279.
 
 ## 10. Conclusión del estado actual
 
