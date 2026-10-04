@@ -355,16 +355,17 @@ VIEWS['dte-config'] = {
         if (pfxB64) body.cert_pfx = pfxB64
         if (pass) body.cert_pass = pass
         // ISSUE-003 (qa): no mandar un guardado sin cambios — con el formulario
-        // vacío creaba una ficha inútil (todo null) y decía «guardada».
-        // Cambio efectivo = algún campo difiere de la ficha guardada, o se
-        // cargó certificado/contraseña (secretos que no se pueden releer).
+        // vacío el PUT llevaba solo ambiente y creaba una ficha inútil (todo
+        // null) celebrada como éxito. Ficha NUEVA exige al menos un campo de
+        // texto (ambiente va siempre elegido: solo no cuenta como contenido);
+        // ficha EXISTENTE exige que algo difiera, o certificado/contraseña
+        // nuevos (secretos que no se pueden releer).
         const base = c || {}
-        const cambio = (k, id) => String(body[k]).trim() !== String(base[k] ?? '').trim()
+        const texto = (k) => String(body[k] ?? '').trim()
+        const cambia = (k) => texto(k) !== String(base[k] ?? '').trim()
+        const campos = ['razon_social', 'giro', 'direccion', 'comuna', 'acteco', 'fch_resol', 'nro_resol']
         const hayCambios = Boolean(pfxB64 || pass)
-          || cambio('razon_social', 'dc-razon') || cambio('giro', 'dc-giro')
-          || cambio('direccion', 'dc-dir') || cambio('comuna', 'dc-com')
-          || cambio('acteco', 'dc-acteco') || cambio('ambiente', 'dc-amb')
-          || cambio('fch_resol', 'dc-fch') || cambio('nro_resol', 'dc-nro')
+          || (c ? campos.some(cambia) || body.ambiente !== base.ambiente : campos.some((k) => texto(k) !== ''))
         if (!hayCambios) {
           showToast(c
             ? 'Sin cambios que guardar'
