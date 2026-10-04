@@ -61,7 +61,12 @@ VIEWS.dte = {
     }
 
     const porEstado = (e) => dtes.filter((d) => d.estado === e).length
-    const alertaConfig = Object.values(faltantes).some((arr) => arr.length)
+    // Matriz compacta: lo que falta a TODOS los tipos incompletos se nombra UNA
+    // vez; por tipo queda solo lo específico. Cero repetición, misma honestidad §42.
+    const incompletos = Object.entries(faltantes).filter(([, l]) => l.length)
+    const alertaConfig = incompletos.length > 0
+    const listas = incompletos.map(([, l]) => l)
+    const comunes = listas.length ? listas[0].filter((x) => listas.every((l) => l.includes(x))) : []
 
     cont.innerHTML = `
      <div class="frm-row mb">
@@ -86,10 +91,27 @@ VIEWS.dte = {
 
       ${alertaConfig ? `
        <div class="card" style="border-color:var(--warning);margin-bottom:var(--space-5)">
-         <h3>Emisor incompleto — lo que falta, por tipo de documento</h3>
-          ${Object.entries(faltantes).map(([t, lista]) => lista.length ? `
-           <div class="checkline warn">Tipo ${t} (${esc(ETIQUETA_TIPO_DTE[t] || t)}): ${esc(lista.join('; '))}</div>
-          ` : '').join('')}
+         <h3>Emisor incompleto — matriz de requisitos por tipo</h3>
+         <div class="tbl-wrap"><table class="tbl">
+           <thead><tr><th>Requisito</th><th>Detalle</th><th>Estado</th></tr></thead>
+           <tbody>
+            ${comunes.length ? `
+             <tr>
+               <td><b>Todos los tipos</b></td>
+               <td>${esc(comunes.join('; '))}</td>
+               <td><span class="chip pendiente">Incompleto</span></td>
+             </tr>` : ''}
+            ${Object.entries(faltantes).map(([t, lista]) => {
+              const extra = lista.filter((x) => !comunes.includes(x))
+              return `
+             <tr>
+               <td>Tipo ${t} — ${esc(ETIQUETA_TIPO_DTE[t] || t)}</td>
+               <td>${lista.length === 0 ? '—' : (extra.length ? esc(extra.join('; ')) : (comunes.length ? 'solo los requisitos comunes' : esc(lista.join('; '))))}</td>
+               <td>${lista.length === 0 ? '<span class="chip contabilizado">Listo</span>' : '<span class="chip pendiente">Incompleto</span>'}</td>
+             </tr>`
+            }).join('')}
+           </tbody>
+         </table></div>
          <p class="hint mt">Completa la ficha del emisor, sube el certificado y carga los CAFs en <a href="#dte-config">Facturación → Configuración</a>. Hasta entonces, la emisión de esos tipos será rechazada nombrando exactamente lo que falta.</p>
        </div>` : ''}
 
