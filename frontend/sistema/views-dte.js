@@ -81,7 +81,7 @@ VIEWS.dte = {
        </div>
        <span class="spacer"></span>
        <a class="btn btn-secondary" href="#dte-emision">Emitir DTE</a>
-        ${puedeEmitir ? `       <button class="btn btn-primary" id="dte-sync">Sincronizar contabilidad</button>` : ''}
+        ${puedeEmitir ? `       <button class="btn btn-secondary" id="dte-sync">Sincronizar contabilidad</button>` : ''}
      </div>
 
       ${alertaConfig ? `
