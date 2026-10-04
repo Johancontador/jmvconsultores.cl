@@ -324,7 +324,9 @@ window.addEventListener('hashchange', renderRoute)
 
 function renderRoute() {
   if (!S.user) return
-  const key = (location.hash || '#inicio').slice(1)
+  // La query de la vista (p. ej. #dte?tipo=33) es estado de la ruta, no parte
+  // de la clave: sin este split, un filtro te expulsa a la vista Inicio.
+  const key = (location.hash || '#inicio').slice(1).split('?')[0]
   const view = VIEWS[key] || VIEWS.inicio
   const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
 
