@@ -203,7 +203,7 @@ VIEWS.dte = {
         const r = await apiPost(`/api/dte/empresas/${eid}/sincronizar-contabilidad`, {})
         const s = r.sincronizacion || {}
         window._dteSyncResultado = { empresaId: eid, s }
-        showToast('Sincronización completada', 'ok')
+        showToast('Sincronización completada', 'success')
         renderRoute()
       } catch (err) {
         syncBtn.disabled = false
@@ -227,7 +227,7 @@ VIEWS.dte = {
       b.disabled = true
       try {
         await apiPost(`/api/dte/empresas/${eid}/dtes/${b.dataset.reintentar}/reintentar`, {})
-        showToast('Reintento enviado al SII con el mismo folio', 'ok')
+        showToast('Reintento enviado al SII con el mismo folio', 'success')
         renderRoute()
       } catch (err) {
         b.disabled = false
@@ -339,9 +339,9 @@ VIEWS['dte-config'] = {
 
     document.getElementById('dc-guardar').addEventListener('click', async () => {
       const btn = document.getElementById('dc-guardar')
-      btn.disabled = true
       try {
         const pfxB64 = await lectorPfx()
+        const pass = document.getElementById('dc-pass').value
         const body = {
           razon_social: document.getElementById('dc-razon').value,
           giro: document.getElementById('dc-giro').value,
@@ -353,10 +353,27 @@ VIEWS['dte-config'] = {
           nro_resol: document.getElementById('dc-nro').value,
         }
         if (pfxB64) body.cert_pfx = pfxB64
-        const pass = document.getElementById('dc-pass').value
         if (pass) body.cert_pass = pass
+        // ISSUE-003 (qa): no mandar un guardado sin cambios — con el formulario
+        // vacío creaba una ficha inútil (todo null) y decía «guardada».
+        // Cambio efectivo = algún campo difiere de la ficha guardada, o se
+        // cargó certificado/contraseña (secretos que no se pueden releer).
+        const base = c || {}
+        const cambio = (k, id) => String(body[k]).trim() !== String(base[k] ?? '').trim()
+        const hayCambios = Boolean(pfxB64 || pass)
+          || cambio('razon_social', 'dc-razon') || cambio('giro', 'dc-giro')
+          || cambio('direccion', 'dc-dir') || cambio('comuna', 'dc-com')
+          || cambio('acteco', 'dc-acteco') || cambio('ambiente', 'dc-amb')
+          || cambio('fch_resol', 'dc-fch') || cambio('nro_resol', 'dc-nro')
+        if (!hayCambios) {
+          showToast(c
+            ? 'Sin cambios que guardar'
+            : 'La ficha está vacía: completa al menos un dato del emisor', 'warning')
+          return
+        }
+        btn.disabled = true
         await apiPut(`/api/dte/empresas/${eid}/config`, body)
-        showToast('Ficha del emisor guardada', 'ok')
+        showToast('Ficha del emisor guardada', 'success')
         renderRoute()
       } catch (err) {
         btn.disabled = false
@@ -370,7 +387,7 @@ VIEWS['dte-config'] = {
       try {
         const xml = document.getElementById('dc-caf').value
         const r = await apiPost(`/api/dte/empresas/${eid}/folios`, { caf_xml: xml })
-        showToast(`CAF cargado: tipo ${r.caf.tipo_dte}, folios ${r.caf.folio_desde}–${r.caf.folio_hasta}`, 'ok')
+        showToast(`CAF cargado: tipo ${r.caf.tipo_dte}, folios ${r.caf.folio_desde}–${r.caf.folio_hasta}`, 'success')
         renderRoute()
       } catch (err) {
         btn.disabled = false
@@ -557,9 +574,9 @@ VIEWS['dte-emision'] = {
       try {
         const r = await apiPost(`/api/dte/empresas/${eid}/emitir`, body)
         if (r.deduplicado) {
-          showToast('Este DTE ya había sido emitido — se muestra el original (idempotencia)', 'ok')
+          showToast('Este DTE ya había sido emitido — se muestra el original (idempotencia)', 'success')
         } else {
-          showToast(`DTE ${r.dte.tipo_dte} folio ${r.dte.folio}: ${r.dte.estado}${r.dte.track_id ? ` — track ${r.dte.track_id}` : ''}`, 'ok')
+          showToast(`DTE ${r.dte.tipo_dte} folio ${r.dte.folio}: ${r.dte.estado}${r.dte.track_id ? ` — track ${r.dte.track_id}` : ''}`, 'success')
         }
         location.hash = '#dte'
       } catch (err) {
