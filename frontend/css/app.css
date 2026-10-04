@@ -69,7 +69,7 @@
 
   --fs-xs:      0.75rem;    /* 12px */
   --fs-sm:      0.8125rem;  /* 13px */
-  --fs-base:    0.9375rem;  /* 15px */
+  --fs-base:    1rem;        /* 16px — base legible (F5 del design audit 2026-10-04); comparte valor con --fs-md */
   --fs-md:      1rem;       /* 16px */
   --fs-lg:      1.0625rem;  /* 17px */
   --fs-xl:      1.1875rem;  /* 19px */
