@@ -27,6 +27,29 @@ const CHIP_ESTADO_DTE = {
 }
 const TASA_IVA_UI = 0.19 // espejo de calcularMontos (TASA_IVA, D.L. 825)
 
+/**
+ * Tarjeta del resultado de una sincronización DTE → contabilidad. El resumen
+ * vive en window._dteSyncResultado (ligado a empresa, como _autoResultado en
+ * views-autom.js) para SOBREVIVIR al re-render de la ruta: si se pintara solo
+ * en #dte-sync-out, renderRoute() lo borra de inmediato y el contador jamás
+ * ve qué hizo la sincronización (bug hallado por /qa).
+ */
+function dteSyncTarjetaHTML(s) {
+  const fila = (label, v) => `<div class="checkline ok">${esc(label)}: <b>&nbsp;${v}</b></div>`
+  return `
+   <div class="card" style="border-color:var(--success)">
+     <h3>Sincronización DTE → contabilidad</h3>
+      ${fila('Aceptados procesados', s.aceptados_procesados)}
+      ${fila('Documentos de bandeja creados', s.documentos_creados)}
+      ${fila('Enlazados a documentos ya ingestados por el RCV (dedupe)', s.documentos_enlazados_por_dedupe)}
+      ${fila('Propuestas creadas (esperan confirmación humana)', s.propuestas_creadas)}
+      ${fila('Sin regla → quedan PENDIENTES en la bandeja', s.sin_regla)}
+      ${fila('Asientos vinculados', s.asientos_vinculados)}
+      ${(s.fallidos || []).map((f) => `<div class="checkline warn">Fallido: DTE ${esc(String(f.dte_id))} — ${esc(f.motivo || f.etapa || '')}</div>`).join('')}
+     <p class="hint mt">Idempotente: re-ejecutar no duplica documentos ni asientos. Propuestas y confirmaciones se hacen en Contabilizaciones → Propuestas y Conciliación.</p>
+   </div>`
+}
+
 VIEWS.dte = {
   titulo: 'Facturación Electrónica',
   async render(cont) {
@@ -156,7 +179,9 @@ VIEWS.dte = {
         ` : `<div class="empty">Sin DTEs para el filtro actual. Empieza en <a href="#dte-emision">Emitir DTE</a>.</div>`}
      </div>
 
-     <div id="dte-sync-out" class="mt"></div>
+     <div id="dte-sync-out" class="mt">
+        ${(window._dteSyncResultado && String(window._dteSyncResultado.empresaId) === String(eid)) ? dteSyncTarjetaHTML(window._dteSyncResultado.s) : ''}
+     </div>
     `
 
     // ---- filtros: re-render de la misma ruta ----
@@ -177,19 +202,7 @@ VIEWS.dte = {
       try {
         const r = await apiPost(`/api/dte/empresas/${eid}/sincronizar-contabilidad`, {})
         const s = r.sincronizacion || {}
-        const fila = (label, v) => `<div class="checkline ok">${esc(label)}: <b>&nbsp;${v}</b></div>`
-        document.getElementById('dte-sync-out').innerHTML = `
-         <div class="card" style="border-color:var(--success)">
-           <h3>Sincronización DTE → contabilidad</h3>
-            ${fila('Aceptados procesados', s.aceptados_procesados)}
-            ${fila('Documentos de bandeja creados', s.documentos_creados)}
-            ${fila('Enlazados a documentos ya ingestados por el RCV (dedupe)', s.documentos_enlazados_por_dedupe)}
-            ${fila('Propuestas creadas (esperan confirmación humana)', s.propuestas_creadas)}
-            ${fila('Sin regla → quedan PENDIENTES en la bandeja', s.sin_regla)}
-            ${fila('Asientos vinculados', s.asientos_vinculados)}
-            ${(s.fallidos || []).map((f) => `<div class="checkline warn">Fallido: DTE ${esc(String(f.dte_id))} — ${esc(f.motivo || f.etapa || '')}</div>`).join('')}
-           <p class="hint mt">Idempotente: re-ejecutar no duplica documentos ni asientos. Propuestas y confirmaciones se hacen en Contabilizaciones → Propuestas y Conciliación.</p>
-         </div>`
+        window._dteSyncResultado = { empresaId: eid, s }
         showToast('Sincronización completada', 'ok')
         renderRoute()
       } catch (err) {
