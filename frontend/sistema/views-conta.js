@@ -902,17 +902,6 @@ VIEWS.memoria = {
 
 /* ========================= REPORTES NUEVOS ========================= */
 
-function filaCuenta8(f) {
-  const num = (v) => (v ? fmtM(v) : '—')
-  return `<tr>
-   <td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td>
-   <td class="num">${num(f.anterior_deudor)}</td><td class="num">${num(f.anterior_acreedor)}</td>
-   <td class="num">${num(f.debe)}</td><td class="num">${num(f.haber)}</td>
-   <td class="num">${num(f.saldo_deudor)}</td><td class="num">${num(f.saldo_acreedor)}</td>
-   <td class="num">${num(f.perdida)}</td><td class="num">${num(f.utilidad)}</td>
- </tr>`
-}
-
 function vistaPeriodoPlantilla(body, titulo, vistaKey) {
   const periodo = window[`_${vistaKey}Periodo`] || periodoActual()
   body.innerHTML = `
@@ -946,19 +935,40 @@ VIEWS.balance8 = {
      </div>
      <div class="card">
        <h3>Sumas y saldos — ${esc(periodo)}</h3>
-       <div class="tbl-wrap mt"><table class="tbl">
-         <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Ant. Deudor</th><th class="num">Ant. Acreedor</th><th class="num">Débitos</th><th class="num">Créditos</th><th class="num">Saldo Deudor</th><th class="num">Saldo Acreedor</th><th class="num">Pérdida</th><th class="num">Utilidad</th></tr></thead>
-         <tbody>${b.filas.map(filaCuenta8).join('') || '<tr><td colspan="10"><div class="empty">Sin movimientos en este período.</div></td></tr>'}</tbody>
-         <tfoot><tr>
-           <td colspan="2">SUMAS IGUALES</td>
-           <td class="num">${fmtM(s.anterior_deudor)}</td><td class="num">${fmtM(s.anterior_acreedor)}</td>
-           <td class="num">${fmtM(s.debe)}</td><td class="num">${fmtM(s.haber)}</td>
-           <td class="num">${fmtM(s.saldo_deudor)}</td><td class="num">${fmtM(s.saldo_acreedor)}</td>
-           <td class="num">${fmtM(s.perdida)}</td><td class="num">${fmtM(s.utilidad)}</td>
-         </tr></tfoot>
-       </table></div>
+       <div id="b8-tabla" class="mt"></div>
        <p class="hint mt">El cuadre clásico de la hoja de trabajo: saldos deudores + pérdidas = saldos acreedores + utilidades. Las columnas Pérdida/Utilidad muestran el neto de las cuentas de resultado (ingresos, costos y gastos) pendientes de cierre.</p>
      </div>`
+    const colNum8 = (key, label) => ({ key, label, num: true, valor: (f) => (f[key] ? fmtM(f[key]) : '—'), crudo: (f) => f[key] || 0 })
+    UITabla.montar({
+      mount: document.getElementById('b8-tabla'),
+      columnas: [
+        { key: 'codigo', label: 'Código' },
+        { key: 'nombre', label: 'Cuenta' },
+        colNum8('anterior_deudor', 'Ant. Deudor'),
+        colNum8('anterior_acreedor', 'Ant. Acreedor'),
+        colNum8('debe', 'Débitos'),
+        colNum8('haber', 'Créditos'),
+        colNum8('saldo_deudor', 'Saldo Deudor'),
+        colNum8('saldo_acreedor', 'Saldo Acreedor'),
+        colNum8('perdida', 'Pérdida'),
+        colNum8('utilidad', 'Utilidad'),
+      ],
+      filas: b.filas,
+      nombreArchivo: `balance8-${periodo}`,
+      porPagina: 100,
+      vacio: 'Sin movimientos en este período.',
+      filaHTML: (f, hl) => `<tr>
+       <td class="mono sub">${hl(f.codigo)}</td><td>${hl(f.nombre)}</td>
+       ${['anterior_deudor', 'anterior_acreedor', 'debe', 'haber', 'saldo_deudor', 'saldo_acreedor', 'perdida', 'utilidad'].map((k) => `<td class="num">${f[k] ? fmtM(f[k]) : '—'}</td>`).join('')}
+     </tr>`,
+      totalesHTML: `<tr>
+         <td colspan="2"><b>SUMAS IGUALES</b></td>
+         <td class="num">${fmtM(s.anterior_deudor)}</td><td class="num">${fmtM(s.anterior_acreedor)}</td>
+         <td class="num">${fmtM(s.debe)}</td><td class="num">${fmtM(s.haber)}</td>
+         <td class="num">${fmtM(s.saldo_deudor)}</td><td class="num">${fmtM(s.saldo_acreedor)}</td>
+         <td class="num">${fmtM(s.perdida)}</td><td class="num">${fmtM(s.utilidad)}</td>
+       </tr>`,
+    })
   },
 }
 
@@ -971,14 +981,17 @@ VIEWS.clasificado = {
     let c
     try { c = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/clasificado/${periodo}`)).clasificado }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
-    const seccion = (titulo, filas, total) => `
+    const tablasClasif = []
+    let seqSec = 0
+    const seccion = (titulo, filas, total) => {
+      const id = `clasif-${++seqSec}`
+      if (filas.length) tablasClasif.push({ id, filas })
+      return `
      <div class="card mb">
        <h3>${esc(titulo)} <span class="num" style="float:right;font-family:var(--font-mono)">${fmtM(total)}</span></h3>
-        ${filas.length ? `<div class="tbl-wrap mt"><table class="tbl">
-         <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
-         <tbody>${filas.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`).join('')}</tbody>
-       </table></div>` : '<p class="hint mt">Sin saldos en esta sección.</p>'}
+        ${filas.length ? `<div id="${id}" class="mt"></div>` : '<p class="hint mt">Sin saldos en esta sección.</p>'}
      </div>`
+    }
     document.getElementById('rep-body').innerHTML = `
      <div class="kpi-grid mb">
        <div class="kpi"><small>Activo corriente</small><strong>${fmtM(c.activo.corriente.reduce((x, f) => x + f.saldo, 0))}</strong><span class="sub">disponible en el año</span></div>
@@ -991,6 +1004,20 @@ VIEWS.clasificado = {
       ${seccion('Pasivo no corriente (2.2+)', c.pasivo.no_corriente, c.pasivo.no_corriente.reduce((x, f) => x + f.saldo, 0))}
       ${seccion('Patrimonio (3) + resultado del período', c.patrimonio.cuentas, c.patrimonio.total)}
      <p class="hint">Resultado del período incluido en patrimonio: ${fmtM(c.patrimonio.resultado_periodo)} (sin asiento de cierre: la ecuación cuadra en todo estado).</p>`
+    for (const t of tablasClasif) {
+      UITabla.montar({
+        mount: document.getElementById(t.id),
+        columnas: [
+          { key: 'codigo', label: 'Código' },
+          { key: 'nombre', label: 'Cuenta' },
+          { key: 'saldo', label: 'Saldo', num: true, valor: (f) => fmtM(f.saldo), crudo: (f) => f.saldo },
+        ],
+        filas: t.filas,
+        nombreArchivo: `balance-clasificado-${periodo}`,
+        vacio: 'Sin saldos en esta sección.',
+        filaHTML: (f, hl) => `<tr><td class="mono sub">${hl(f.codigo)}</td><td>${hl(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`,
+      })
+    }
   },
 }
 
@@ -1003,11 +1030,16 @@ VIEWS.situacion = {
     let s
     try { s = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/situacion/${periodo}`)).situacion }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
-    const tabla = (titulo, filas, total) => `
+    const tablasSit = []
+    let seqSit = 0
+    const tabla = (titulo, filas, total) => {
+      const id = `sit-${++seqSit}`
+      if (filas.length) tablasSit.push({ id, filas, titulo })
+      return `
      <div class="card mb"><h3>${esc(titulo)} <span class="num" style="float:right;font-family:var(--font-mono)">${fmtM(total)}</span></h3>
-        ${filas.length ? `<div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
-       <tbody>${filas.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint mt">Sin saldos.</p>'}
+        ${filas.length ? `<div id="${id}" class="mt"></div>` : '<p class="hint mt">Sin saldos.</p>'}
      </div>`
+    }
     document.getElementById('rep-body').innerHTML = `
      <div class="kpi-grid mb">
        <div class="kpi"><small>Activos</small><strong>${fmtM(s.totales.activos)}</strong></div>
@@ -1021,6 +1053,20 @@ VIEWS.situacion = {
      <div class="card"><h3>Resultado del período (clases 4/5/6)</h3>
        <p>Ingresos ${fmtM(s.resultados.ingresos)} − costos ${fmtM(s.resultados.costos)} − gastos ${fmtM(s.resultados.gastos)} = <b class="mono">${fmtM(s.resultados.resultado)}</b></p>
      </div>`
+    for (const t of tablasSit) {
+      UITabla.montar({
+        mount: document.getElementById(t.id),
+        columnas: [
+          { key: 'codigo', label: 'Código' },
+          { key: 'nombre', label: 'Cuenta' },
+          { key: 'saldo', label: 'Saldo', num: true, valor: (f) => fmtM(f.saldo), crudo: (f) => f.saldo },
+        ],
+        filas: t.filas,
+        nombreArchivo: `situacion-${t.titulo.toLowerCase()}-${periodo}`,
+        vacio: 'Sin saldos.',
+        filaHTML: (f, hl) => `<tr><td class="mono sub">${hl(f.codigo)}</td><td>${hl(f.nombre)}</td><td class="num">${fmtM(f.saldo)}</td></tr>`,
+      })
+    }
   },
 }
 
@@ -1033,26 +1079,44 @@ VIEWS.resultados = {
     let r
     try { r = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/resultados/${periodo}`)).resultados }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
-    const bloque = (titulo, d) => `
+    const tablasRes = []
+    const bloque = (titulo, d, idx) => {
+      const id = `res-${idx}`
+      const filas = [
+        ...d.detalle.ingresos.map((f) => ({ ...f, signo: 1, claseTxt: 'Ingreso' })),
+        ...d.detalle.costos.map((f) => ({ ...f, signo: -1, claseTxt: 'Costo' })),
+        ...d.detalle.gastos.map((f) => ({ ...f, signo: -1, claseTxt: 'Gasto' })),
+      ]
+      tablasRes.push({ id, filas, d })
+      return `
      <div class="card mb"><h3>${esc(titulo)}</h3>
-       <div class="tbl-wrap mt"><table class="tbl">
-         <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Saldo</th></tr></thead>
-         <tbody>
-            ${d.detalle.ingresos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num up">${fmtM(f.saldo)}</td></tr>`).join('')}
-            ${d.detalle.costos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">(−) ${fmtM(f.saldo)}</td></tr>`).join('')}
-            ${d.detalle.gastos.map((f) => `<tr><td class="mono sub">${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td class="num">(−) ${fmtM(f.saldo)}</td></tr>`).join('')}
-           <tr><td colspan="2"><b>Resultado</b></td><td class="num"><b>${fmtM(d.resultado)}</b></td></tr>
-         </tbody>
-       </table></div>
+       <div id="${id}" class="mt"></div>
      </div>`
+    }
     document.getElementById('rep-body').innerHTML = `
      <div class="kpi-grid mb">
        <div class="kpi up"><small>Ingresos del mes</small><strong>${fmtM(r.periodo_mes.ingresos)}</strong></div>
        <div class="kpi ${r.periodo_mes.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado del mes</small><strong>${fmtM(r.periodo_mes.resultado)}</strong></div>
        <div class="kpi ${r.acumulado.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado acumulado</small><strong>${fmtM(r.acumulado.resultado)}</strong><span class="sub">${esc(r.rango_acumulado.desde)} → ${esc(r.rango_acumulado.hasta)}</span></div>
      </div>
-      ${bloque('Del período ' + r.periodo, r.periodo_mes)}
-      ${bloque('Acumulado del año ' + r.anio, r.acumulado)}`
+      ${bloque('Del período ' + r.periodo, r.periodo_mes, 1)}
+      ${bloque('Acumulado del año ' + r.anio, r.acumulado, 2)}`
+    for (const t of tablasRes) {
+      UITabla.montar({
+        mount: document.getElementById(t.id),
+        columnas: [
+          { key: 'codigo', label: 'Código' },
+          { key: 'nombre', label: 'Cuenta' },
+          { key: 'clase', label: 'Clase', orden: false, valor: (f) => f.claseTxt },
+          { key: 'saldo', label: 'Saldo', num: true, valor: (f) => (f.signo === 1 ? fmtM(f.saldo) : `(−) ${fmtM(f.saldo)}`), crudo: (f) => f.signo * f.saldo },
+        ],
+        filas: t.filas,
+        nombreArchivo: `resultados-${t.d === r.periodo_mes ? 'periodo-' + r.periodo : 'acumulado-' + r.anio}`,
+        vacio: 'Sin cuentas de resultado en este rango.',
+        filaHTML: (f, hl) => `<tr><td class="mono sub">${hl(f.codigo)}</td><td>${hl(f.nombre)}</td><td><span class="chip ${f.signo === 1 ? 'contabilizado' : 'neutral'}">${esc(f.claseTxt)}</span></td><td class="num">${f.signo === 1 ? fmtM(f.saldo) : `(−) ${fmtM(f.saldo)}`}</td></tr>`,
+        totalesHTML: `<tr><td colspan="3"><b>Resultado</b></td><td class="num"><b>${fmtM(t.d.resultado)}</b></td></tr>`,
+      })
+    }
   },
 }
 
@@ -1087,30 +1151,12 @@ function vistaCuentaCorriente(rol) {
        </div>
        <div class="card">
          <h3>Resumen por contraparte</h3>
-         <div class="tbl-wrap mt"><table class="tbl">
-           <thead><tr><th>RUT</th><th>Razón social</th><th class="num">Cargos</th><th class="num">Abonos</th><th class="num">Saldo</th><th></th></tr></thead>
-           <tbody>${cc.resumen.map((r) => `<tr>
-             <td class="mono">${esc(r.rut)}</td><td>${esc(r.razon_social || '—')}</td>
-             <td class="num">${fmtM(r.cargos)}</td><td class="num">${fmtM(r.abonos)}</td>
-             <td class="num"><b>${fmtM(r.saldo)}</b></td>
-             <td><button class="btn btn-secondary btn-sm cc-detalle" data-rut="${esc(r.rut)}">Ver detalle</button></td>
-           </tr>`).join('') || '<tr><td colspan="6"><div class="empty">Sin documentos contabilizados con esos filtros.</div></td></tr>'}</tbody>
-         </table></div>
+         <div id="cc-resumen" class="mt"></div>
        </div>
         ${cc.detalle ? `
        <div class="card mt">
          <h3>Detalle de ${esc(cc.rut)} — saldo corrido</h3>
-         <div class="tbl-wrap mt"><table class="tbl">
-           <thead><tr><th>Fecha</th><th>Tipo</th><th>Referencia</th><th class="num">Cargo</th><th class="num">Abono</th><th class="num">Saldo</th></tr></thead>
-           <tbody>${cc.detalle.map((d) => `<tr>
-             <td class="sub">${esc(d.fecha || '')}</td>
-             <td><span class="chip ${d.tipo === 'DOCTO' ? 'clasificado' : d.tipo === 'NC' ? 'propuesto' : 'contabilizado'}">${esc(d.tipo)}</span></td>
-             <td class="mono sub">${esc(d.referencia || '')}</td>
-             <td class="num">${d.cargo ? fmtM(d.cargo) : '—'}</td>
-             <td class="num">${d.abono ? fmtM(d.abono) : '—'}</td>
-             <td class="num"><b>${fmtM(d.saldo_despues)}</b></td>
-           </tr>`).join('')}</tbody>
-         </table></div>
+         <div id="cc-detalle-tabla" class="mt"></div>
        </div>` : ''}
        <p class="hint mt">Cargos/abonos derivados de la partida doble real: facturas contabilizadas (devengo en fecha_docto) y pagos/cobros de tesorería aplicados al documento.</p>`
 
@@ -1127,10 +1173,61 @@ function vistaCuentaCorriente(rol) {
       document.getElementById('cc-limpiar').addEventListener('click', () => {
         window._ccDesde = null; window._ccHasta = null; window._ccRut = null; renderRoute()
       })
-      cont.querySelectorAll('.cc-detalle').forEach((btn) => btn.addEventListener('click', () => {
+      UITabla.montar({
+        mount: document.getElementById('cc-resumen'),
+        columnas: [
+          { key: 'rut', label: 'RUT' },
+          { key: 'razon_social', label: 'Razón social', valor: (r) => r.razon_social || '—' },
+          { key: 'cargos', label: 'Cargos', num: true, valor: (r) => fmtM(r.cargos), crudo: (r) => r.cargos },
+          { key: 'abonos', label: 'Abonos', num: true, valor: (r) => fmtM(r.abonos), crudo: (r) => r.abonos },
+          { key: 'saldo', label: 'Saldo', num: true, valor: (r) => fmtM(r.saldo), crudo: (r) => r.saldo },
+          { key: 'acciones', label: '', orden: false, buscar: false },
+        ],
+        filas: cc.resumen,
+        nombreArchivo: `cuenta-corriente-${rol}-${f.desde || 'inicio'}_${f.hasta || 'hoy'}`,
+        vacio: 'Sin documentos contabilizados con esos filtros.',
+        filaHTML: (r, hl) => `<tr>
+             <td class="mono">${hl(r.rut)}</td><td>${hl(r.razon_social || '—')}</td>
+             <td class="num">${fmtM(r.cargos)}</td><td class="num">${fmtM(r.abonos)}</td>
+             <td class="num"><b>${fmtM(r.saldo)}</b></td>
+             <td><button class="btn btn-secondary btn-sm cc-detalle" data-rut="${esc(r.rut)}">Ver detalle</button></td>
+           </tr>`,
+        totalesHTML: `<tr><td colspan="2"><b>Total</b></td>
+             <td class="num"><b>${fmtM(cc.total_cargos)}</b></td>
+             <td class="num"><b>${fmtM(cc.total_abonos)}</b></td>
+             <td class="num"><b>${fmtM(cc.total_saldo)}</b></td><td></td></tr>`,
+      })
+      // Delegación: UITabla re-renderiza el tbody al buscar/ordenar/paginar.
+      document.getElementById('cc-resumen').addEventListener('click', (e) => {
+        const btn = e.target.closest('.cc-detalle')
+        if (!btn) return
         window._ccRut = btn.dataset.rut
         renderRoute()
-      }))
+      })
+      if (cc.detalle) {
+        UITabla.montar({
+          mount: document.getElementById('cc-detalle-tabla'),
+          columnas: [
+            { key: 'fecha', label: 'Fecha', orden: false },
+            { key: 'tipo', label: 'Tipo', orden: false },
+            { key: 'referencia', label: 'Referencia', orden: false },
+            { key: 'cargo', label: 'Cargo', num: true, orden: false, valor: (d) => (d.cargo ? fmtM(d.cargo) : '—'), crudo: (d) => d.cargo || 0 },
+            { key: 'abono', label: 'Abono', num: true, orden: false, valor: (d) => (d.abono ? fmtM(d.abono) : '—'), crudo: (d) => d.abono || 0 },
+            { key: 'saldo_despues', label: 'Saldo', num: true, orden: false, valor: (d) => fmtM(d.saldo_despues), crudo: (d) => d.saldo_despues },
+          ],
+          filas: cc.detalle,
+          nombreArchivo: `cc-detalle-${cc.rut || 'contraparte'}`,
+          vacio: 'Sin movimientos.',
+          filaHTML: (d) => `<tr>
+             <td class="sub">${esc(d.fecha || '')}</td>
+             <td><span class="chip ${d.tipo === 'DOCTO' ? 'clasificado' : d.tipo === 'NC' ? 'propuesto' : 'contabilizado'}">${esc(d.tipo)}</span></td>
+             <td class="mono sub">${esc(d.referencia || '')}</td>
+             <td class="num">${d.cargo ? fmtM(d.cargo) : '—'}</td>
+             <td class="num">${d.abono ? fmtM(d.abono) : '—'}</td>
+             <td class="num"><b>${fmtM(d.saldo_despues)}</b></td>
+           </tr>`,
+        })
+      }
     },
   }
 }
