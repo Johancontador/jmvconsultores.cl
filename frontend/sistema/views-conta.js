@@ -587,32 +587,35 @@ async function admEmpresas(body) {
   const btn = document.getElementById('emp-new')
   if (btn) btn.addEventListener('click', () => {
     openModal(`
-     <h3>Nueva empresa</h3>
-     <p class="sub">La clave SII se guarda cifrada (bóveda AES-256-GCM) y el plan de cuentas se precarga.</p>
+     <h3>Nueva empresa — solo RUT y clave SII</h3>
+     <p class="sub">El sistema ingresa al SII con esa clave, extrae la ficha oficial del contribuyente (razón social, inicio de actividades, régimen, actividad, domicilio, contacto) y deja la empresa creada con todo eso. La clave se guarda cifrada (bóveda AES-256-GCM) y el plan de cuentas se precarga. Solo falta confirmar socios e histórico de documentos.</p>
      <div class="form-group"><label class="frm-label">RUT</label><input id="ne-rut" class="form-input" placeholder="76.123.456-7"></div>
-     <div class="form-group"><label class="frm-label">Razón social</label><input id="ne-nombre" class="form-input"></div>
      <div class="form-group"><label class="frm-label">Clave SII</label><input id="ne-clave" type="password" class="form-input"></div>
-     <div class="form-group"><label class="frm-label">Tasa PPM (ej. 0.015)</label><input id="ne-ppm" class="form-input" value="0.015"></div>
-     <div class="form-group"><label class="frm-label">Teléfono</label><input id="ne-tel" class="form-input"></div>
-     <label class="flex" style="font-size:var(--fs-sm)"><input type="checkbox" id="ne-exento"> Empresa exenta de IVA</label>
+     <div class="login-err" id="ne-err" hidden></div>
      <div class="modal-foot">
        <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
-       <button class="btn btn-primary" id="ne-ok">Crear</button>
+       <button class="btn btn-primary" id="ne-ok">Consultar SII y crear</button>
      </div>`)
     document.getElementById('ne-ok').addEventListener('click', async () => {
+      const btnOk = document.getElementById('ne-ok')
+      const err = document.getElementById('ne-err')
+      err.hidden = true
+      const rut = document.getElementById('ne-rut').value.trim()
+      const clave = document.getElementById('ne-clave').value
+      if (!rut || !clave) { err.textContent = 'Ingresa RUT y clave SII.'; err.hidden = false; return }
+      btnOk.disabled = true
+      btnOk.textContent = 'Consultando el SII…'
       try {
-        await apiPost('/api/contable/empresas', {
-          rut: document.getElementById('ne-rut').value,
-          nombre: document.getElementById('ne-nombre').value,
-          clave_sii: document.getElementById('ne-clave').value,
-          tasa_ppm: Number(document.getElementById('ne-ppm').value) || 0,
-          telefono: document.getElementById('ne-tel').value,
-          exento: document.getElementById('ne-exento').checked,
-        })
-        showToast('Empresa creada', 'success')
+        const r = await apiPost('/api/contable/empresas/desde-sii', { rut, clave_sii: clave })
+        showToast(`Empresa creada: ${r.nombre} (RUT ${formatRut(r.rut)})`, 'success')
         cerrarModal()
         boot()
-      } catch (err) { showToast(err.message, 'error') }
+      } catch (ex) {
+        err.textContent = ex.message
+        err.hidden = false
+        btnOk.disabled = false
+        btnOk.textContent = 'Consultar SII y crear'
+      }
     })
   })
 }

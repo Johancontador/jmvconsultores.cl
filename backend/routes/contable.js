@@ -9,6 +9,7 @@ const db = require('../db')
 const { requireAdmin } = require('../middleware/requireAuth')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const empresas = require('../core/empresas')
+const empresasSii = require('../core/empresas-sii')
 const periodos = require('../core/periodos')
 const auditoria = require('../core/auditoria')
 const asientos = require('../core/asientos')
@@ -55,6 +56,26 @@ router.post('/empresas', requireAdmin, (req, res) => {
     res.status(201).json({ ok: true, empresa })
   } catch (err) {
     const code = /Ya existe|inválida|inválido|obligatorios/.test(err.message) ? 400 : 500
+    res.status(code).json({ ok: false, error: err.message })
+  }
+})
+
+// Alta de empresa con SOLO RUT + clave SII: el sistema loguea al SII, extrae
+// la ficha oficial del contribuyente (DatosCntrNow) y crea la empresa con
+// razón social, inicio de actividades, régimen y actividad reales. Solo super admin.
+router.post('/empresas/desde-sii', requireAdmin, async (req, res) => {
+  try {
+    const { rut, clave_sii, tasa_ppm } = req.body
+    const resultado = await empresasSii.crearDesdeSii(db, {
+      usuarioId: req.user.id,
+      rut,
+      clave: clave_sii,
+      tasaPpm: tasa_ppm,
+      ip: ip(req),
+    })
+    res.status(201).json({ ok: true, ...resultado })
+  } catch (err) {
+    const code = /Ya existe|inválida|inválido|obligatorios|Clave SII|no se pudo|no entregó|corresponde al RUT/.test(err.message) ? 400 : 500
     res.status(code).json({ ok: false, error: err.message })
   }
 })
