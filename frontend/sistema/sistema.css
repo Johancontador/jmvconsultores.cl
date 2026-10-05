@@ -72,12 +72,37 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
 @media (max-width: 960px) {
   .sys { grid-template-columns: 1fr; }
   .sys-side { position: static; height: auto; }
-  .sys-nav { flex-direction: row; flex-wrap: wrap; }
-  .nav-seccion { width: 100%; margin-top: var(--space-2); }
-  .sys-side-foot { border-top: none; flex-direction: row; align-items: center; flex-wrap: wrap; }
-  .sys-side-foot select.form-input { width: auto; flex: 1; }
+  /* Nav horizontal scrollable: el contenido queda a un scroll de distancia,
+     no tras 26 ítems apilados. El buscador del menú no aplica aquí. */
+  .sys-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: var(--space-1); padding-bottom: var(--space-1); -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .sys-nav a { white-space: nowrap; border-left: none; border-bottom: 2px solid transparent; padding: 6px var(--space-3); }
+  .sys-nav a.active { border-bottom-color: var(--accent); }
+  .nav-seccion { width: auto; margin: 0; display: none; }
+  .nav-search { display: none; }
+  .sys-side-foot { border-top: none; flex-direction: row; align-items: center; flex-wrap: wrap; margin-top: var(--space-2); }
+  .sys-side-foot select.form-input { width: auto; flex: 1; min-width: 180px; }
   .sys-main { padding: var(--space-4) var(--space-3) var(--space-12); }
   .sys-titlebar h1 { font-size: var(--fs-xl); }
+}
+
+@media (max-width: 640px) {
+  /* Teléfono: header apilado, KPIs en 2 columnas, toolbar compacta. */
+  .sys-header { flex-wrap: wrap; gap: var(--space-2); }
+  .sys-breadcrumb { font-size: var(--fs-xs); }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: var(--space-2); }
+  .kpi { padding: var(--space-3); }
+  .card { padding: var(--space-3); border-radius: var(--radius-lg); }
+  .tbl-toolbar { gap: var(--space-2); }
+  .tbl-toolbar input { max-width: none; flex: 1; min-width: 120px; }
+  .frm-row { flex-direction: column; align-items: stretch; }
+  .frm-row .form-input { width: 100% !important; }
+  .sys-main { padding: var(--space-3) var(--space-2) var(--space-10); }
+}
+
+/* Táctil: filas y columnas ordenables con área de toque digna */
+@media (hover: none) and (pointer: coarse) {
+  .tbl tbody tr { min-height: 44px; }
+  .tbl th.th-sort { padding-top: var(--space-2); padding-bottom: var(--space-2); }
 }
 
 /* ---------- Componentes ---------- */
