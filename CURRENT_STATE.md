@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-04 · Commit base: `3089001` (master) · Suite: 279 verdes
+> Fecha: 2026-10-05 · Commit base: `e3cae20` (master) · Suite: 289 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 27 archivos, 279 tests verdes: `npm test` |
+| Tests | `node --test` | 28 archivos, 289 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -52,12 +52,20 @@ backend/
                             automatización, onboarding, reportes, dashboard, tesorería,
                             tesoreria-cartola-formatos, activos, niif, asientos-externos,
                             dte-emisor (BLOQUE 2: emisión de DTEs por empresa cliente),
-                            dte-contable (BLOQUE 3: DTE ACEPTADO → bandeja → propuesta → asiento)
+                            dte-contable (BLOQUE 3: DTE ACEPTADO → bandeja → propuesta → asiento),
+                            empresas-sii (alta de empresa desde el SII con solo RUT + clave:
+                            login por fetch, extrae la ficha oficial DatosCntrNow del home
+                            misiir y alimenta onboarding.confirmarFicha; régimen desde
+                            atributos 14TT/14GG, nada inventado; ficha cruda en
+                            data/sii-fichas/<rut>.json; fallback a login básico si la cuenta
+                            no habilita token RCV; detecta redirección a login = clave
+                            rechazada con la variante «no es correcta» que loginSII no pesca)
   routes/
     auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin),
                             registro self-service con validación SII en vivo (SAAS-1)
-    contable.js             empresas CRUD, usuarios/roles, períodos, auditoría, plan de cuentas,
-                            centros de costo, reglas
+    contable.js             empresas CRUD (incluye POST /empresas/desde-sii: alta con solo
+                            RUT + clave SII, ver core/empresas-sii.js), usuarios/roles,
+                            períodos, auditoría, plan de cuentas, centros de costo, reglas
     documentos.js           bandeja + ingesta RCV + reglas (FASE 3)
     propuestas.js           propuestas + conciliación SII↔contable (FASE 4)
     reportes.js             balance, situación, resultados, cierre de período (FASE 5)
@@ -93,10 +101,11 @@ frontend/
   landing.html              Landing pública (servida en /) con login embebido
   sistema/                  SPA contable (shell real): router hash + vistas por módulo
     index.html              app.js, views-fiscal/autom/teso/activos/onboarding/dte/conta
-    app.js                  boot, login, shell (secciones verticales: Empresa / SII /
-                            Facturación / Contabilizaciones / Tesorería / Reportes, pill de
-                            documentos), router (query de vista soportada en el hash:
-                            #dte?tipo=33), selector de empresa
+    app.js                  boot, login, shell (secciones verticales ordenadas por flujo de
+                            trabajo: SII / Facturación / Contabilizaciones / Tesorería /
+                            Reportes / Empresa — Bandeja de Documentos primero,
+                            Administración al final, pill de documentos), router (query de
+                            vista soportada en el hash: #dte?tipo=33), selector de empresa
     views-dte.js            Facturación Electrónica (BLOQUE 4): bandeja de DTEs emitidos con
                             filtros/estado SII/vínculo contable y sincronización DTE→contabilidad,
                             matriz de requisitos del emisor, configuración (certificado/CAFs) y
@@ -119,9 +128,9 @@ data/                       SQLite (no versionado)
 nginx/, Dockerfile, docker-compose.yml, scripts/, iniciar.bat
 docs/                       PRD, TRD, BACKEND, APPFLOW, UI-UX, PLAN, MASTERPLAN,
                             SEGURIDAD, DESPLIEGUE, ROADMAP-FUNCIONALIDADES, REDISENO_PROPUESTA
-test/                       27 suites: calculos, db-schema, export-fecha, informe-listar,
+test/                       28 suites: calculos, db-schema, export-fecha, informe-listar,
                             fase1-fase9, saas1-saas3, automatizacion, dashboard, backup-seguro,
-                            boveda-clientes, dte-emision, dte-contable, hardening,
+                            boveda-clientes, dte-emision, dte-contable, empresas-sii, hardening,
                             memoria-limpieza, memoria-reportes, password, cartola-formatos
 ```
 
@@ -219,7 +228,11 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **DTE → Contabilidad (BLOQUE 3, 12 tests — tras auditoría 2A):** `sincronizar-contabilidad` lleva cada DTE ACEPTADO a la bandeja como documento `origen='dte'` con la MISMA `clave_dedupe` de la ingesta RCV (UNA sola representación: re-ingestar el RCV del período lo dedupea; si el RCV llegó primero, se apunta a él), auto-clasifica con las reglas del contador y genera PROPUESTA PENDIENTE — la confirmación humana sigue siendo la única puerta al asiento (§6); sin regla → documento PENDIENTE visible (nada inventado); segunda pasada vincula `dte_emitidos.asiento_id` (vínculo bidireccional DTE↔asiento). Devengo por `fecha_emision`. Flujo probado 33 (Debe CLIENTES / Haber VENTAS_SERVICIOS + IVA_DEBITO), 34 sin IVA y 61 invertido. Idempotencia de emisión: `idempotencia` opcional en `POST /emitir` (UNIQUE parcial empresa+clave → `deduplicado: true`). La conciliación FASE 4 ve los DTE automáticamente vía bandeja (sin tocarla).
 
-- Tests `npm test` en verde (279). CI en verde en cada push.
+- **Alta de empresa desde el SII (solo RUT + clave SII):** el modal de nueva empresa de Administración pide únicamente RUT y clave SII; `POST /api/contable/empresas/desde-sii` hace login por fetch (`loginSII`), extrae la ficha oficial del contribuyente (JSON `DatosCntrNow` embebido en el HTML del home misiir) y alimenta la ficha completa vía `onboarding.confirmarFicha` — razón social, tipo/subtipo contribuyente, constitución, inicio de actividades, régimen tributario desde atributos 14TT/14GG (null si no están: nada inventado), email, teléfono, domicilio y actividades (glosas). Valida que el RUT de la ficha coincida con el pedido, guarda la ficha cruda en `data/sii-fichas/<rut>.json` y la clave SII queda cifrada en bóveda. 10 tests del parser/mapeo; suite 289/289.
+
+- **Portafolio cargado en producción (2026-10-05):** 22 empresas activas (ids 1-22) — 19 creadas en lote vía el flujo «desde SII» con sus fichas crudas en `data/sii-fichas/`. 2 RUTs de la lista original (77604189-0 y 78107917-0) quedaron fuera: el SII rechaza sus claves («La Clave Tributaria ingresada no es correcta») — pendiente que el dueño entregue las claves correctas y se reintente (el flujo es idempotente).
+
+- Tests `npm test` en verde (289). CI en verde en cada push.
 
 - **UI de Facturación Electrónica (BLOQUE 4, frontend) + design audit:** las tres vistas en `/sistema/` (`views-dte.js`): bandeja de DTEs emitidos (KPIs por estado, filtros tipo/estado con query en el hash, acciones por fila: consultar estado SII verbatim y reintentar con el mismo folio, botón de sincronización DTE→contabilidad con resumen de ambas pasadas), configuración del emisor (ficha con certificado .pfx subido desde archivo y contraseña — cifrados en el servidor, jamás releídos —, tabla de CAFs con folios usados y carga por pegado del XML, idempotente) y emisión 33/34/56/61 (receptor completo, referencia condicional para notas con CodRef 1/2/3, ítems dinámicos con totales en vivo idénticos a `calcularMontos`, clave de idempotencia generada al abrir el formulario). Design audit documentado en [docs/DESIGN-AUDIT-DTE.md](docs/DESIGN-AUDIT-DTE.md): 5 hallazgos corregidos (bug del router con query en el hash compartido por todas las vistas, matriz de faltantes en vez del muro repetido ×4, jerarquía de acciones, montos en mono tabular, base tipográfica de la app a 16px) — Design Score B → A, suite 279/279.
 
