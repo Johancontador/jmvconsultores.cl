@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-05 · Commit base: `e3cae20` (master) · Suite: 289 verdes
+> Fecha: 2026-10-05 · Commit base: `7d7a565` (master) · Suite: 301 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -28,7 +28,7 @@
 | Frontend | Vanilla JS (sin framework, sin build) | 10 páginas + 11 módulos compartidos en `frontend/shared/` |
 | Auth propia | Sesiones en SQLite + cookie `sid` httpOnly | scrypt para passwords (`salt:hash` en hex, 64 bytes) |
 | Export | exceljs + archiver | Excel y ZIP en exportación masiva |
-| Tests | `node --test` | 28 archivos, 289 tests verdes: `npm test` |
+| Tests | `node --test` | 29 archivos, 301 tests verdes: `npm test` |
 | CI | GitHub Actions (`.github/workflows/ci.yml`) | tests + `node --check` + gitleaks + chequeo de archivos sensibles |
 | Deploy | Docker + nginx (docker-compose) o bare-metal; Cloudflare Tunnel documentado | `docs/DESPLIEGUE.md` |
 | Repos | Git local → remote `vps` (bare en VPS, vía Tailscale) | GitHub pendiente de `gh auth login` |
@@ -59,7 +59,9 @@ backend/
                             atributos 14TT/14GG, nada inventado; ficha cruda en
                             data/sii-fichas/<rut>.json; fallback a login básico si la cuenta
                             no habilita token RCV; detecta redirección a login = clave
-                            rechazada con la variante «no es correcta» que loginSII no pesca)
+                            rechazada con la variante «no es correcta» que loginSII no pesca),
+                            analitica (motor de analítica tributaria: DV M11, alertas de
+                            duplicados y RUT inválidos del RCV, KPIs anuales, top contrapartes)
   routes/
     auth.js                 login (rate-limit 5/15min por IP), logout, /me, CRUD usuarios (admin),
                             registro self-service con validación SII en vivo (SAAS-1)
@@ -68,7 +70,8 @@ backend/
                             períodos, auditoría, plan de cuentas, centros de costo, reglas
     documentos.js           bandeja + ingesta RCV + reglas (FASE 3)
     propuestas.js           propuestas + conciliación SII↔contable (FASE 4)
-    reportes.js             balance, situación, resultados, cierre de período (FASE 5)
+    reportes.js             balance, situación, resultados, cierre de período (FASE 5),
+                            analítica tributaria anual (GET /empresas/:id/analitica)
     automatizacion.js       pipeline de contabilización automática del período
     onboarding.js           ficha tributaria SII + ingesta del histórico (SAAS-2)
     tesoreria.js            bancos, pagos/cobros/transferencias, cartola, conciliación (FASE 6)
@@ -100,12 +103,15 @@ backend/
 frontend/
   landing.html              Landing pública (servida en /) con login embebido
   sistema/                  SPA contable (shell real): router hash + vistas por módulo
-    index.html              app.js, views-fiscal/autom/teso/activos/onboarding/dte/conta
+    index.html              app.js, views-fiscal/autom/teso/activos/onboarding/dte/conta,
+                            views-analitica, tema.js, shared/uitoolkit.js
     app.js                  boot, login, shell (secciones verticales ordenadas por flujo de
                             trabajo: SII / Facturación / Contabilizaciones / Tesorería /
                             Reportes / Empresa — Bandeja de Documentos primero,
                             Administración al final, pill de documentos), router (query de
-                            vista soportada en el hash: #dte?tipo=33), selector de empresa
+                            vista soportada en el hash: #dte?tipo=33), selector de empresa,
+                            sys-header con breadcrumb y toggle de tema claro/oscuro, buscador
+                            del menú lateral
     views-dte.js            Facturación Electrónica (BLOQUE 4): bandeja de DTEs emitidos con
                             filtros/estado SII/vínculo contable y sincronización DTE→contabilidad,
                             matriz de requisitos del emisor, configuración (certificado/CAFs) y
@@ -113,7 +119,12 @@ frontend/
     views-teso.js           Tesorería: bancos, libro banco, conciliación (FASE 6)
     views-activos.js        Activos fijos, venta/baja, depreciación del período (FASE 7)
     views-niif.js           NIIF: situación/resultados por rubros + mapeo (FASE 8)
-    views-fiscal.js         Libros C/V, documentos, bandeja
+    views-fiscal.js         Libros C/V, documentos, bandeja (UITabla: buscar sin acentos,
+                            ordenar por valor crudo, paginar, exportar CSV/XLS, copiar,
+                            imprimir, totales de lo filtrado en tfoot)
+    views-analitica.js      Dashboard Tributario: KPIs anuales con variación vs año
+                            anterior, barras 12 meses, top 20 clientes/proveedores,
+                            alertas de duplicados y RUT inválidos
     views-autom.js          Automatización + propuestas/conciliación
     views-onboarding.js     Onboarding autónomo (SAAS-2)
     views-conta.js          Asientos, diario, mayor, memoria, balance 8 columnas,
@@ -123,15 +134,16 @@ frontend/
   js/  clientes.js informe.js libro.js proceso.js dashboard.js reportes.js
        tributario.js herramientas.js portafolio.js exportacion-masiva.js
   shared/ layout.js shell-router.js shell-state.js api.js format.js table.js
-          datagrid.js filters.js rango.js export.js toast.js
+          datagrid.js filters.js rango.js export.js toast.js uitoolkit.js
 data/                       SQLite (no versionado)
 nginx/, Dockerfile, docker-compose.yml, scripts/, iniciar.bat
 docs/                       PRD, TRD, BACKEND, APPFLOW, UI-UX, PLAN, MASTERPLAN,
                             SEGURIDAD, DESPLIEGUE, ROADMAP-FUNCIONALIDADES, REDISENO_PROPUESTA
-test/                       28 suites: calculos, db-schema, export-fecha, informe-listar,
+test/                       29 suites: calculos, db-schema, export-fecha, informe-listar,
                             fase1-fase9, saas1-saas3, automatizacion, dashboard, backup-seguro,
                             boveda-clientes, dte-emision, dte-contable, empresas-sii, hardening,
-                            memoria-limpieza, memoria-reportes, password, cartola-formatos
+                            memoria-limpieza, memoria-reportes, password, cartola-formatos,
+                            analitica
 ```
 
 ## 4. Modelo de datos actual (resumen; detalle en DATA_MODEL.md)
@@ -232,7 +244,9 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Portafolio cargado en producción (2026-10-05):** 22 empresas activas (ids 1-22) — 19 creadas en lote vía el flujo «desde SII» con sus fichas crudas en `data/sii-fichas/`. 2 RUTs de la lista original (77604189-0 y 78107917-0) quedaron fuera: el SII rechaza sus claves («La Clave Tributaria ingresada no es correcta») — pendiente que el dueño entregue las claves correctas y se reintente (el flujo es idempotente).
 
-- Tests `npm test` en verde (289). CI en verde en cada push.
+- **Arquitectura UI profesional (FASES 1-4, commit `7d7a565`):** tema claro/oscuro/sistema persistente con toggle en el header (`tema.js` + tokens en app.css); sys-header con breadcrumb por sección; buscador del menú lateral con filtrado en vivo; **UITabla** en `shared/uitoolkit.js` (buscador sin acentos con resaltado `<mark>`, orden por columna usando el valor crudo — los montos formateados ordenan numérico, bug corregido y verificado en vivo —, paginación, exportación CSV/XLS con BOM, copiar, imprimir, tfoot con totales de lo filtrado) y **UIForms** (validación requerido/rut/email/min con mensajes inline). Libros C/V y Bandeja de Documentos reescritas sobre UITabla (fin del scraping de DOM); **Dashboard Tributario** (#analitica) con KPIs anuales + variación, barras 12 meses, top 20 clientes/proveedores y alertas de duplicados/RUT inválidos (`core/analitica.js`, 12 tests); modal de nueva empresa valida con UIForms antes de llamar al SII. Verificado en vivo con navegador headless (shell, dashboard, tema, buscador, libros, documentos con paginación, modal sin crear nada): consola sin errores, 22 empresas intactas.
+
+- Tests `npm test` en verde (301). CI en verde en cada push.
 
 - **UI de Facturación Electrónica (BLOQUE 4, frontend) + design audit:** las tres vistas en `/sistema/` (`views-dte.js`): bandeja de DTEs emitidos (KPIs por estado, filtros tipo/estado con query en el hash, acciones por fila: consultar estado SII verbatim y reintentar con el mismo folio, botón de sincronización DTE→contabilidad con resumen de ambas pasadas), configuración del emisor (ficha con certificado .pfx subido desde archivo y contraseña — cifrados en el servidor, jamás releídos —, tabla de CAFs con folios usados y carga por pegado del XML, idempotente) y emisión 33/34/56/61 (receptor completo, referencia condicional para notas con CodRef 1/2/3, ítems dinámicos con totales en vivo idénticos a `calcularMontos`, clave de idempotencia generada al abrir el formulario). Design audit documentado en [docs/DESIGN-AUDIT-DTE.md](docs/DESIGN-AUDIT-DTE.md): 5 hallazgos corregidos (bug del router con query en el hash compartido por todas las vistas, matriz de faltantes en vez del muro repetido ×4, jerarquía de acciones, montos en mono tabular, base tipográfica de la app a 16px) — Design Score B → A, suite 279/279.
 
