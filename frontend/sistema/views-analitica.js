@@ -85,6 +85,52 @@ VIEWS.analitica = {
        <div class="bars-lbl">${a.meses.map((m) => `<span title="${perDisplay(m.periodo)}">${m.mes}</span>`).join('')}</div>
      </div>
 
+     <div class="grid-2 mt">
+       <div class="card">
+         <h3>IVA determinado por mes — ${a.anio}</h3>
+         <p class="hint">Débito − crédito. Barras bajo cero (rembolso) en verde.</p>
+         <div class="bars mt" style="height:110px">
+           ${(() => {
+             const maxIva = Math.max(1, ...a.meses.map((m) => Math.abs(m.iva_determinado)))
+             return a.meses.map((m) => {
+               const pct = Math.round((Math.abs(m.iva_determinado) / maxIva) * 100)
+               const color = m.iva_determinado < 0 ? 'var(--success)' : 'var(--danger)'
+               return `<div class="b" title="${perDisplay(m.periodo)} — IVA determinado ${fmtM(m.iva_determinado)}">
+                 <i style="height:${m.iva_determinado === 0 ? 0 : Math.max(4, pct)}%;background:${color};opacity:.85"></i>
+               </div>`
+             }).join('')
+           })()}
+         </div>
+         <div class="bars-lbl">${a.meses.map((m) => `<span title="${perDisplay(m.periodo)}">${m.mes}</span>`).join('')}</div>
+       </div>
+       <div class="card">
+         <h3>${a.anio} vs ${Number(a.anio) - 1}</h3>
+         ${(() => {
+           const ant = a.anual.anio_anterior
+           const filas = [
+             { k: 'Ventas', act: a.anual.ventas, ant: ant.ventas },
+             { k: 'Compras', act: a.anual.compras, ant: ant.compras },
+             { k: 'IVA determinado', act: a.anual.iva_determinado, ant: ant.iva_determinado },
+           ]
+           const maxCmp = Math.max(1, ...filas.map((f) => Math.max(Math.abs(f.act), Math.abs(f.ant))))
+           return filas.map((f) => `
+             <div style="margin-top:var(--space-4)">
+               <div class="flex" style="justify-content:space-between;margin-bottom:4px">
+                 <b>${f.k}</b>
+                 <span class="sub">${fmtCorto(f.ant)} → <b style="color:var(--fg-primary)">${fmtCorto(f.act)}</b>
+                   ${f.ant > 0 ? `<span class="fg-${f.act >= f.ant ? 'success' : 'danger'}">${fmtPct(Math.round(((f.act - f.ant) / f.ant) * 100))}</span>` : ''}</span>
+               </div>
+               <div style="height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;margin-bottom:3px" title="${a.anio}: ${fmtM(f.act)}">
+                 <i style="display:block;height:100%;width:${Math.max(2, Math.round((Math.abs(f.act) / maxCmp) * 100))}%;background:var(--accent);border-radius:4px"></i>
+               </div>
+               <div style="height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden" title="${Number(a.anio) - 1}: ${fmtM(f.ant)}">
+                 <i style="display:block;height:100%;width:${Math.max(2, Math.round((Math.abs(f.ant) / maxCmp) * 100))}%;background:var(--c-slate-500);border-radius:4px"></i>
+               </div>
+             </div>`).join('')
+         })()}
+       </div>
+     </div>
+
      <div class="card mt">
        <h3>Resumen mensual e IVA</h3>
        <div class="tbl-wrap">
@@ -103,7 +149,16 @@ VIEWS.analitica = {
              <td class="num">${fmtM(a.anual.ventas)}</td><td class="num">${fmtM(a.anual.compras)}</td>
              <td class="num">${fmtM(a.anual.iva_debito)}</td><td class="num">${fmtM(a.anual.iva_credito)}</td>
              <td class="num">${fmtM(a.anual.iva_determinado)}</td>
-             <td class="num">${a.anual.docs}</td></tr></tfoot>
+             <td class="num">${a.anual.docs}</td></tr>
+             ${(() => {
+               const ant = a.anual.anio_anterior
+               if (!ant.ventas && !ant.compras) return ''
+               return `<tr><td class="sub">Año anterior ${Number(a.anio) - 1}</td>
+                 <td class="num sub">${fmtM(ant.ventas)}</td><td class="num sub">${fmtM(ant.compras)}</td>
+                 <td class="num sub" colspan="2">IVA det. ${fmtM(ant.iva_determinado)}</td>
+                 <td class="num sub"></td><td class="num sub"></td></tr>`
+             })()}
+           </tfoot>
          </table>
        </div>
      </div>
