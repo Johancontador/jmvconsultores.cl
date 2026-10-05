@@ -589,8 +589,8 @@ async function admEmpresas(body) {
     openModal(`
      <h3>Nueva empresa — solo RUT y clave SII</h3>
      <p class="sub">El sistema ingresa al SII con esa clave, extrae la ficha oficial del contribuyente (razón social, inicio de actividades, régimen, actividad, domicilio, contacto) y deja la empresa creada con todo eso. La clave se guarda cifrada (bóveda AES-256-GCM) y el plan de cuentas se precarga. Solo falta confirmar socios e histórico de documentos.</p>
-     <div class="form-group"><label class="frm-label">RUT</label><input id="ne-rut" class="form-input" placeholder="76.123.456-7"></div>
-     <div class="form-group"><label class="frm-label">Clave SII</label><input id="ne-clave" type="password" class="form-input"></div>
+     <div class="form-group"><label class="frm-label">RUT del contribuyente</label><input id="ne-rut" class="form-input" placeholder="76.123.456-7" autocomplete="off"></div>
+     <div class="form-group"><label class="frm-label">Clave SII (tributaria)</label><input id="ne-clave" type="password" class="form-input" placeholder="Tu clave de 3ra clave del SII" autocomplete="new-password"></div>
      <div class="login-err" id="ne-err" hidden></div>
      <div class="modal-foot">
        <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
@@ -599,10 +599,15 @@ async function admEmpresas(body) {
     document.getElementById('ne-ok').addEventListener('click', async () => {
       const btnOk = document.getElementById('ne-ok')
       const err = document.getElementById('ne-err')
+      const raiz = document.querySelector('.modal-card')
       err.hidden = true
+      const v = UIForms.validar(raiz, {
+        'ne-rut': [['requerido'], ['rut']],
+        'ne-clave': [['requerido'], [['min', 4]]],
+      })
+      if (!v.ok) return
       const rut = document.getElementById('ne-rut').value.trim()
       const clave = document.getElementById('ne-clave').value
-      if (!rut || !clave) { err.textContent = 'Ingresa RUT y clave SII.'; err.hidden = false; return }
       btnOk.disabled = true
       btnOk.textContent = 'Consultando el SII…'
       try {

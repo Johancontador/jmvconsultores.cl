@@ -228,3 +228,94 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .checkline.ok::before { content: 'OK'; color: var(--success); }
 .checkline.bad::before { content: 'NO'; color: var(--danger); }
 .checkline.warn::before { content: '!'; color: var(--warning); }
+
+/* ==========================================================================
+   FASE 1 — Arquitectura profesional: breadcrumb, toggle de tema, buscador de
+   menú, tablas ordenables y utilidades de impresión. Todo sobre los tokens
+   existentes: funciona en claro y oscuro sin cambios por componente.
+   ========================================================================== */
+
+/* ---------- Header con breadcrumb + acciones ---------- */
+.sys-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  flex-wrap: wrap; margin-bottom: var(--space-4);
+}
+.sys-breadcrumb {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--fs-xs); color: var(--fg-muted); min-width: 0; flex-wrap: wrap;
+}
+.sys-breadcrumb a { color: var(--fg-muted); text-decoration: none; }
+.sys-breadcrumb a:hover { color: var(--accent); text-decoration: underline; }
+.sys-breadcrumb .bc-sep { opacity: 0.6; }
+.sys-breadcrumb .bc-actual { color: var(--fg-secondary); font-weight: var(--fw-medium); }
+.sys-header .spacer { flex: 1; }
+
+/* Toggle de tema: dibuja el icono con CSS puro según data-theme */
+.tema-toggle {
+  width: 34px; height: 34px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+.tema-toggle:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.tema-toggle::before {
+  content: ''; width: 15px; height: 15px; border-radius: 50%;
+  border: 1.5px solid var(--fg-secondary);
+  box-shadow: inset 5px -3px 0 0 var(--fg-secondary); /* luna */
+  transition: box-shadow var(--dur-fast);
+}
+html[data-theme='light'] .tema-toggle::before {
+  box-shadow: none;               /* sol */
+  background: radial-gradient(circle at 35% 35%, var(--warning) 0 40%, transparent 42%);
+  border-color: var(--warning);
+}
+
+/* ---------- Buscador del menú (filtra items del sidebar) ---------- */
+.nav-search { position: relative; }
+.nav-search input {
+  width: 100%; padding: 6px var(--space-3) 6px var(--space-6);
+  font-size: var(--fs-xs); color: var(--fg-primary);
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.nav-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.nav-search::before {
+  content: '⌕'; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--fg-muted); font-size: var(--fs-sm); pointer-events: none;
+}
+.nav-seccion.oculta, .sys-nav a.oculto { display: none !important; }
+
+/* ---------- Tablas ordenables y con buscador ---------- */
+.tbl-toolbar {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3); margin-bottom: var(--space-3);
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+.tbl-toolbar input { max-width: 260px; height: 30px; font-size: var(--fs-xs); }
+.tbl-toolbar .spacer { flex: 1; }
+.tbl-toolbar .hint { font-size: var(--fs-xs); color: var(--fg-muted); }
+
+.tbl th.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.tbl th.th-sort:hover { color: var(--fg-primary); }
+.tbl th.th-sort::after { content: '↕'; margin-left: 5px; opacity: 0.35; font-size: 10px; }
+.tbl th.th-sort.asc::after { content: '↑'; opacity: 1; color: var(--accent); }
+.tbl th.th-sort.desc::after { content: '↓'; opacity: 1; color: var(--accent); }
+.tbl tbody tr.sel { background: var(--accent-soft); }
+
+/* Resaltado del término buscado */
+mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* Botón activo por filtro en toolbars de chips */
+.btn.btn-on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- Impresión: solo el contenido principal ---------- */
+@media print {
+  .sys-side, .sys-header .tema-toggle, .tbl-toolbar, .btn, .banner-lic,
+  .toast-container, .modal-back { display: none !important; }
+  .sys { display: block; }
+  .sys-main { max-width: none; padding: 0; }
+  body { background: #fff; color: #000; }
+  .card, .tbl-wrap { box-shadow: none; border-color: #ccc; }
+}

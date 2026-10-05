@@ -146,7 +146,6 @@ VIEWS.libros = {
      <div class="frm-row mb">
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('lb-periodo', periodo)}</div>
         ${puedeIngestar ? `<button class="btn btn-primary" id="lb-sync">⇅ Sincronizar con SII</button>` : ''}
-       <button class="btn btn-secondary" id="lb-csv">CSV</button>
        <span class="spacer"></span>
        <div id="lb-ingesta" style="flex:1;min-width:220px"></div>
      </div>
@@ -165,7 +164,6 @@ VIEWS.libros = {
       const t = e.target.dataset.t
       if (t) { window._librosTab = t; renderRoute() }
     })
-    document.getElementById('lb-csv').addEventListener('click', () => exportarLibroCSV(periodo, tab))
 
     if (puedeIngestar) {
       document.getElementById('lb-sync').addEventListener('click', () => sincronizarSII(periodo))
@@ -204,52 +202,49 @@ async function pintarLibro(periodo, tab) {
 
   const r = await apiGet(`/api/contable/empresas/${eid}/documentos?periodo=${periodo}&tipo_flujo=${tab}&limit=1000`)
   const docs = r.documentos || []
-  body.innerHTML = `
-   <div class="tbl-wrap">
-     <table class="tbl">
-       <thead><tr>
-         <th>Fecha</th><th>Tipo</th><th>Folio</th><th>RUT</th><th>Razón social</th>
-         <th class="num">Exento</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th><th>Estado</th>
-       </tr></thead>
-       <tbody>
-          ${docs.map((d) => `<tr>
-           <td class="sub">${esc((d.fecha_docto || '').slice(0, 10))}</td>
-           <td class="sub">${esc(NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}`)}</td>
-           <td class="mono">${esc(d.folio)}</td>
-           <td class="mono sub">${esc(formatRut(d.rut_contraparte))}</td>
-           <td>${esc((d.razon_social || '').slice(0, 42))}</td>
-           <td class="num">${d.monto_exento ? fmtM(d.monto_exento) : '—'}</td>
-           <td class="num">${fmtM(d.monto_neto)}</td>
-           <td class="num">${fmtM(d.monto_iva)}</td>
-           <td class="num"><b>${fmtM(d.monto_total)}</b></td>
-           <td>${chipEstado(d.estado)}</td>
-         </tr>`).join('') || `<tr><td colspan="10"><div class="empty">Sin documentos de ${tab === 'compra' ? 'compras' : 'ventas'} en ${perDisplay(periodo)}.</div></td></tr>`}
-       </tbody>
-       <tfoot><tr>
-         <td colspan="6">Totales (${r.sumas?.n ?? 0} docs)</td>
-         <td class="num">${fmtM(r.sumas?.neto)}</td>
-         <td class="num">${fmtM(r.sumas?.iva)}</td>
-         <td class="num">${fmtM(r.sumas?.total)}</td><td></td>
-       </tr></tfoot>
-     </table>
-   </div>
-    ${(r.total || 0) > docs.length ? `<p class="hint mt">Mostrando ${docs.length} de ${r.total} — usa el filtro por texto en la sección Documentos.</p>` : ''}`
-}
+  const suma = (filas, campo) => filas.reduce((acc, d) => acc + (d[campo] || 0), 0)
 
-function exportarLibroCSV(periodo, tab) {
-  const rows = document.querySelectorAll('#lb-body tbody tr')
-  if (!rows.length) return showToast('Nada que exportar', 'error')
-  const lines = [['Fecha', 'Tipo', 'Folio', 'RUT', 'Razon social', 'Exento', 'Neto', 'IVA', 'Total', 'Estado']]
-  rows.forEach((tr) => {
-    if (tr.querySelector('.empty')) return
-    lines.push([...tr.querySelectorAll('td')].map((td) => td.textContent.trim().replace(/\$/g, '').replace(/\./g, '').trim()))
+  body.innerHTML = `
+   <div id="lb-tabla"></div>
+   ${(r.total || 0) > docs.length ? `<p class="hint mt">El período tiene ${r.total} documentos; se cargaron los primeros ${docs.length}. Refina por texto en la sección Documentos.</p>` : ''}`
+
+  UITabla.montar({
+    mount: document.getElementById('lb-tabla'),
+    columnas: [
+      { key: 'fecha_docto', label: 'Fecha', valor: (d) => (d.fecha_docto || '').slice(0, 10) },
+      { key: 'tipo_doc', label: 'Tipo', valor: (d) => NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}` },
+      { key: 'folio', label: 'Folio' },
+      { key: 'rut_contraparte', label: 'RUT', valor: (d) => formatRut(d.rut_contraparte) },
+      { key: 'razon_social', label: 'Razón social' },
+      { key: 'monto_exento', label: 'Exento', num: true, valor: (d) => (d.monto_exento ? fmtM(d.monto_exento) : '—'), crudo: (d) => d.monto_exento || 0 },
+      { key: 'monto_neto', label: 'Neto', num: true, valor: (d) => fmtM(d.monto_neto), crudo: (d) => d.monto_neto },
+      { key: 'monto_iva', label: 'IVA', num: true, valor: (d) => fmtM(d.monto_iva), crudo: (d) => d.monto_iva },
+      { key: 'monto_total', label: 'Total', num: true, valor: (d) => fmtM(d.monto_total), crudo: (d) => d.monto_total },
+      { key: 'estado', label: 'Estado', orden: false, valor: (d) => d.estado },
+    ],
+    filas: docs,
+    nombreArchivo: `libro-${tab}-${periodo}`,
+    porPagina: 100,
+    vacio: `Sin documentos de ${tab === 'compra' ? 'compras' : 'ventas'} en ${perDisplay(periodo)}.`,
+    filaHTML: (d, hl) => `<tr>
+      <td class="sub">${hl((d.fecha_docto || '').slice(0, 10))}</td>
+      <td class="sub">${hl(NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}`)}</td>
+      <td class="mono">${hl(d.folio)}</td>
+      <td class="mono sub">${hl(formatRut(d.rut_contraparte))}</td>
+      <td>${hl((d.razon_social || '').slice(0, 42))}</td>
+      <td class="num">${d.monto_exento ? fmtM(d.monto_exento) : '—'}</td>
+      <td class="num">${fmtM(d.monto_neto)}</td>
+      <td class="num">${fmtM(d.monto_iva)}</td>
+      <td class="num"><b>${fmtM(d.monto_total)}</b></td>
+      <td>${chipEstado(d.estado)}</td>
+    </tr>`,
+    totalesHTML: (filas) => `<tr>
+      <td colspan="6">Totales de lo filtrado (${filas.length} docs) · período completo: ${fmtM(r.sumas?.total)}</td>
+      <td class="num">${fmtM(suma(filas, 'monto_neto'))}</td>
+      <td class="num">${fmtM(suma(filas, 'monto_iva'))}</td>
+      <td class="num">${fmtM(suma(filas, 'monto_total'))}</td><td></td>
+    </tr>`,
   })
-  const csv = lines.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
-  a.download = `libro-${tab}-${periodo}.csv`
-  a.click()
-  URL.revokeObjectURL(a.href)
 }
 
 /** Ingesta SII con progreso en vivo (la conexión IVA Mensual, oculta aquí). */
@@ -317,42 +312,52 @@ VIEWS.documentos = {
        <button class="btn ${filtros.estado === 'REVISIÓN' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="REVISIÓN">Revisión <b class="mono">${estadosMap['REVISIÓN'] || 0}</b></button>
        <button class="btn ${filtros.estado === '' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="">Todos</button>
        <span class="spacer"></span>
-       <input id="doc-texto" class="form-input" placeholder="Buscar folio o razón social…" value="${esc(filtros.texto)}" style="width:220px">
-        ${tiene('documentos:clasificar') ? `<button class="btn btn-primary btn-sm" id="doc-auto">Clasificar automático</button>` : ''}
+       ${tiene('documentos:clasificar') ? `<button class="btn btn-primary btn-sm" id="doc-auto">Clasificar automático</button>` : ''}
        <button class="btn btn-secondary btn-sm" id="doc-reglas">Reglas</button>
      </div>
-     <div class="tbl-wrap">
-       <table class="tbl">
-         <thead><tr><th>Doc</th><th>Folio</th><th>Contraparte</th><th class="num">Total</th><th>Estado</th><th>Cuenta</th><th></th></tr></thead>
-         <tbody>
-            ${(r.documentos || []).map((d) => `<tr>
-             <td class="sub">${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${esc(NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc)}</td>
-             <td class="mono">${esc(d.folio)}</td>
-             <td>${esc((d.razon_social || '—').slice(0, 38))}<div class="sub mono">${esc(formatRut(d.rut_contraparte))}</div></td>
-             <td class="num"><b>${fmtM(d.monto_total)}</b></td>
-             <td>${chipEstado(d.estado)}</td>
-             <td class="sub">${esc(d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}` : '—')}</td>
-             <td>${tiene('documentos:clasificar') && !['CONTABILIZADO', 'ANULADO'].includes(d.estado)
-                ? `<button class="btn btn-secondary btn-sm" data-clas="${d.id}">Clasificar</button>` : ''}</td>
-           </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Sin documentos con estos filtros.</div></td></tr>`}
-         </tbody>
-         <tfoot><tr><td colspan="3">Sumas del filtro</td>
-           <td class="num">${fmtM(r.sumas?.total)}</td>
-           <td colspan="3" class="sub">neto ${fmtM(r.sumas?.neto)} · IVA ${fmtM(r.sumas?.iva)}</td>
-         </tr></tfoot>
-       </table>
-     </div>`
+     <div id="doc-tabla"></div>`
+
+    UITabla.montar({
+      mount: document.getElementById('doc-tabla'),
+      columnas: [
+        { key: 'tipo_doc', label: 'Doc', valor: (d) => `${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc}` },
+        { key: 'folio', label: 'Folio' },
+        { key: 'razon_social', label: 'Contraparte' },
+        { key: 'rut_contraparte', label: 'RUT', valor: (d) => formatRut(d.rut_contraparte) },
+        { key: 'monto_total', label: 'Total', num: true, valor: (d) => fmtM(d.monto_total), crudo: (d) => d.monto_total },
+        { key: 'estado', label: 'Estado', orden: false },
+        { key: 'cuenta', label: 'Cuenta', valor: (d) => (d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}` : '—') },
+      ],
+      filas: r.documentos || [],
+      nombreArchivo: `documentos-${filtros.estado || 'todos'}`,
+      porPagina: 100,
+      vacio: 'Sin documentos con estos filtros.',
+      filaHTML: (d, hl) => `<tr>
+        <td class="sub">${hl(d.tipo_flujo === 'compra' ? 'Compra' : 'Venta')} ${hl(NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc)}</td>
+        <td class="mono">${hl(d.folio)}</td>
+        <td>${hl((d.razon_social || '—').slice(0, 38))}<div class="sub mono">${hl(formatRut(d.rut_contraparte))}</div></td>
+        <td class="num"><b>${fmtM(d.monto_total)}</b></td>
+        <td>${chipEstado(d.estado)}</td>
+        <td class="sub">${hl(d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}` : '—')}</td>
+        <td>${tiene('documentos:clasificar') && !['CONTABILIZADO', 'ANULADO'].includes(d.estado)
+          ? `<button class="btn btn-secondary btn-sm" data-clas="${d.id}">Clasificar</button>` : ''}</td>
+      </tr>`,
+      totalesHTML: (filas) => `<tr><td colspan="4">Sumas de lo filtrado (${filas.length} docs)</td>
+        <td class="num">${fmtM(filas.reduce((a, d) => a + (d.monto_total || 0), 0))}</td>
+        <td colspan="2" class="sub">neto ${fmtM(filas.reduce((a, d) => a + (d.monto_neto || 0), 0))} · IVA ${fmtM(filas.reduce((a, d) => a + (d.monto_iva || 0), 0))}</td>
+      </tr>`,
+      accionesExtra: '',
+    })
 
     cont.querySelectorAll('[data-est]').forEach((b) => b.addEventListener('click', () => {
       window._docFiltros = { ...filtros, estado: b.dataset.est }
       renderRoute()
     }))
-    const txt = document.getElementById('doc-texto')
-    txt.addEventListener('change', () => {
-      window._docFiltros = { ...filtros, texto: txt.value.trim() }
-      renderRoute()
+    // Delegación: UITabla re-renderiza el tbody al paginar/ordenar.
+    document.getElementById('doc-tabla').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-clas]')
+      if (b) modalClasificar(Number(b.dataset.clas))
     })
-    cont.querySelectorAll('[data-clas]').forEach((b) => b.addEventListener('click', () => modalClasificar(Number(b.dataset.clas))))
     document.getElementById('doc-reglas').addEventListener('click', modalReglas)
     const auto = document.getElementById('doc-auto')
     if (auto) auto.addEventListener('click', async () => {

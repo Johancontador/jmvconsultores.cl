@@ -1434,3 +1434,44 @@ body.sidebar-collapsed .sidebar .nav-group-toggle:hover::after {
 /* Dropzone del conversor DTE */
 .dte-drop { border: 2px dashed var(--border-default); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast); margin-top: var(--space-4); }
 .dte-drop:hover, .dte-drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+/* ─────────────────────────────────────────────────────────────────────────────
+   30. TEMA CLARO — override de tokens semánticos bajo [data-theme="light"].
+   El oscuro es el default (:root); el claro redefinirá solo los tokens de
+   superficie/texto/borde. Componentes enteros siguen funcionando igual.
+   ───────────────────────────────────────────────────────────────────────────── */
+html[data-theme='light'] {
+  --bg-canvas:      var(--c-slate-100);
+  --bg-surface:     #ffffff;
+  --bg-elevated:    var(--c-slate-50);
+  --bg-hover:       rgba(15, 23, 42, 0.045);
+  --bg-active:      rgba(15, 23, 42, 0.09);
+
+  --fg-primary:     var(--c-slate-900);
+  --fg-secondary:   var(--c-slate-600);
+  --fg-muted:       var(--c-slate-500);
+  --fg-inverse:     var(--c-slate-50);
+
+  --border-subtle:  rgba(15, 23, 42, 0.08);
+  --border-default: rgba(15, 23, 42, 0.14);
+  --border-strong:  rgba(15, 23, 42, 0.24);
+
+  --accent-soft:    rgba(46, 134, 200, 0.12);
+  --accent-strong:  rgba(46, 134, 200, 0.2);
+
+  --success-soft:   rgba(5, 150, 105, 0.12);
+  --warning-soft:   rgba(217, 119, 6, 0.14);
+  --danger-soft:    rgba(220, 38, 38, 0.1);
+  --warning:        var(--c-amber-600);
+  --danger:         var(--c-rose-600);
+
+  --shadow-xs:  0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm:  0 2px 6px rgba(15, 23, 42, 0.07);
+  --shadow-md:  0 6px 20px rgba(15, 23, 42, 0.09);
+  --shadow-lg:  0 16px 40px rgba(15, 23, 42, 0.12);
+  --shadow-xl:  0 24px 64px rgba(15, 23, 42, 0.16);
+}
+
+/* Color de la barra de scroll coherente con el tema activo */
+html[data-theme='light'] { scrollbar-color: var(--c-slate-300) transparent; }
+html[data-theme='light'] *::-webkit-scrollbar-thumb { background: var(--c-slate-300); }
+html[data-theme='light'] *::-webkit-scrollbar-thumb:hover { background: var(--c-slate-400); }

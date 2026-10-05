@@ -28,3 +28,7 @@ Thumbs.db
 .claude/worktrees/
 .superpowers/
 .freebuff/
+
+# Scratch de sesion QA
+.tmp-*
+.gstack/

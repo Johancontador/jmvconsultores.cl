@@ -10,6 +10,7 @@ const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const reportes = require('../core/reportes')
 const dashboardCore = require('../core/dashboard')
+const analitica = require('../core/analitica')
 
 const router = express.Router()
 
@@ -25,6 +26,18 @@ router.get('/empresas/:empresaId/dashboard', requirePermiso('reportes:ver'), (re
   try {
     const d = dashboardCore.dashboard(db, { empresaId: req.empresaId, periodo: req.query.periodo || null })
     res.json({ ok: true, dashboard: d })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// Analítica tributaria del año (libros C/V): resumen mensual, IVA anual,
+// top 20 clientes/proveedores, comparativo vs año anterior y alertas de
+// calidad (duplicados, RUT inválidos). Solo lectura, en core/analitica.js.
+router.get('/empresas/:empresaId/analitica', requirePermiso('reportes:ver'), (req, res) => {
+  try {
+    const a = analitica.analitica(db, { empresaId: req.empresaId, periodo: req.query.periodo || null })
+    res.json({ ok: true, analitica: a })
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

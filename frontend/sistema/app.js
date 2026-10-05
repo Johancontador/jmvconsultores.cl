@@ -209,6 +209,7 @@ const MENU = [
     seccion: 'SII', items: [
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
+      { key: 'analitica', label: 'Dashboard Tributario', permiso: 'reportes:ver' },
     ]
   },
   {
@@ -282,6 +283,9 @@ function renderShell() {
          <div>Sistema Contable<small>JMV Consultores</small></div>
        </div>
        <nav class="sys-nav" id="sys-nav">
+         <div class="nav-search" style="margin-bottom:var(--space-2)">
+           <input id="nav-buscar" type="search" placeholder="Buscar sección…" aria-label="Buscar sección del menú">
+         </div>
           ${MENU.filter(seccionVisible).map((sec) => `
            <div class="nav-seccion">${esc(sec.seccion)}</div>
             ${sec.items.map(itemHTML).join('')}`).join('')}
@@ -295,6 +299,11 @@ function renderShell() {
        </div>
      </aside>
      <main class="sys-main">
+       <div class="sys-header">
+         <nav class="sys-breadcrumb" id="sys-breadcrumb" aria-label="Ruta"></nav>
+         <span class="spacer"></span>
+         ${window.Tema ? window.Tema.botonHTML() : ''}
+       </div>
        <div class="sys-titlebar">
          <h1 id="sys-title">Inicio</h1>
          <span class="spacer"></span>
@@ -304,12 +313,45 @@ function renderShell() {
      </main>
    </div>`
 
+  if (window.Tema) window.Tema.conectar()
+  conectarBuscadorMenu()
   document.getElementById('sys-empresa').addEventListener('change', (e) => setEmpresa(e.target.value))
   document.getElementById('sys-logout').addEventListener('click', async (e) => {
     e.preventDefault()
     try { await apiPost('/api/auth/logout', {}) } catch { /* sesión ya inexistente */ }
     localStorage.removeItem('iva_empresa_activa')
     renderLogin()
+  })
+}
+
+/* ---------- breadcrumb ---------- */
+
+function breadcrumbHTML(route) {
+  const sec = MENU.find((m) => m.items.some((i) => i.key === route.key))
+  if (!sec) return `<span class="bc-actual">${esc(route.label)}</span>`
+  return `<a href="#inicio">Inicio</a><span class="bc-sep">/</span><span>${esc(sec.seccion)}</span><span class="bc-sep">/</span><span class="bc-actual">${esc(route.label)}</span>`
+}
+
+/* ---------- buscador del menú ---------- */
+
+function conectarBuscadorMenu() {
+  const inp = document.getElementById('nav-buscar')
+  if (!inp) return
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase()
+    document.querySelectorAll('#sys-nav a').forEach((a) => {
+      a.classList.toggle('oculto', q && !a.textContent.toLowerCase().includes(q))
+    })
+    document.querySelectorAll('#sys-nav .nav-seccion').forEach((sec) => {
+      const el = sec.nextElementSibling
+      let hayVisible = false
+      let nodo = el
+      while (nodo && !nodo.classList.contains('nav-seccion')) {
+        if (nodo.tagName === 'A' && !nodo.classList.contains('oculto')) { hayVisible = true; break }
+        nodo = nodo.nextElementSibling
+      }
+      sec.classList.toggle('oculta', q && !hayVisible)
+    })
   })
 }
 
@@ -334,6 +376,8 @@ function renderRoute() {
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
+  const bc = document.getElementById('sys-breadcrumb')
+  if (bc) bc.innerHTML = breadcrumbHTML(route)
 
   if (route.permiso && !tiene(route.permiso)) {
     document.getElementById('sys-view').innerHTML =
