@@ -414,38 +414,25 @@ function pintarConciliacion(out, c) {
    </table></div>`
 }
 
-/* ========================= REPORTES Y CIERRE ========================= */
+/* ================ BALANCE DE COMPROBACIÓN (vista propia) ================
+ * Era la pestaña "balance" del antiguo #reportes ("Reportes y Cierre").
+ * #reportes es ahora el Centro de Reportes; situación/resultados/cierre ya
+ * tienen vistas propias (#situacion/#resultados/#cierre), así que el balance
+ * de comprobación se conserva íntegro aquí como #comprobacion — misma API
+ * (reportes/balance/:periodo) y mismo cuadre ΣD = ΣH del mes y acumulado.
+ */
 
-VIEWS.reportes = {
-  titulo: 'Reportes y Cierre',
+VIEWS.comprobacion = {
+  titulo: 'Balance de Comprobación',
   async render(cont) {
-    const tab = window._repTab || 'balance'
-    const periodo = window._repPeriodo || periodoActual()
-    cont.innerHTML = `
-     <div class="frm-row mb">
-       <div><span class="frm-label">Período</span>${inputPeriodoHTML('rep-periodo', periodo)}</div>
-     </div>
-     <div class="tabs">
-       <button data-t="balance" class="${tab === 'balance' ? 'active' : ''}">Balance de comprobación</button>
-       <button data-t="situacion" class="${tab === 'situacion' ? 'active' : ''}">Situación financiera</button>
-       <button data-t="resultados" class="${tab === 'resultados' ? 'active' : ''}">Resultados</button>
-       <button data-t="cierre" class="${tab === 'cierre' ? 'active' : ''}">Cierre de período</button>
-     </div>
-     <div id="rep-body"></div>`
-
-    document.getElementById('rep-periodo').addEventListener('change', () => {
-      window._repPeriodo = leerPeriodo('rep-periodo') || periodo
-      renderRoute()
-    })
-    cont.querySelector('.tabs').addEventListener('click', (e) => {
-      if (e.target.dataset.t) { window._repTab = e.target.dataset.t; renderRoute() }
-    })
-    const body = document.getElementById('rep-body')
-    const eid = S.empresa.id
-    if (tab === 'balance') {
-      const { balance: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/balance/${periodo}`)
-      const tabla = (b, titulo) => `
-       <h3 class="section-title">${titulo} <span class="chip ${b.cuadra ? 'contabilizado' : 'error'}">${b.cuadra ? 'Cuadra ΣD = ΣH' : 'DESCUADRE'}</span></h3>
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    const body = cont
+    const periodo = vistaPeriodoPlantilla(body, 'Balance de comprobación — cuadre ΣD = ΣH, mes y acumulado', 'comprobacion')
+    let r
+    try { r = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/balance/${periodo}`)).balance }
+    catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const tabla = (b, titulo) => `
+     <div class="card mb"><h3>${titulo} <span class="chip ${b.cuadra ? 'contabilizado' : 'error'}">${b.cuadra ? 'Cuadra ΣD = ΣH' : 'DESCUADRE'}</span></h3>
        <div class="tbl-wrap"><table class="tbl">
          <thead><tr><th>Código</th><th>Cuenta</th><th class="num">Debe</th><th class="num">Haber</th></tr></thead>
          <tbody>${b.filas.map((f) => `<tr>
@@ -454,39 +441,8 @@ VIEWS.reportes = {
          </tr>`).join('')}</tbody>
          <tfoot><tr><td colspan="2">Sumas iguales</td>
            <td class="num">${fmtM(b.debe)}</td><td class="num">${fmtM(b.haber)}</td></tr></tfoot>
-       </table></div>`
-      body.innerHTML = tabla(r.acumulado, `Acumulado al ${perDisplay(periodo)}`) + tabla(r.periodo_mes, 'Movimientos del mes')
-    } else if (tab === 'situacion') {
-      const { situacion: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/situacion/${periodo}`)
-      body.innerHTML = `
-       <div class="kpi-grid mb">
-         <div class="kpi up"><small>Activos</small><strong>${fmtCorto(r.totales.activos)}</strong></div>
-         <div class="kpi bad"><small>Pasivos</small><strong>${fmtCorto(r.totales.pasivos)}</strong></div>
-         <div class="kpi acc"><small>Patrimonio</small><strong>${fmtCorto(r.totales.patrimonio)}</strong></div>
-         <div class="kpi ${r.ecuacion.cuadra ? 'up' : 'bad'}"><small>Ecuación A = P + Pat.</small><strong>${r.ecuacion.cuadra ? '' : fmtM(r.ecuacion.diferencia)}</strong></div>
-       </div>
-        ${[['Activos', r.activos], ['Pasivos', r.pasivos], ['Patrimonio', r.patrimonio]].map(([t, lista]) => `
-         <h3 class="section-title">${t}</h3>
-         <div class="tbl-wrap"><table class="tbl">
-           <tbody>${(lista || []).map((x) => `<tr>
-             <td class="mono sub">${esc(x.cuenta?.codigo || x.codigo || '')}</td>
-             <td>${esc(x.cuenta?.nombre || x.nombre || '')}</td>
-             <td class="num"><b>${fmtM(x.saldo)}</b></td>
-           </tr>`).join('') || '<tr><td><div class="empty">Sin saldos.</div></td></tr>'}</tbody>
-         </table></div>`).join('')}`
-    } else if (tab === 'resultados') {
-      const { resultados: r } = await apiGet(`/api/contable/empresas/${eid}/reportes/resultados/${periodo}`)
-      const cards = (d, t) => `
-       <div class="kpi-grid mb">
-         <div class="kpi up"><small>${t} · Ingresos</small><strong>${fmtCorto(d.ingresos)}</strong></div>
-         <div class="kpi"><small>${t} · Costos</small><strong>${fmtCorto(d.costos)}</strong></div>
-         <div class="kpi"><small>${t} · Gastos</small><strong>${fmtCorto(d.gastos)}</strong></div>
-         <div class="kpi ${d.resultado >= 0 ? 'up' : 'bad'}"><small>${t} · Resultado</small><strong>${fmtM(d.resultado)}</strong></div>
-       </div>`
-      body.innerHTML = cards(r.periodo_mes, 'Mes') + cards(r.acumulado, `Acumulado ${r.anio}`)
-    } else {
-      await vistaCierre(body, periodo)
-    }
+       </table></div></div>`
+    document.getElementById('rep-body').innerHTML = tabla(r.acumulado, `Acumulado al ${perDisplay(periodo)}`) + tabla(r.periodo_mes, 'Movimientos del mes')
   },
 }
 
@@ -541,6 +497,160 @@ async function vistaCierre(body, periodo) {
   if (btnF) btnF.addEventListener('click', () => {
     if (confirm('¿Cerrar con documentos pendientes? Quedará auditado como decisión explícita.')) ejecutar(true)
   })
+}
+
+/* ==================== CIERRE DE PERÍODO (vista propia) ====================
+ * Antes era la pestaña "cierre" de #reportes. Vista dedicada porque es una
+ * OPERACIÓN con consecuencias (asientos de cierre + snapshot), no un reporte.
+ * La lógica (vistaCierre) se reutiliza intacta: misma API, mismos permisos.
+ */
+
+VIEWS.cierre = {
+  titulo: 'Cierre de Período',
+  async render(cont) {
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    const periodo = window._cierrePeriodo || window._repPeriodo || periodoGlobal()
+    cont.innerHTML = `
+     <div class="frm-row mb">
+       <div><span class="frm-label">Período a cerrar</span>${inputPeriodoHTML('cierre-periodo', periodo)}</div>
+     </div>
+     <div id="cierre-body"><div class="empty">Preparando checklist…</div></div>`
+    document.getElementById('cierre-periodo').addEventListener('change', () => {
+      window._cierrePeriodo = leerPeriodo('cierre-periodo') || periodo
+      renderRoute()
+    })
+    await vistaCierre(document.getElementById('cierre-body'), window._cierrePeriodo || periodo)
+  },
+}
+
+/* ==================== AUDITORÍA (vista propia con UITabla) ====================
+ * Antes: pestaña dentro de Administración (sigue disponible ahí). Vista propia
+ * porque la auditoría es transversal: asientos, documentos, SII, seguridad.
+ */
+
+VIEWS.auditoria = {
+  titulo: 'Auditoría',
+  async render(cont) {
+    cont.innerHTML = '<div class="empty">Cargando…</div>'
+    let r
+    try { r = await apiGet(`/api/contable/empresas/${S.empresa.id}/auditoria?limit=200`) }
+    catch (err) { cont.innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
+    const registros = (r.registros || []).map((a) => ({
+      ...a,
+      fecha_txt: (a.creado_en || '').replace('T', ' ').slice(0, 16),
+      entidad_txt: `${a.entidad || ''} ${a.entidad_id || ''}`.trim(),
+      detalle_txt: a.despues_json || a.antes_json || '',
+    }))
+    cont.innerHTML = `
+     <div class="kpi-grid mb">
+       <div class="kpi"><small>Eventos cargados</small><strong>${registros.length}</strong><span class="sub">últimos 200 del período de retención</span></div>
+       <div class="kpi"><small>Usuarios distintos</small><strong>${new Set(registros.map((x) => x.usuario_id)).size}</strong></div>
+       <div class="kpi"><small>Acciones distintas</small><strong>${new Set(registros.map((x) => x.accion)).size}</strong></div>
+     </div>
+     <div id="aud-tabla"></div>`
+    UITabla.montar({
+      mount: document.getElementById('aud-tabla'),
+      columnas: [
+        { key: 'fecha_txt', label: 'Fecha' },
+        { key: 'username', label: 'Usuario', valor: (a) => a.username || String(a.usuario_id || '') },
+        { key: 'accion', label: 'Acción' },
+        { key: 'entidad_txt', label: 'Entidad' },
+        { key: 'detalle_txt', label: 'Detalle', buscar: true },
+      ],
+      filas: registros,
+      nombreArchivo: `auditoria-${periodoActual()}`,
+      porPagina: 100,
+      vacio: 'Sin eventos registrados.',
+      filaHTML: (a, hl) => `<tr>
+       <td class="sub mono">${hl(a.fecha_txt)}</td>
+       <td>${hl(a.username || String(a.usuario_id || ''))}</td>
+       <td><span class="chip neutral">${hl(a.accion)}</span></td>
+       <td class="sub">${hl(a.entidad_txt)}</td>
+       <td class="sub" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hl(a.detalle_txt)}</td>
+     </tr>`,
+    })
+  },
+}
+
+/* ==================== CENTRO DE REPORTES ====================
+ * Antes: 8 botones sueltos en el menú. Ahora un índice con filtros globales
+ * (período + estado) que reutiliza las vistas existentes vía atajos.
+ * Los grupos sin funcionalidad real hoy (flujo de efectivo, inventario,
+ * cobranza por antigüedad) se muestran como "En preparación" — §4 HANDOFF:
+ * nada se presenta como implementado si no lo está.
+ */
+
+VIEWS.reportes = {
+  titulo: 'Centro de Reportes',
+  async render(cont) {
+    const periodo = window._repPeriodo || periodoGlobal()
+    const tienePerm = (p) => tiene(p)
+    const grupos = [
+      { titulo: 'Contabilidad', items: [
+        { hash: '#comprobacion', label: 'Balance de comprobación', desc: 'Sumas y saldos con cuadre ΣD = ΣH (mes y acumulado)' },
+        { hash: '#balance8', label: 'Balance de 8 columnas', desc: 'Hoja de trabajo completa con Pérdida/Utilidad' },
+        { hash: '#asientos', tabVar: '_ctaTab', tabVal: 'mayor', label: 'Libro mayor', desc: 'Movimientos y saldos por cuenta' },
+      ] },
+      { titulo: 'Estados financieros', items: [
+        { hash: '#situacion', label: 'Estado de situación financiera', desc: 'A = P + Patrimonio, con saldos bancarios' },
+        { hash: '#resultados', label: 'Estado de resultados', desc: 'Por período y acumulado, con detalle por cuenta' },
+        { hash: '#clasificado', label: 'Balance clasificado', desc: 'Corriente / no corriente + capital de trabajo' },
+        { hash: '#niif', label: 'Estados NIIF por rubros', desc: 'Presentación por rubros con mapeo editable' },
+        { label: 'Flujo de efectivo', desc: 'En preparación' },
+        { label: 'Cambios en patrimonio', desc: 'En preparación' },
+      ] },
+      { titulo: 'Tributarios', items: [
+        { hash: '#analitica', label: 'IVA — dashboard tributario', desc: 'Débito, crédito, determinado anual y por mes' },
+        { hash: '#libros', label: 'RCV — libros de compra y venta', desc: 'Documento a documento desde el SII' },
+        { label: 'F29', desc: 'En preparación' },
+        { label: 'PPM', desc: 'En preparación' },
+      ] },
+      { titulo: 'Clientes y proveedores', items: [
+        { hash: '#cclientes', label: 'Cuenta corriente — clientes', desc: 'Cargos, abonos y saldo corrido por cliente' },
+        { hash: '#cproveedores', label: 'Cuenta corriente — proveedores', desc: 'Cargos, abonos y saldo corrido por proveedor' },
+        { label: 'Antigüedad de saldos', desc: 'En preparación' },
+      ] },
+      { titulo: 'Tesorería', items: [
+        { hash: '#tesoreria', tabVar: '_tesoTab', tabVal: 'movimientos', label: 'Libro banco', desc: 'Saldo corrido con folio por movimiento' },
+        { hash: '#tesoreria', tabVar: '_tesoTab', tabVal: 'conciliacion', label: 'Conciliación bancaria', desc: 'Libro vs cartola, diferencias explicadas' },
+      ] },
+      { titulo: 'Gestión', items: [
+        { hash: '#analitica', label: 'Comparativos anuales', desc: 'Ventas, compras e IVA vs año anterior' },
+        { label: 'Centros de costo', desc: 'En preparación' },
+      ] },
+    ]
+    cont.innerHTML = `
+     <div class="frm-row mb">
+       <div><span class="frm-label">Período de trabajo</span>${inputPeriodoHTML('rep-periodo-global', periodo)}</div>
+       <span class="hint" style="align-self:end">Los reportes abren con este período preseleccionado.</span>
+     </div>
+     ${grupos.map((g) => `
+       <div class="card mb">
+         <h3>${esc(g.titulo)}</h3>
+         <div class="rep-grid">
+           ${g.items.map((it) => it.hash
+             ? `<a class="rep-card" href="${it.hash}"${it.tabVar ? ` data-tabvar="${it.tabVar}" data-tabval="${it.tabVal}"` : ''}><b>${esc(it.label)}</b><span>${esc(it.desc)}</span></a>`
+             : `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
+         </div>
+       </div>`).join('')}`
+    document.getElementById('rep-periodo-global').addEventListener('change', () => {
+      window._repPeriodo = leerPeriodo('rep-periodo-global') || periodo
+      // Propaga el período del centro a los reportes que lo respetan.
+      window._balance8Periodo = window._repPeriodo; window._clasificadoPeriodo = window._repPeriodo
+      window._situacionPeriodo = window._repPeriodo; window._resultadosPeriodo = window._repPeriodo
+      window._inicioPeriodo = window._repPeriodo
+      localStorage.setItem('iva_periodo_activo', window._repPeriodo)
+      renderRoute()
+    })
+    // Atajos con pestaña preseleccionada (Libro mayor, Libro banco,
+    // Conciliación): al hacer click se fija el estado de pestaña de la vista
+    // destino (window._ctaTab / window._tesoTab) antes de navegar al anchor.
+    cont.querySelectorAll('.rep-card[data-tabvar]').forEach((a) => {
+      a.addEventListener('click', () => {
+        window[a.dataset.tabvar] = a.dataset.tabval
+      })
+    })
+  },
 }
 
 /* ============================ ADMINISTRACIÓN ============================ */
@@ -903,7 +1013,7 @@ VIEWS.memoria = {
 /* ========================= REPORTES NUEVOS ========================= */
 
 function vistaPeriodoPlantilla(body, titulo, vistaKey) {
-  const periodo = window[`_${vistaKey}Periodo`] || periodoActual()
+  const periodo = window[`_${vistaKey}Periodo`] || window._repPeriodo || periodoGlobal()
   body.innerHTML = `
    <div class="frm-row mb">
      <div><span class="frm-label">Período</span>${inputPeriodoHTML('rep-periodo', periodo)}</div>

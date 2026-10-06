@@ -139,6 +139,7 @@ function setEmpresa(id) {
   S.licencia = e?.licencia || null
   S.permisos = new Set(e?.permisos || [])
   S.cache = {}
+  localStorage.removeItem('iva_periodo_activo') // cada empresa retoma su período
   renderShell()
   navigate(location.hash || '#inicio')
 }
@@ -195,38 +196,47 @@ function renderLogin(mensaje = '') {
  * MENÚ SUPERIOR HORIZONTAL — secciones con desplegable. Sin iconos: la
  * jerarquía la da la tipografía. Cada sección se despliega al posarse encima.
  */
+/*
+ * MENU — organizado según el flujo real del trabajo contable (HANDOFF §2-§20):
+ * EMPRESA → PERÍODO → OPERACIÓN → SII/TRIBUTACIÓN → FACTURACIÓN →
+ * CONTABILIDAD → TESORERÍA → CENTRALIZACIONES → ACTIVOS → REPORTES →
+ * CIERRE → AUDITORÍA.
+ *
+ * Regla de compatibilidad (HANDOFF §36): TODOS los anchors históricos se
+ * conservan; los que cambiaron de grupo siguen funcionando tal cual.
+ * #reportes era "Reportes y Cierre" y ahora es el Centro de Reportes; el
+ * cierre de período y el balance de comprobación tienen vistas propias
+ * (#cierre, #comprobacion), enlazadas desde el Centro.
+ */
 const MENU = [
   {
-    seccion: 'Empresa', items: [
+    seccion: 'Operación', items: [
       { key: 'inicio', label: 'Inicio — panel del período', permiso: null },
-      { key: 'onboarding', label: 'Onboarding desde el SII', permiso: 'documentos:ver' },
-      { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
-      { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },
-      { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
+      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
+      { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
+      { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
     ]
   },
   {
-    seccion: 'SII', items: [
-      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
+    seccion: 'SII y Tributación', items: [
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'analitica', label: 'Dashboard Tributario', permiso: 'reportes:ver' },
+      { key: 'onboarding', label: 'Onboarding desde el SII', permiso: 'documentos:ver' },
     ]
   },
   {
     seccion: 'Facturación', items: [
-      { key: 'dte', label: 'Bandeja de DTEs Emitidos', permiso: 'dte:ver' },
       { key: 'dte-emision', label: 'Emitir Factura o Nota', permiso: 'dte:emitir' },
+      { key: 'dte', label: 'Bandeja de DTEs Emitidos', permiso: 'dte:ver' },
       { key: 'dte-config', label: 'Configuración del Emisor', permiso: 'dte:ver' },
     ]
   },
   {
-    seccion: 'Contabilizaciones', items: [
-      { key: 'automatizacion', label: 'Automatización del período', permiso: 'propuestas:ver' },
+    seccion: 'Contabilidad', items: [
+      { key: 'automatizacion', label: 'Contabilización y Pendientes', permiso: 'propuestas:ver' },
       { key: 'propuestas', label: 'Propuestas y Conciliación', permiso: 'propuestas:ver' },
       { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
-      { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
       { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
-      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
     ]
   },
   {
@@ -235,18 +245,51 @@ const MENU = [
     ]
   },
   {
+    seccion: 'Centralizaciones', items: [
+      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
+    ]
+  },
+  {
+    seccion: 'Activos', items: [
+      { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
+    ]
+  },
+  {
     seccion: 'Reportes', items: [
+      { key: 'reportes', label: 'Centro de Reportes', permiso: 'reportes:ver' },
+      { key: 'comprobacion', label: 'Balance de Comprobación', permiso: 'reportes:ver' },
       { key: 'balance8', label: 'Balance de 8 Columnas', permiso: 'reportes:ver' },
       { key: 'clasificado', label: 'Balance Clasificado', permiso: 'reportes:ver' },
       { key: 'situacion', label: 'Situación Financiera', permiso: 'reportes:ver' },
       { key: 'resultados', label: 'Estado de Resultados', permiso: 'reportes:ver' },
       { key: 'niif', label: 'NIIF — Estados por Rubros', permiso: 'reportes:ver' },
-      { key: 'cclientes', label: 'Cuenta Corriente — Clientes', permiso: 'reportes:ver' },
-      { key: 'cproveedores', label: 'Cuenta Corriente — Proveedores', permiso: 'reportes:ver' },
-      { key: 'reportes', label: 'Cierre de Período', permiso: 'reportes:ver' },
+    ]
+  },
+  {
+    seccion: 'Cierre', items: [
+      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
+    ]
+  },
+  {
+    seccion: 'Empresa', items: [
+      { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
+      { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
+      { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
+      { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },
     ]
   },
 ]
+
+/* Compatibilidad de anchors (HANDOFF §36): hash histórico → ruta actual.
+ * #reportes sigue existiendo (ahora es el Centro de Reportes) y el balance de
+ * comprobación que vivía en sus pestañas tiene vista propia (#comprobacion).
+ * Los alias ANTIGUO→NUEVO se registran en REDIRECCIONES_ANCHOR; hoy está
+ * vacío porque ningún anchor histórico cambió de vista. */
+const REDIRECCIONES_ANCHOR = {}
+
+function resolverRouteKey(key) {
+  return REDIRECCIONES_ANCHOR[key] || key
+}
 
 const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
 
@@ -307,6 +350,10 @@ function renderShell() {
        <div class="sys-titlebar">
          <h1 id="sys-title">Inicio</h1>
          <span class="spacer"></span>
+         <div class="frm-row" style="gap:var(--space-2);align-items:center">
+           <span class="sub" id="sys-periodo-estado"></span>
+           <select id="sys-periodo" class="form-input" style="width:auto;height:30px;font-size:var(--fs-xs)" aria-label="Período activo"></select>
+         </div>
        </div>
        <div id="sys-banner">${banner}</div>
        <div id="sys-view"></div>
@@ -315,12 +362,60 @@ function renderShell() {
 
   if (window.Tema) window.Tema.conectar()
   conectarBuscadorMenu()
+  conectarSelectorPeriodo()
   document.getElementById('sys-empresa').addEventListener('change', (e) => setEmpresa(e.target.value))
   document.getElementById('sys-logout').addEventListener('click', async (e) => {
     e.preventDefault()
     try { await apiPost('/api/auth/logout', {}) } catch { /* sesión ya inexistente */ }
     localStorage.removeItem('iva_empresa_activa')
     renderLogin()
+  })
+}
+
+/* ---------- selector global de período (header) ---------- */
+
+/** Período activo global: lo fija Inicio o el selector; las vistas lo leen. */
+function periodoGlobal() {
+  if (window._inicioPeriodo) return window._inicioPeriodo
+  let p = localStorage.getItem('iva_periodo_activo')
+  if (!p) {
+    p = periodoActual()
+    localStorage.setItem('iva_periodo_activo', p)
+  }
+  return p
+}
+
+async function conectarSelectorPeriodo() {
+  const sel = document.getElementById('sys-periodo')
+  if (!sel) return
+  const est = document.getElementById('sys-periodo-estado')
+  // Períodos registrados de la empresa (para el estado ABIERTO/CERRADO).
+  let periodos = []
+  try { periodos = (await apiGet(`/api/contable/empresas/${S.empresa.id}/periodos`)).periodos || [] }
+  catch { /* sin permiso periodos:ver: el selector queda funcional igual */ }
+  // Opciones: últimos 24 meses + los períodos registrados (p.ej. cerrados).
+  const opciones = [...new Set([
+    ...ultimosPeriodos(24).map(String),
+    ...periodos.map((p) => String(p.periodo)),
+  ])].sort()
+  sel.innerHTML = opciones.map((p) => `<option value="${p}">${esc(perDisplay(p))}</option>`).join('')
+  sel.value = periodoGlobal()
+  // El estado del período (ABIERTO/CERRADO) al lado del selector.
+  const pintarEstado = (p) => {
+    if (!est) return
+    const row = periodos.find((x) => String(x.periodo) === String(p))
+    est.innerHTML = row ? `<span class="chip ${row.estado === 'ABIERTO' ? 'clasificado' : 'neutral'}" title="Estado del período activo">${esc(row.estado)}</span>` : ''
+  }
+  pintarEstado(periodoGlobal())
+  sel.addEventListener('change', () => {
+    const p = sel.value || periodoActual()
+    localStorage.setItem('iva_periodo_activo', p)
+    pintarEstado(p)
+    window._inicioPeriodo = p // Inicio y las vistas con período propio lo siguen
+    window._repPeriodo = p; window._balance8Periodo = p; window._clasificadoPeriodo = p
+    window._situacionPeriodo = p; window._resultadosPeriodo = p; window._niifPeriodo = p
+    window._niifResPeriodo = p; window._asPeriodo = p; window._tesoPeriodo = p
+    renderRoute()
   })
 }
 
@@ -368,7 +463,8 @@ function renderRoute() {
   if (!S.user) return
   // La query de la vista (p. ej. #dte?tipo=33) es estado de la ruta, no parte
   // de la clave: sin este split, un filtro te expulsa a la vista Inicio.
-  const key = (location.hash || '#inicio').slice(1).split('?')[0]
+  const key0 = (location.hash || '#inicio').slice(1).split('?')[0]
+  const key = resolverRouteKey(key0)
   const view = VIEWS[key] || VIEWS.inicio
   const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
 

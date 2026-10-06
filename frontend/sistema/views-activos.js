@@ -45,7 +45,7 @@ async function renderActivos(cont, { eid, resumen, puedeOperar }) {
   let imputables = []
   try {
     data = await apiGet(`/api/contable/empresas/${eid}/activos`)
-    imputables = (await getCuentasImputables()).cuentas
+    imputables = (await getCuentasImputables()) || [] // el helper ya devuelve el array
   } catch (err) { showToast(err.message, 'error') }
   const activos = data.activos || []
 

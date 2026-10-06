@@ -344,3 +344,29 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   body { background: #fff; color: #000; }
   .card, .tbl-wrap { box-shadow: none; border-color: #ccc; }
 }
+
+/* ==========================================================================
+   R1 HANDOFF — Centro de Reportes (#reportes): tarjetas de atajo por grupo.
+   Las tarjetas "En preparación" (.rep-card-off) se ven atenuadas y no
+   navegan: nada se presenta como implementado si no lo está.
+   ========================================================================== */
+
+.rep-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-3);
+}
+.rep-card {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  background: var(--bg-elevated); color: inherit; text-decoration: none;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.rep-card b { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.rep-card span { font-size: var(--fs-xs); color: var(--fg-muted); }
+.rep-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+.rep-card:hover b { color: var(--accent); }
+.rep-card-off { cursor: default; opacity: 0.6; }
+.rep-card-off:hover { border-color: var(--border-subtle); background: var(--bg-elevated); }
+.rep-card-off:hover b { color: inherit; }
