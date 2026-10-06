@@ -325,6 +325,9 @@ function renderShell() {
          <img src="/assets/logo-light.svg" alt="JMV">
          <div>Sistema Contable<small>JMV Consultores</small></div>
        </div>
+       <select id="sys-empresa" class="form-input" aria-label="Empresa activa">
+          ${S.empresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(S.empresa.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+       </select>
        <nav class="sys-nav" id="sys-nav">
          <div class="nav-search" style="margin-bottom:var(--space-2)">
            <input id="nav-buscar" type="search" placeholder="Buscar sección…" aria-label="Buscar sección del menú">
@@ -334,9 +337,6 @@ function renderShell() {
             ${sec.items.map(itemHTML).join('')}`).join('')}
        </nav>
        <div class="sys-side-foot">
-         <select id="sys-empresa" class="form-input" aria-label="Empresa activa">
-            ${S.empresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(S.empresa.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
-         </select>
          <div class="u-name">${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</div>
          <a href="#" id="sys-logout">Salir</a>
        </div>
