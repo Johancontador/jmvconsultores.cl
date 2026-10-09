@@ -78,6 +78,8 @@ app.use('/api/pagos', require('./routes/pagos'))
 // BLOQUE 2: emisión de DTE para las empresas cliente (config del emisor, CAFs
 // de folios, emisión 33/34/56/61, estado SII real, reintentos).
 app.use('/api/dte', requireAuth, require('./routes/dte'))
+// CRM (Fase B): pipeline/recordatorios/campañas/engagement — exclusivo despacho.
+app.use('/api/crm', requireAuth, require('./routes/crm'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })

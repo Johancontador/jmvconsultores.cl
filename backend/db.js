@@ -354,5 +354,9 @@ require('./core/migraciones').migracionesBovedaClientes(db)
 require('./core/migraciones').migracionesDte(db)
 // BLOQUE 3 (DTE → contabilidad): idempotencia de emisión en dte_emitidos.
 require('./core/migraciones').migracionesDte2(db)
+// ACCESO ADMIN: users.debe_cambiar_clave para el flujo admin→usuario temporal.
+require('./core/migraciones').migracionesUsuarioTemporal(db)
+// CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
+require('./core/migraciones').migracionesCrm(db)
 
 module.exports = db

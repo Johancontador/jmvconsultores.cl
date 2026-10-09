@@ -75,7 +75,48 @@ router.post('/login', rateLimitLogin, (req, res) => {
     secure: isSecure, // Solo en producción (HTTPS)
     maxAge: SESSION_TTL_MS,
   })
-  res.json({ ok: true, user: { username: user.username, is_admin: !!user.is_admin } })
+  res.json({ ok: true, user: { username: user.username, is_admin: !!user.is_admin, debe_cambiar_clave: !!user.debe_cambiar_clave } })
+})
+
+// ---- ACCESO ADMIN (Fase A): usuario temporal con clave provisional ----
+// El super admin crea un usuario desde Administración indicando el correo;
+// el sistema genera la clave provisional y la devuelve UNA vez (solo en esta
+// respuesta — no se guarda en claro, jamás va a logs/auditoría).
+router.post('/usuarios-empresa', requireAuth, requireAdmin, (req, res) => {
+  try {
+    const { crearUsuarioTemporal } = require('../core/usuarios-temporales')
+    const r = crearUsuarioTemporal(db, {
+      adminId: req.user.id,
+      username: req.body.username,
+      ip: req.ip || null,
+    })
+    res.status(201).json(r)
+  } catch (err) {
+    const code = /ya exist|inválid|obligator|debe |Simple/i.test(err.message) ? 400 : 400
+    res.status(code).json({ ok: false, error: err.message })
+  }
+})
+
+// ---- ACCESO ADMIN (Fase A): onboarding de la empresa EXCLUSIVA del usuario ----
+// RUT + clave SII → crearDesdeSii (ficha oficial del SII) + rol admin_empresa.
+// Un usuario sin empresa aún y sin cambio de clave pendiente.
+router.post('/onboarding/empresa', requireAuth, async (req, res) => {
+  try {
+    const { onboardingEmpresa, estadoDeCambio } = require('../core/usuarios-temporales')
+    if (estadoDeCambio(db, req.user.id)) {
+      return res.status(403).json({ ok: false, error: 'Debes cambiar tu clave provisional antes de continuar' })
+    }
+    const r = await onboardingEmpresa(db, {
+      usuarioId: req.user.id,
+      rut: req.body.rut,
+      claveSii: req.body.clave_sii,
+      ip: req.ip || null,
+    })
+    res.status(201).json(r)
+  } catch (err) {
+    const code = /inválid|ya |obligator|debe |existe|rechazad|incorrecta/i.test(err.message) ? 400 : 500
+    res.status(code).json({ ok: false, error: err.message })
+  }
 })
 
 // ---- Registro self-service (SAAS-ACCESO §3, §7) ----
@@ -168,13 +209,19 @@ router.post('/password', requireAuth, rateLimitPassword, (req, res) => {
   const nuevoHash = hashPassword(String(password_nueva))
   const tx = db.transaction(() => {
     db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(nuevoHash, user.id)
+    // ACCESO ADMIN (Fase A): si la clave provisional seguía pendiente, el
+    // cambio exitoso la concluye (primer login del usuario temporal).
+    const estabaPendiente = !!db.prepare(`SELECT debe_cambiar_clave FROM users WHERE id = ?`).get(user.id)?.debe_cambiar_clave
+    if (estabaPendiente) {
+      db.prepare(`UPDATE users SET debe_cambiar_clave = 0 WHERE id = ?`).run(user.id)
+    }
     // REVOCAR TODAS las sesiones del usuario (incluida la actual): un cambio
     // de credencial exige re-autenticación en todos los dispositivos.
     const revocadas = db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(user.id).changes
     registrarAccion(db, {
       empresaId: null, usuarioId: user.id,
       accion: 'usuario.password_cambiar', entidad: 'users', entidadId: String(user.id),
-      despues: { sesiones_revocadas: revocadas }, ip: req.ip || null,
+      despues: { sesiones_revocadas: revocadas, primer_cambio: estabaPendiente }, ip: req.ip || null,
     })
   })
   tx()

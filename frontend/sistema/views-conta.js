@@ -846,6 +846,13 @@ async function admUsuarios(body) {
          <input id="us-pass" class="form-input" type="password" placeholder="contraseña (8+)" style="width:170px">
          <button class="btn btn-primary btn-sm" id="us-add">Crear usuario</button>
        </div>
+       <h3 class="mt">Cliente con acceso exclusivo a su empresa</h3>
+       <p class="sub">Ingresa el correo del cliente: el sistema genera una clave provisional (se muestra una sola vez), el usuario la cambia en su primer login, y luego ingresa RUT + clave SII para que su empresa se forme sola desde el SII. Quedará ligado a esa empresa y a ninguna otra.</p>
+       <div class="frm-row mt">
+         <input id="us-cli" class="form-input" placeholder="correo del cliente" style="width:220px">
+         <button class="btn btn-primary btn-sm" id="us-cli-add">Crear con clave provisional</button>
+       </div>
+       <div id="us-cli-resultado" class="mt"></div>
      </div>
      <div class="card">
        <h3>Roles en ${esc(S.empresa.nombre)}</h3>
@@ -874,6 +881,22 @@ async function admUsuarios(body) {
       })
       showToast('Usuario creado', 'success')
       renderRoute()
+    } catch (err) { showToast(err.message, 'error') }
+  })
+  document.getElementById('us-cli-add').addEventListener('click', async () => {
+    const email = document.getElementById('us-cli').value.trim()
+    const out = document.getElementById('us-cli-resultado')
+    out.innerHTML = ''
+    try {
+      const r = await apiPost('/api/auth/usuarios-empresa', { username: email })
+      showToast('Cliente creado con clave provisional', 'success')
+      out.innerHTML = `
+        <div class="card" style="border:1px solid var(--ok)">
+          <h3>✅ ${esc(r.username)} creado — id ${r.usuarioId}</h3>
+          <p>Clave provisional (muéstrala SOLO a tu cliente, no quede registrada en el sistema):</p>
+          <p style="font-family:var(--mono); font-size:1.15rem; letter-spacing:.5px"><b>${esc(r.clave_provisional)}</b></p>
+          <p class="sub">El cliente entra con esta clave, se le exigirá cambiarla de inmediato, y luego ingresa RUT + clave SII para formar su empresa.</p>
+        </div>`
     } catch (err) { showToast(err.message, 'error') }
   })
   document.getElementById('as-add').addEventListener('click', async () => {

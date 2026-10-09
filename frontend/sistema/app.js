@@ -176,10 +176,16 @@ function renderLogin(mensaje = '') {
     btn.disabled = true
     btn.textContent = 'Verificando…'
     try {
-      await apiPost('/api/auth/login', {
+      const raw = await apiPost('/api/auth/login', {
         username: document.getElementById('lg-user').value.trim(),
         password: document.getElementById('lg-pass').value,
       })
+      // ACCESO ADMIN: si el login indica cambio forzado, la UI lo exige ANTES
+      // de seguir (el backend igual bloquea empresas y onboarding sin concluirlo).
+      if (raw && raw.user && raw.user.debe_cambiar_clave) {
+        renderCambioForzado(raw.user.username)
+        return
+      }
       boot()
     } catch (ex) {
       err.textContent = ex.message
@@ -188,6 +194,259 @@ function renderLogin(mensaje = '') {
       btn.textContent = 'Entrar'
     }
   })
+}
+
+/* ---------- ACCESO ADMIN: cambio de clave forzado + onboarding ---------- */
+
+/**
+ * Pantalla del usuario nuevo (creado por JMV desde Administración): le exige
+ * cambiar la clave provisional antes de seguir, y en seguida pide RUT + clave
+ * SII para que la empresa se forme sola (empresas-sii.crearDesdeSii).
+ */
+function renderCambioForzado(username) {
+  $app().innerHTML = `
+   <div class="sys-login">
+     <div class="login-card">
+       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <h2>Bienvenido, ${esc(username)}</h2>
+       <p class="sub">Por seguridad, cambia la clave provisional que te entregó tu contador antes de continuar.</p>
+       <div class="login-err" id="cf-err" hidden></div>
+       <form id="cf-form">
+         <div class="form-group">
+           <label class="form-label" for="cf-actual">Clave provisional</label>
+           <input type="password" id="cf-actual" class="form-input" autocomplete="current-password" required>
+         </div>
+         <div class="form-group">
+           <label class="form-label" for="cf-nueva">Nueva clave (mínimo 8)</label>
+           <input type="password" id="cf-nueva" class="form-input" autocomplete="new-password" required minlength="8">
+         </div>
+         <div class="form-group">
+           <label class="form-label" for="cf-rep">Repetir nueva clave</label>
+           <input type="password" id="cf-rep" class="form-input" autocomplete="new-password" required>
+         </div>
+         <button type="submit" class="btn btn-primary" style="width:100%" id="cf-btn">Cambiar y continuar</button>
+       </form>
+     </div>
+   </div>`
+  document.getElementById('cf-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const err = document.getElementById('cf-err')
+    err.hidden = true
+    const nueva = document.getElementById('cf-nueva').value
+    if (nueva !== document.getElementById('cf-rep').value) {
+      err.textContent = 'Las claves no coinciden'
+      err.hidden = false
+      return
+    }
+    try {
+      await apiPost('/api/auth/password', {
+        password_actual: document.getElementById('cf-actual').value,
+        password_nueva: nueva,
+      })
+      showToast('Clave actualizada. Ahora formulario de tu empresa.', 'success')
+      renderOnboardingEmpresa()
+    } catch (ex) {
+      err.textContent = ex.message
+      err.hidden = false
+    }
+  })
+}
+
+function renderOnboardingEmpresa() {
+  $app().innerHTML = `
+   <div class="sys-login">
+     <div class="login-card">
+       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <h2>Tu empresa</h2>
+       <p class="sub">Ingresa el RUT de tu empresa y tu clave tributaria del SII. El sistema valida la credencial contra el SII y arma tu empresa sola: razón social, régimen, plan de cuentas y prueba de 90 días. Este vínculo es único y no puede cambiarse después.</p>
+       <div class="login-err" id="ob-err" hidden></div>
+       <form id="ob-form">
+         <div class="form-group">
+           <label class="form-label" for="ob-rut">RUT de la empresa</label>
+           <input type="text" id="ob-rut" class="form-input" placeholder="76.312.274-3" required>
+         </div>
+         <div class="form-group">
+           <label class="form-label" for="ob-clave">Clave SII / clave tributaria</label>
+           <input type="password" id="ob-clave" class="form-input" autocomplete="off" required>
+         </div>
+         <button type="submit" class="btn btn-primary" style="width:100%" id="ob-btn">Conectar con el SII y crear mi empresa</button>
+       </form>
+     </div>
+   </div>`
+  document.getElementById('ob-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const err = document.getElementById('ob-err')
+    const btn = document.getElementById('ob-btn')
+    err.hidden = true
+    btn.disabled = true
+    btn.textContent = 'Consultando el SII… (puede tomar unos segundos)'
+    try {
+      const r = await apiPost('/api/auth/onboarding/empresa', {
+        rut: document.getElementById('ob-rut').value.trim(),
+        clave_sii: document.getElementById('ob-clave').value,
+      })
+      showToast(`Empresa ${r.empresa.nombre} creada`, 'success')
+      boot()
+    } catch (ex) {
+      err.textContent = ex.message
+      err.hidden = false
+      btn.disabled = false
+      btn.textContent = 'Conectar con el SII y crear mi empresa'
+    }
+  })
+}
+
+/* ---------- búsqueda global (R2, HANDOFF §22) ----------
+ * Un input en el header que busca DENTRO de la empresa activa (documentos,
+ * asientos, DTEs, personas, cuentas) y deja saltar directo al resultado. Los
+ * grupos respetan el RBAC del rol — el backend devuelve solo lo permitido.
+ * Mínimo 2 caracteres; debounce 300ms; Enter en un resultado navega. */
+
+let buscarTimer = null
+
+function buscarGlobalHTML() {
+  return `
+   <div class="gsearch" id="gsearch">
+     <input id="gs-input" type="search" placeholder="Buscar en la empresa…  (⌘K / Ctrl+K)" aria-label="Búsqueda global" autocomplete="off">
+     <div class="gsearch-drop" id="gs-drop" hidden></div>
+   </div>`
+}
+
+/* ---------- Notificaciones (R2 §21): las MISMAS fuentes que el dashboard ----------
+ * 3 canales reales, sin inventar: documentos sin contabilizar (documentos:ver),
+ * conciliación pendiente (conciliacion:ver) y DTE rechazados (dte:ver).
+ * Sin permiso → el canal no existe. Sin novedad → panel "Al día".
+ */
+
+async function cargarNotificaciones() {
+  const eid = S.empresa.id
+  const items = []
+  const tareas = []
+
+  if (tiene('documentos:ver')) {
+    tareas.push(apiGet(`/api/contable/empresas/${eid}/documentos?estado=PENDIENTE&limit=1`).then((r) => {
+      if (r.total > 0) items.push({ nivel: 'warn', hash: '#documentos', texto: `${r.total} documento(s) sin contabilizar — pena la conciliación y el cierre`, etiqueta: 'Bandeja' })
+    }).catch(() => {}))
+  }
+  if (tiene('conciliacion:ver')) {
+    const periodo = periodoGlobal()
+    tareas.push(apiGet(`/api/contable/empresas/${eid}/conciliacion/${periodo}`).then((r) => {
+      const difs = (r.conciliacion && r.conciliacion.diferencias) || []
+      if (difs.length) items.push({ nivel: 'error', hash: '#propuestas', texto: `Conciliación ${periodo}: ${difs.length} diferencia(s) libro vs cartola`, etiqueta: 'Revisar' })
+    }).catch(() => {})) // 404 = conciliación aún sin ejecutar en el período (no es error)
+  }
+  if (tiene('dte:ver')) {
+    tareas.push(apiGet(`/api/dte/empresas/${eid}`).then((r) => {
+      const rechazados = (r.dtes || []).filter((d) => d.estado === 'RECHAZADO')
+      if (rechazados.length) items.push({ nivel: 'error', hash: '#dte', texto: `${rechazados.length} DTE(s) RECHAZADO(s) por el SII — requiere corrección y reenvío`, etiqueta: 'DTEs' })
+    }).catch(() => {}))
+  }
+
+  await Promise.all(tareas)
+  return items
+}
+
+function notificacionesHTML() {
+  return `
+   <div class="campana" id="campana">
+     <button class="campana-btn" id="campana-btn" aria-label="Notificaciones" title="Notificaciones">
+       <span class="campana-icon"></span>
+       <span class="campana-dot" id="campana-dot" hidden></span>
+     </button>
+     <div class="campana-drop" id="campana-drop" hidden></div>
+   </div>`
+}
+
+function conectarNotificaciones() {
+  const btn = document.getElementById('campana-btn')
+  const drop = document.getElementById('campana-drop')
+  const dot = document.getElementById('campana-dot')
+  if (!btn || !drop || !dot) return
+
+  let items = []
+  const pintar = () => {
+    drop.innerHTML = items.length
+      ? `<div class="gs-head">Pendientes de la empresa</div>` + items.map((i) => `
+          <a class="gs-item" href="${i.hash}">
+            <span class="campana-nv ${i.nivel}"></span>
+            <span class="gs-item-tx"><b>${esc(i.texto)}</b></span>
+            <span class="gs-ir">${esc(i.etiqueta)} →</span>
+          </a>`).join('')
+      : '<div class="gs-vacio">Al día — sin pendientes de contabilización, conciliación ni DTEs.</div>'
+    dot.hidden = items.length === 0
+  }
+
+  cargarNotificaciones().then((r) => { items = r; pintar() }).catch(() => {})
+
+  btn.addEventListener('click', () => { drop.hidden = !drop.hidden })
+  drop.addEventListener('click', (e) => {
+    if (e.target.closest('a.gs-item')) drop.hidden = true
+  })
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#campana')) drop.hidden = true
+  })
+}
+
+function conectarBusquedaGlobal() {
+  const input = document.getElementById('gs-input')
+  const drop = document.getElementById('gs-drop')
+  if (!input || !drop) return
+
+  const cerrar = () => { drop.hidden = true }
+  input.addEventListener('blur', () => setTimeout(cerrar, 180))
+
+  input.addEventListener('input', () => {
+    clearTimeout(buscarTimer)
+    const q = input.value.trim()
+    if (q.length < 2) { cerrar(); return }
+    buscarTimer = setTimeout(async () => {
+      try {
+        const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/buscador?q=${encodeURIComponent(q)}`)
+        pintarResultados(drop, q, r.grupos || [])
+      } catch { cerrar() }
+    }, 300)
+  })
+
+  drop.addEventListener('mousedown', (e) => {
+    const a = e.target.closest('a.gs-item')
+    if (!a) return
+    e.preventDefault() // evita que el blur cierre el dropdown antes de navegar
+  })
+  drop.addEventListener('click', (e) => {
+    const a = e.target.closest('a.gs-item')
+    if (!a) return
+    cerrar()
+    input.value = ''
+  })
+
+  // Atajo de teclado: Ctrl+K / ⌘K enfoca la búsqueda.
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault()
+      input.focus()
+    }
+    if (e.key === 'Escape') cerrar()
+  })
+}
+
+function pintarResultados(drop, q, grupos) {
+  if (!grupos.length) {
+    drop.innerHTML = '<div class="gs-vacio">Sin resultados para “' + esc(q) + '”.</div>'
+    drop.hidden = false
+    return
+  }
+  const total = grupos.reduce((s, g) => s + g.filas.length, 0)
+  const gruposHTML = grupos.map((g) => `
+    <div class="gs-grupo">
+      <div class="gs-grupo-t">${esc(g.grupo)}</div>
+      ${g.filas.map((f) => `
+        <a class="gs-item" href="${esc(f.hash)}">
+          <span class="gs-item-tx"><b>${esc(f.titulo)}</b><small>${esc(f.sub || '')}</small></span>
+          <span class="gs-ir">ir →</span>
+        </a>`).join('')}
+    </div>`).join('')
+  drop.innerHTML = `<div class="gs-head">${total} resultado(s) por “${esc(q)}”</div>${gruposHTML}`
+  drop.hidden = false
 }
 
 /* ---------- shell ---------- */
@@ -271,6 +530,11 @@ const MENU = [
     ]
   },
   {
+    seccion: 'CRM', items: [
+      { key: 'crm', label: 'Clientes — Pipeline y Salud', permiso: 'empresas:ver' },
+    ]
+  },
+  {
     seccion: 'Empresa', items: [
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
       { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
@@ -345,6 +609,8 @@ function renderShell() {
        <div class="sys-header">
          <nav class="sys-breadcrumb" id="sys-breadcrumb" aria-label="Ruta"></nav>
          <span class="spacer"></span>
+         ${buscarGlobalHTML()}
+         ${notificacionesHTML()}
          ${window.Tema ? window.Tema.botonHTML() : ''}
        </div>
        <div class="sys-titlebar">
@@ -362,6 +628,8 @@ function renderShell() {
 
   if (window.Tema) window.Tema.conectar()
   conectarBuscadorMenu()
+  conectarBusquedaGlobal()
+  conectarNotificaciones()
   conectarSelectorPeriodo()
   document.getElementById('sys-empresa').addEventListener('change', (e) => setEmpresa(e.target.value))
   document.getElementById('sys-logout').addEventListener('click', async (e) => {

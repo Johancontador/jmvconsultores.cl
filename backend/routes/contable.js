@@ -15,7 +15,8 @@ const auditoria = require('../core/auditoria')
 const asientos = require('../core/asientos')
 const cuentas = require('../core/cuentas')
 const centrosCosto = require('../core/centros-costo')
-const { PERMISOS_POR_ROL, CATALOGO_CAPACIDADES } = require('../core/permisos')
+const { PERMISOS_POR_ROL, CATALOGO_CAPACIDADES, permisosDeRol } = require('../core/permisos')
+const buscador = require('../core/buscador')
 
 const router = express.Router()
 
@@ -328,6 +329,26 @@ router.post('/empresas/:empresaId/memoria', requirePermiso('documentos:clasifica
       rut: req.body.rut, cuentaId: req.body.cuenta_id, ip: ip(req),
     })
     res.json({ ok: true, memoria: r })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Búsqueda global (R2, HANDOFF §22) ----------
+
+// Búsqueda por texto libre DENTRO de la empresa activa. requirePermiso('reportes:ver')
+// hace de puerta universal (los 5 roles la tienen): aquí solo se llega con
+// sesión y empresa resuelta; dentro, core/buscador filtrará cada grupo por el
+// permiso real del rol en la empresa. Solo lectura: sin gate de licencia.
+router.get('/empresas/:empresaId/buscador', requirePermiso('reportes:ver'), (req, res) => {
+  const texto = String(req.query.q || '').trim()
+  if (texto.length < 2) {
+    return res.json({ ok: true, grupos: [] })
+  }
+  try {
+    const permisos = permisosDeRol(req.rolEmpresa)
+    const r = buscador.buscar(db, { empresaId: req.empresaId, texto, permisos })
+    res.json({ ok: true, grupos: r.grupos })
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

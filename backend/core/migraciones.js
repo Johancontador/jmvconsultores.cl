@@ -902,4 +902,24 @@ function migracionesDte(db) {
   `)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, seedPlanCuentas }
+// ============================================================
+// ACCESO ADMIN — usuario temporal con cambio forzado de clave (Fase A).
+// Un usuario creado por el super admin recibe una clave provisional que la
+// app le exige cambiar en el primer login (users.debe_cambiar_clave = 1).
+// Idempotente: solo agrega la columna si no existe.
+// ============================================================
+function migracionesUsuarioTemporal(db) {
+  const cols = db.prepare(`PRAGMA table_info(users)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'debe_cambiar_clave')) {
+    db.exec(`ALTER TABLE users ADD COLUMN debe_cambiar_clave INTEGER NOT NULL DEFAULT 0`)
+  }
+}
+
+// ============================================================
+// CRM (Fase B): pipeline de clientes, recordatorios y campañas.
+// ============================================================
+function migracionesCrm(db) {
+  require('./crm').migracionesCrm(db)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, seedPlanCuentas }
