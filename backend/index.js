@@ -94,4 +94,16 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`IVA Mensual corriendo en http://localhost:${PORT}`)
+
+  // BLOQUE 2 (riesgos): reanudación de trabajos largos persistidos tras un
+  // reinicio (ingesta histórica a mitad). Idempotente: sin pendientes no hace
+  // nada. Con pendientes, re-ejecuta SOLO los períodos sin checkpoint.
+  require('./core/onboarding').reanudarHistoricosPendientes().catch((err) => {
+    console.error('[JOBS] reanudación falló (no fatalo):', err.message)
+  })
+  // BLOQUE 5 (riesgos): reanudación de la sincronización diaria pendiente del
+  // día (crash a mitad). Idempotente; sin pendientes no hace nada.
+  require('./core/sync-diaria').reanudarSyncDiaria().catch((err) => {
+    console.error('[JOBS] reanudación sync-diaria falló (no fatalo):', err.message)
+  })
 })

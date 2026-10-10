@@ -4,6 +4,7 @@ const { hashPassword, verifyPassword } = require('../services/password')
 const { crearSesion, obtenerSesion, destruirSesion, SESSION_TTL_MS } = require('../services/session')
 const { requireAuth, requireAdmin, parseCookies } = require('../middleware/requireAuth')
 const { registrarAccion } = require('../core/auditoria')
+const rlDb = require('../core/rate-limit-db')
 
 const router = express.Router()
 
@@ -50,7 +51,10 @@ function rateLimitLogin(req, res, next) {
   next()
 }
 
-router.post('/login', rateLimitLogin, (req, res) => {
+router.post('/login', rlDb.middleware('login', {
+  limite: LIMITE_LOGIN, ventanaMs: VENTANA_LOGIN_MS,
+  mensaje: 'Demasiados intentos de login. Intente de nuevo en 15 minutos.',
+}), (req, res) => {
   const { username, password } = req.body
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: 'Usuario y contraseña requeridos' })
@@ -142,7 +146,10 @@ function rateLimitRegistro(req, res, next) {
   next()
 }
 
-router.post('/registro', rateLimitRegistro, async (req, res) => {
+router.post('/registro', rlDb.middleware('registro', {
+  limite: LIMITE_REGISTRO, ventanaMs: VENTANA_REGISTRO_MS,
+  mensaje: 'Demasiados registros desde esta IP. Intente más tarde.',
+}), async (req, res) => {
   try {
     const { registrarConOnboarding } = require('../core/registro')
     const r = await registrarConOnboarding(db, {
@@ -184,7 +191,10 @@ function rateLimitPassword(req, res, next) {
   next()
 }
 
-router.post('/password', requireAuth, rateLimitPassword, (req, res) => {
+router.post('/password', requireAuth, rlDb.middleware('password', {
+  limite: LIMITE_PASSWORD, ventanaMs: VENTANA_PASSWORD_MS,
+  mensaje: 'Demasiados intentos. Intente de nuevo en 15 minutos.',
+}), (req, res) => {
   const { password_actual, password_nueva } = req.body
   if (!password_actual || !password_nueva) {
     return res.status(400).json({ ok: false, error: 'Contraseña actual y nueva requeridas' })
@@ -232,7 +242,10 @@ router.post('/password', requireAuth, rateLimitPassword, (req, res) => {
 })
 
 // Disponibilidad en vivo para el formulario (usuario y RUT, sin crear nada).
-router.get('/registro/disponible', rateLimitRegistro, (req, res) => {
+router.get('/registro/disponible', rlDb.middleware('registro', {
+  limite: LIMITE_REGISTRO, ventanaMs: VENTANA_REGISTRO_MS,
+  mensaje: 'Demasiadas consultas desde esta IP. Intente más tarde.',
+}), (req, res) => {
   const { username, rut } = req.query
   const out = {}
   if (username) out.username = !db.prepare(`SELECT 1 FROM users WHERE username = ?`).get(String(username).trim().toLowerCase())

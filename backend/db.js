@@ -358,5 +358,15 @@ require('./core/migraciones').migracionesDte2(db)
 require('./core/migraciones').migracionesUsuarioTemporal(db)
 // CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
 require('./core/migraciones').migracionesCrm(db)
+// BLOQUE 2 (masterplan): persistencia de jobs largos en SQLite (recuperación
+// tras restart). Al arrancar, libera locks vencidos y deja re-landizables los
+// trabajos colgados.
+require('./core/jobs-persistentes').migrar(db)
+// BLOQUE 3 (masterplan): rate-limits en SQLite — sobreviven reinicios (un
+// crash no resetea los contadores antifuerza-bruta) y preparan multiproceso.
+require('./core/rate-limit-db').migrar(db)
+// BLOQUE 4 (masterplan): aplicaciones de cobro/pago trazables 1↔n y n↔1.
+require('./core/migraciones').migracionesTesoreriaAplicaciones(db)
+require('./core/jobs-persistentes').recuperarAlArranque(db)
 
 module.exports = db

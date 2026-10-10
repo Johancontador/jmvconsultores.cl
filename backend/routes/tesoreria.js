@@ -181,6 +181,43 @@ router.post('/empresas/:empresaId/cobranza/:documentoId/pagada', requirePermiso(
   }
 })
 
+// BLOQUE 4 (masterplan): aplicar un movimiento bancario a N documentos
+// (1↔n), con techos validados y trazabilidad completa en teso_aplicaciones.
+router.post('/empresas/:empresaId/tesoreria/movimientos/:movimientoId/aplicar', requirePermiso('tesoreria:operar'), (req, res) => {
+  try {
+    const b = req.body || {}
+    res.status(201).json(cobranza.aplicarMovimientoADocumentos(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      movimientoId: Number(req.params.movimientoId),
+      aplicaciones: b.aplicaciones, ip: ip(req),
+    }))
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// Consulta la trazabilidad de un documento: cada aplicación con su movimiento
+// y asiento — el "quién cobró qué con qué transferencia" para auditoría.
+router.get('/empresas/:empresaId/tesoreria/documentos/:documentoId/aplicaciones', requirePermiso('tesoreria:ver'), (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      documento_id: Number(req.params.documentoId),
+      cobrado: cobranza.cobradoDeDocumento(db, Number(req.params.documentoId)),
+      aplicaciones: db.prepare(`
+        SELECT a.id, a.monto, a.aplicado_en, a.motivo, a.movimiento_id,
+               m.fecha, m.tipo, m.glosa, m.asiento_id
+        FROM teso_aplicaciones a
+        JOIN teso_movimientos m ON m.id = a.movimiento_id
+        WHERE a.documento_id = ? AND a.empresa_id = ?
+        ORDER BY a.id
+      `).all(Number(req.params.documentoId), req.empresaId),
+    })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
 router.post('/empresas/:empresaId/tesoreria/cobros', requirePermiso('tesoreria:operar'), (req, res) => {
   try {
     const b = req.body || {}

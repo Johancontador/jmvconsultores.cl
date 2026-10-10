@@ -916,10 +916,37 @@ function migracionesUsuarioTemporal(db) {
 }
 
 // ============================================================
+// BLOQUE 4 (masterplan) — APLICACIONES DE COBRO/PAGO trazables 1↔n y n↔1.
+//
+// Hoy teso_movimientos.documento_id es UNA sola referencia (1↔1): un
+// movimiento bancario que paga N facturas (o N abonos que saldan 1 factura)
+// no tiene dónde anotar cada aplicación. Esta tabla registra CADA aplicación
+// con su monto — trazabilidad completa del saldo de cada documento.
+// Additiva: sin tocar datos existentes (documento_id sigue funcionando).
+// ============================================================
+function migracionesTesoreriaAplicaciones(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS teso_aplicaciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      movimiento_id INTEGER NOT NULL REFERENCES teso_movimientos(id),
+      documento_id INTEGER NOT NULL REFERENCES documentos(id),
+      monto INTEGER NOT NULL,             -- siempre POSITIVO; el lado lo define tipo del movimiento
+      aplicado_por INTEGER REFERENCES users(id),
+      aplicado_en TEXT DEFAULT (datetime('now')),
+      motivo TEXT,                        -- nota opcional del contador
+      UNIQUE(movimiento_id, documento_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_teso_apl_doc ON teso_aplicaciones(empresa_id, documento_id);
+    CREATE INDEX IF NOT EXISTS idx_teso_apl_mov ON teso_aplicaciones(movimiento_id);
+  `)
+}
+
+// ============================================================
 // CRM (Fase B): pipeline de clientes, recordatorios y campañas.
 // ============================================================
 function migracionesCrm(db) {
   require('./crm').migracionesCrm(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, seedPlanCuentas }
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, migracionesTesoreriaAplicaciones, seedPlanCuentas }

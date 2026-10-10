@@ -23,6 +23,7 @@
 
 const tesoreria = require('./tesoreria')
 const reportes = require('./reportes')
+const { registrarAccion } = require('./auditoria')
 
 /**
  * Clientes con saldo pendiente (la lista de cobranza). Cada fila:
@@ -100,4 +101,119 @@ function marcarPagada(db, { empresaId, usuarioId, documentoId, bancoCuentaId, fe
   }
 }
 
-module.exports = { saldosClientes, marcarPagada }
+// ============================================================
+// BLOQUE 4 (masterplan): APLICACIONES trazables 1↔n / n↔1.
+//
+// Un movimiento bancario de la cartola puede pagar N facturas (transferencia
+// que agrupa) y una factura puede saldarse con N abonos. La tabla
+// teso_aplicaciones registra CADA aplicación con su monto — el movimiento
+// puede quedar sin documento_id (el vínculo fino vive acá).
+//
+// Regla anti-ambigüedad (§43): la sumatoria de aplicaciones de un movimiento
+// JAMÁS excede el |monto| del movimiento, y la de un documento jamás excede
+// su monto_total. Si el usuario no asigna todo el monto, lo que queda visible
+// como 'aplicado' vs 'pendiente' — nunca se adivina una asignación.
+// ============================================================
+
+/** Suma aplicada a un documento (teso_aplicaciones + legacy documento_id). */
+function cobradoDeDocumento(db, documentoId) {
+  const legado = db.prepare(`
+    SELECT COALESCE(SUM(ABS(monto)),0) AS n FROM teso_movimientos WHERE documento_id = ?
+  `).get(Number(documentoId)).n
+  const fino = db.prepare(`
+    SELECT COALESCE(SUM(monto),0) AS n FROM teso_aplicaciones WHERE documento_id = ?
+  `).get(Number(documentoId)).n
+  return legado + fino
+}
+
+/** Suma aplicada por un movimiento (teso_aplicaciones). */
+function aplicadoDeMovimiento(db, movimentoId) {
+  return db.prepare(`
+    SELECT COALESCE(SUM(monto),0) AS n FROM teso_aplicaciones WHERE movimiento_id = ?
+  `).get(Number(movimentoId)).n
+}
+
+/**
+ * Aplica UN movimiento (tipo COBRO/PAGO ya registrado) a N documentos, en la
+ * MISMA transacción, validando los dos techos. `aplicaciones` =
+ * [{ documento_id, monto }]. Exige que la partida cuadre EXACTA o deje saldo
+ * explícito — jamás reparte por su cuenta (anti-ambigüedad §43).
+ */
+function aplicarMovimientoADocumentos(db, { empresaId, usuarioId, movimientoId, aplicaciones, ip = null }) {
+  if (!Array.isArray(aplicaciones) || aplicaciones.length === 0) {
+    throw new Error('La lista de aplicaciones está vacía')
+  }
+  const mov = db.prepare(`
+    SELECT m.id, m.tipo, m.monto, m.banco_cuenta_id, b.empresa_id AS empresa_mov
+    FROM teso_movimientos m JOIN bancos_cuentas b ON b.id = m.banco_cuenta_id
+    WHERE m.id = ?
+  `).get(Number(movimientoId))
+  if (!mov || mov.empresa_mov !== empresaId) throw new Error('Movimiento no encontrado en esta empresa')
+
+  const techomov = Math.abs(Number(mov.monto))
+  const yaAplicado = aplicadoDeMovimiento(db, mov.id)
+
+  const tx = db.transaction(() => {
+    let sumaRonda = 0
+    for (const a of aplicaciones) {
+      const docId = Number(a.documento_id)
+      const monto = Math.round(Number(a.monto))
+      if (!Number.isInteger(monto) || monto <= 0) throw new Error(`Monto de aplicación inválido: ${a.monto}`)
+      const doc = db.prepare(`
+        SELECT id, tipo_flujo, tipo_doc, folio, monto_total, estado, rut_contraparte
+        FROM documentos WHERE id = ? AND empresa_id = ?
+      `).get(docId, empresaId)
+      if (!doc) throw new Error(`Documento ${docId} no encontrado en esta empresa`)
+      if (doc.estado !== 'CONTABILIZADO') throw new Error(`F${doc.folio} está ${doc.estado} — solo se aplican a documentos CONTABILIZADOS`)
+      // COHERENCIA de mano: COBRO → ventas; PAGO → compras.
+      if (mov.tipo === 'COBRO' && doc.tipo_flujo !== 'venta') throw new Error(`F${doc.folio} es ${doc.tipo_flujo} — un COBRO solo aplica a ventas`)
+      if (mov.tipo === 'PAGO' && doc.tipo_flujo !== 'compra') throw new Error(`F${doc.folio} es ${doc.tipo_flujo} — un PAGO solo aplica a compras`)
+
+      // Techo del documento: lo ya cobrado (legacy+fino) no puede exceder.
+      // SIN tolerancia: las aplicaciones son enteros exactos (el +1 legacy de
+      // marcarPagada era para el redondeo del cobro inicial, no aplica acá).
+      const cobradoDoc = cobradoDeDocumento(db, docId)
+      if (cobradoDoc + monto > Math.round(Number(doc.monto_total))) {
+        throw new Error(`F${doc.folio}: ya tiene ${cobradoDoc} aplicado — esta aplicación de ${monto} excede su total ${doc.monto_total}`)
+      }
+
+      // Idempotencia (UNIQUE movimiento+documento): re-aplicar al mismo par suma.
+      db.prepare(`
+        INSERT INTO teso_aplicaciones (empresa_id, movimiento_id, documento_id, monto, aplicado_por)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(movimiento_id, documento_id) DO UPDATE SET monto = monto + excluded.monto
+      `).run(empresaId, mov.id, docId, monto, usuarioId)
+      sumaRonda += monto
+    }
+
+    // Techo del movimiento: legacy (documento_id) + fino no excede |monto|.
+    const legacyMov = db.prepare(`
+      SELECT COALESCE(SUM(ABS(monto)),0) AS n FROM teso_movimientos WHERE id = ? AND documento_id IS NOT NULL
+    `).get(mov.id).n
+    if (yaAplicado + legacyMov + sumaRonda > techomov) {
+      throw new Error(`El movimiento ${mov.id} (${techomov}) no alcanza: aplicado ${legacyMov + yaAplicado}, esta ronda pide ${sumaRonda}`)
+    }
+
+    registrarAccion(db, {
+      empresaId, usuarioId,
+      accion: 'cobranza.aplicar_movimiento', entidad: 'teso_aplicaciones', entidadId: String(mov.id),
+      despues: { tipo: mov.tipo, aplicaciones: aplicaciones.length, total_ronda: sumaRonda, saldo_movimiento: techomov - legacyMov - yaAplicado - sumaRonda },
+      ip,
+    })
+  })
+  tx()
+
+  return {
+    ok: true, movimiento_id: mov.id,
+    aplicaciones: aplicaciones.map((a) => ({ ...a, saldo_doc: Math.max(0, 0) })),
+    aplicado_total: aplicadoDeMovimiento(db, mov.id),
+    pendiente_movimiento: Math.max(0, techomov - legacyMov0(db, mov.id) - aplicadoDeMovimiento(db, mov.id)),
+  }
+}
+
+/** Legacy pendiente: el |monto| del movimiento asociado por documento_id. */
+function legacyMov0(db, movId) {
+  return db.prepare(`SELECT COALESCE(SUM(ABS(monto)),0) AS n FROM teso_movimientos WHERE id = ? AND documento_id IS NOT NULL`).get(Number(movId)).n
+}
+
+module.exports = { saldosClientes, marcarPagada, cobradoDeDocumento, aplicarMovimientoADocumentos, aplicadoDeMovimiento }

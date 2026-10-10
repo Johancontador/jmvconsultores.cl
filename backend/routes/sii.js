@@ -48,7 +48,10 @@ router.get('/config', (req, res) => {
   })
 })
 
-router.post('/probar', rateLimitSiiProbar, async (req, res) => {
+router.post('/probar', require('../core/rate-limit-db').middleware('sii-probar', {
+  limite: LIMITE_SII_PROBAR, ventanaMs: VENTANA_SII_PROBAR_MS,
+  mensaje: 'Demasiadas pruebas de conexión SII. Intente de nuevo en 15 minutos.',
+}), async (req, res) => {
   try {
     let rut, clave
 

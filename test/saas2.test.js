@@ -315,6 +315,71 @@ test('ingestarHistorico con errores parciales: marca parcial sin degradar confir
   }
 })
 
+// ---------- BLOQUE 2 (masterplan): persistencia + reanudación tras crash ----------
+
+test('BLOQUE 2 · reanudación tras crash: checkpoints por período, solo pide lo faltante', async () => {
+  // Empresa fresca para este escenario (checklist limpio, sin docs previos)
+  siiRcvMock.probarConexion = async () => ({ ok: true, periodo: '202610', compras: 0, ventas: 0, pasos: [] })
+  const r3 = await registro.registrarConOnboarding(db, {
+    username: 'pyme.reanuda', password: 'clave-segura-1', rut: '77.555.333-2',
+    claveSii: 'clave-reanuda', nombreEmpresa: 'Pyme Reanuda SpA', probarSii: true,
+  })
+  siiRcvMock.probarConexion = originalProbar
+
+  // Rastreo de consultas al SII: la reanudación JAMÁS debe re-pedir 202509.
+  const pedidos = []
+  let crashEn202510 = true
+  mockearRCV()
+  const mockBueno = rcv.consultarRCV
+  rcv.consultarRCV = async (rut, clave, tipo, periodo) => {
+    pedidos.push(`${periodo}-${tipo}`)
+    if (crashEn202510 && periodo === '202510') throw new Error('crash simulado a mitad (SII caído en 202510)')
+    return mockBueno(rut, clave, tipo, periodo)
+  }
+  try {
+    // Corrida 1: 202509 OK (checkpoint), 202510 FALLA (sin checkpoint)
+    const job = onboarding.ingestarHistorico(db, {
+      empresaId: r3.empresaId, usuarioId: usuarioPyme, desde: '202509', hasta: '202510',
+    })
+    const t = onboarding.trabajos.get(job.jobId)
+    await t.promise
+    assert.strictEqual(t.estado, 'completado_con_errores', 'la corrida a mitad se marca como tal')
+    // Estado persistente: 202509 checkpoints, 202510 registrado como error
+    const jobsP = require('../backend/core/jobs-persistentes')
+    const xp = jobsP.obtener(db, t.xpId)
+    assert.deepStrictEqual(xp.progreso.periodos_completados, ['202509'], 'checkpoint de 202509 persistido')
+    assert.match(xp.progreso.errores['202510'], /crash simulado/, 'error de 202510 visible en progreso')
+
+    // SIMULACIÓN DE CRASH: el proceso muere y reviven MÁS TARDE con la misma BD.
+    // (la tabla ya dice lo que hay que hacer — no hay mapa en memoria que recuperar)
+
+    // Corrida 2 (reanudación): misma clave → mismo job persistente; el mock ya
+    // está sano (el wrapper mantiene el rastreo): solo se piden los períodos
+    // SIN checkpoint.
+    pedidos.length = 0
+    crashEn202510 = false
+    const job2 = onboarding.ingestarHistorico(db, {
+      empresaId: r3.empresaId, usuarioId: usuarioPyme, desde: '202509', hasta: '202510',
+    })
+    assert.strictEqual(job2.jobId !== job.jobId, true, 'nuevo job de memoria,')
+    const t2 = onboarding.trabajos.get(job2.jobId)
+    await t2.promise
+    assert.strictEqual(t2.estado, 'completado')
+    // CRÍTICO: 202509 NO se volvió a pedir al SII (dedupe del checkpoint);
+    // solo 202510 (compra+venta).
+    assert.ok(!pedidos.includes('202509-compras'), '202509 NO se re-solicita tras el checkpoint')
+    assert.ok(!pedidos.includes('202509-ventas'), '202509 NO se re-solicita tras el checkpoint')
+    assert.ok(pedidos.includes('202510-compras') && pedidos.includes('202510-ventas'), '202510 SÍ se completa en la reanudación')
+    // Documentos finales: 5 (los 3 de 202509 no se duplicaron con los 2 de 202510)
+    assert.strictEqual(
+      db.prepare(`SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ?`).get(r3.empresaId).n,
+      5, 'sin duplicados tras la reanudación',
+    )
+  } finally {
+    restaurarRCV()
+  }
+})
+
 // ---------- Estado expuesto por API ----------
 
 test('estadoIngestaHistorica: solo el dueño del job lo ve; null para otro usuario', async () => {

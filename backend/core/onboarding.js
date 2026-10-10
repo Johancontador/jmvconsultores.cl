@@ -18,6 +18,12 @@
  *     re-lanzar no duplica nada). Trabajo en background con progreso — el
  *     mismo patrón de core/ingesta.js.
  *
+ *  4. BLOQUE 2 (riesgos): el progreso de la ingesta histórica se PERSISTE en
+ *     SQLite (core/jobs-persistentes.js) con checkpoint por período. Tras un
+ *     reinicio, `reanudarHistoricosPendientes()` re-landiza los jobs que
+ *     quedaron a mitad desde el último período completado (la dedupe de la
+ *     ingesta aporta el resto de la idempotencia). No pide confirmación:
+ *
  * Regla dura: se CONSULTA al SII (fetch JSON de los facades ya existentes),
  * jamás se parsea HTML (§42). Todo queda auditado.
  */
@@ -26,6 +32,7 @@ const rcv = require('../services/rcv')
 const { claveSiiDescifrada } = require('./empresas')
 const documentosCore = require('./documentos')
 const { registrarAccion } = require('./auditoria')
+const jobsP = require('./jobs-persistentes')
 
 const CLAVES_CHECKLIST = [
   'razon_social_sii',
@@ -249,6 +256,14 @@ function estadoIngestaHistorica(jobId, usuarioId) {
   jobsMemoria.purgar(trabajos)
   const t = trabajos.get(jobId)
   if (!t || t.usuarioId !== usuarioId) return null
+  // BLOQUE 2: enriquece con el progreso PERSISTENTE (sobrevive reinicios).
+  let persistente = null
+  if (t.xpId) {
+    try {
+      const xp = jobsP.obtener(require('../db'), t.xpId)
+      if (xp) persistente = { id: xp.id, estado: xp.estado, intentos: xp.intentos, periodos_hechos: xp.progreso?.periodos_completados?.length || 0 }
+    } catch { /* persistente aún no creado: job de sólo memoria */ }
+  }
   return {
     jobId,
     empresa_id: t.empresaId,
@@ -260,6 +275,7 @@ function estadoIngestaHistorica(jobId, usuarioId) {
     periodo_actual: t.periodoActual || null,
     resultado: t.resultado,
     error: t.error,
+    persistente,
   }
 }
 
@@ -303,8 +319,17 @@ function ingestarHistorico(dbParam, { empresaId, usuarioId, desde, hasta, ip = n
   }
 
   const jobId = generarJobId()
+  // BLOQUE 2: estado persistente idempotente — si ya existe un job vivo de la
+  // misma clave (empresa+rango), se REUTILIZA en vez de duplicarlo.
+  const persistente = jobsP.crear(dbParam, {
+    tipo: 'historico_rcv',
+    claveUnicidad: `${empresaId}:${desdeEfectivo}-${hasta}`,
+    empresaId, usuarioId,
+    periodoDesde: String(desdeEfectivo), periodoHasta: String(hasta),
+    ventanaIdempotenciaMin: 0, // re-lanzable siempre (el dedupe de la ingesta hace la idempotencia)
+  })
   jobsMemoria.registrar(trabajos, jobId, {
-    jobId, empresaId, usuarioId, desde: String(desde), hasta: String(hasta), ip,
+    jobId, xpId: persistente.id, empresaId, usuarioId, desde: String(desde), hasta: String(hasta), ip,
     periodos, total: periodos.length, procesados: 0, periodoActual: null,
     estado: 'procesando', resultado: [], error: null,
     empresa: { id: empresa.id, rut: empresa.rut, nombre: empresa.nombre },
@@ -334,6 +359,15 @@ async function ejecutarHistorico(jobId) {
   if (!t) return
   const { empresaId, usuarioId, ip } = t
   const dbInstancia = require('../db')
+  const xpId = t.xpId
+
+  // BLOQUE 2: el job debe estar en 'ejecutando' para el checkpoint correspondiente.
+  try { jobsP.tomar(dbInstancia, xpId) } catch (e) {
+    // Ya ejecutándose (o cancelado/completado): el mapa esta ronda lo salta.
+    t.estado = 'error'
+    t.error = `Job persistente no disponible: ${e.message}`
+    return
+  }
 
   let clave
   try {
@@ -351,7 +385,10 @@ async function ejecutarHistorico(jobId) {
   }
 
   const resultado = []
-  for (const periodo of t.periodos) {
+  // BLOQUE 2: reanudación — los períodos con checkpoint COMPLETADO del job
+  // persistente se saltan (no se re-solicitan al SII tras un reinicio).
+  const faltantes = jobsP.periodosFaltantes(dbInstancia, xpId, t.periodos)
+  for (const periodo of faltantes) {
     t.periodoActual = periodo
     t.estado = `ingestando_${periodo}`
     const detalle = { periodo, compra: null, venta: null }
@@ -364,10 +401,23 @@ async function ejecutarHistorico(jobId) {
       } catch (err) {
         // Un tipo/período que falla no aborta el resto: queda visible en el resumen.
         detalle[flujo] = { error: err.message }
+        jobsP.errorPeriodo(dbInstancia, xpId, periodo, err.message)
       }
     }
     resultado.push(detalle)
     t.procesados += 1
+    // Checkpoint persistente por período (tras AMBOS flujos del período):
+    // en un reinicio a mitad, este período no se vuelve a pedir al SII.
+    const erroresDelPeriodo = (detalle.compra?.error ? 1 : 0)
+      + (detalle.venta?.error ? 1 : 0)
+      + (detalle.compra?.errores?.length || 0)
+      + (detalle.venta?.errores?.length || 0)
+    if (erroresDelPeriodo === 0) {
+      jobsP.checkpointPeriodo(dbInstancia, xpId, periodo)
+    }
+    // Latido: reinicia la ventana de lock de 30 min (crashes largos a mitad).
+    dbInstancia.prepare(`UPDATE jobs_persistentes SET actualizado_en = ? WHERE id = ?`)
+      .run(new Date().toISOString(), xpId)
   }
 
   const insertados = resultado.reduce((s, r) =>
@@ -387,6 +437,18 @@ async function ejecutarHistorico(jobId) {
     despues: { estado: t.estado, insertados: insertados, duplicados, errores, periodos: t.periodos.length },
     ip,
   })
+
+  // BLOQUE 2: el job persistente refleja el resultado del run. Si quedan
+  // períodos sin checkpoint con error, queda 'pendiente' (reintento automático
+  // en la próxima corrida de reanudación); si falló todo y no hay más intentos,
+  // queda 'fallido'. Nunca confundido con "sin datos": el estado del job en la
+  // tabla es explícito, no una ausencia.
+  const quedanFaltantes = jobsP.periodosFaltantes(dbInstancia, xpId, t.periodos)
+  if (quedanFaltantes.length > 0 && errores > 0) {
+    jobsP.finalizar(dbInstancia, xpId, 'fallido', `${errores} error(es); períodos incompletos: ${quedanFaltantes.join(',')}`.slice(0, 500))
+  } else {
+    jobsP.finalizar(dbInstancia, xpId, 'completado', errores > 0 ? `${errores} error(es) aceptados` : null)
+  }
 
   // Un run posterior con errores no degrada un histórico ya confirmado: solo
   // marca 'parcial' si aún no estaba completo.
@@ -411,7 +473,69 @@ function listarIngestasDeUsuario(usuarioId) {
   return lista.sort((a, b) => (a.jobId < b.jobId ? 1 : -1))
 }
 
+/**
+ * BLOQUE 2 — Reanudación tras reinicio: toma los jobs persistentes de tipo
+ * 'historico_rcv' que quedaron a mitad ('pendiente' con checkpoint), reconstruye
+ * su contexto y re-ejecuta SOLO los períodos que faltan. Se llama al arranque
+ * del backend (services/server.js) — es idempotente: si no hay nada pendiente,
+ * no hace nada. La promesa de cada re-run queda viva en el Map de trabajos
+ * (purga estándar) para observabilidad; si el proceso muere de nuevo, el
+ * siguiente arranque repite la reanudación sin duplicar dishecho.
+ */
+async function reanudarHistoricosPendientes() {
+  const dbInstancia = require('../db')
+  const pendientes = jobsP.listar(dbInstancia, { tipo: 'historico_rcv', limit: 100 })
+    .filter((j) => j.estado === 'pendiente' && j.empresa_id)
+  let reanudados = 0
+  for (const job of pendientes) {
+    const jobId = `onb_re_${job.id}`
+    const empresa = dbInstancia.prepare(`SELECT id, rut, nombre FROM empresas WHERE id = ? AND activo = 1`).get(job.empresa_id)
+    if (!empresa) {
+      jobsP.cancelar(dbInstancia, job.id, 'empresa eliminada o inactiva tras reinicio')
+      continue
+    }
+    // Reconstruye el rango del job persistente (periodo_desde/hasta guardados).
+    const periodos = []
+    let p = String(job.periodo_desde)
+    while (p <= String(job.periodo_hasta) && periodos.length < 36) {
+      periodos.push(p)
+      p = periodoSiguiente(p)
+    }
+    jobsMemoria.registrar(trabajos, jobId, {
+      jobId, xpId: job.id, empresaId: job.empresa_id, usuarioId: job.usuario_id,
+      desde: String(job.periodo_desde), hasta: String(job.periodo_hasta), ip: null,
+      periodos, total: periodos.length, procesados: 0, periodoActual: null,
+      estado: 'reanudando', resultado: [], error: null,
+      empresa: { id: empresa.id, rut: empresa.rut, nombre: empresa.nombre },
+    })
+    reanudados += 1
+    const promesa = ejecutarHistorico(jobId).catch((err) => {
+      const t = trabajos.get(jobId)
+      if (t) {
+        t.estado = 'error'
+        t.error = err.message
+        registrarAccion(dbInstancia, {
+          empresaId: job.empresa_id, usuarioId: job.usuario_id,
+          accion: 'onboarding.historico_error', entidad: 'documentos', entidadId: `${job.periodo_desde}-${job.periodo_hasta}`,
+          despues: { error: err.message, reanudado: true },
+        })
+      }
+    })
+    trabajos.get(jobId).promise = promesa
+  }
+  if (reanudados > 0) {
+    console.log(`[JOBS] ${reanudados} ingesta(s) histórica(s) reanudada(s) tras reinicio.`)
+    registrarAccion(dbInstancia, {
+      empresaId: null, usuarioId: null,
+      accion: 'jobs.reanudados_arranque', entidad: 'jobs_persistentes', entidadId: 'historic_rcv',
+      despues: { reanudados },
+    })
+  }
+  return { reanudados }
+}
+
 module.exports = {
   clavesChecklist, ficha, consultarSii, confirmarFicha, marcarChecklist,
   ingestarHistorico, estadoIngestaHistorica, listarIngestasDeUsuario, trabajos,
+  reanudarHistoricosPendientes,
 }
