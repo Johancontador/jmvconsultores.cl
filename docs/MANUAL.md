@@ -321,6 +321,37 @@ histórico de centralizaciones recibidas y el contrato visible.
    enviado al SII con folio y track-id. Requiere configuración de emisor
    (ver §5.3); lo que falta se nombra exactamente, nunca se adivina.
 
+### 4.14a Alertas y Cobranza (Fases 1-4 del flujo cliente nuevo)
+
+**El flujo del cliente nuevo (2026-10-10):** el admin crea el usuario de la
+empresa (Administración → usuarios temporales); la clave provisional la
+manda por WhatsApp; el cliente la cambia en su primer login, entra su
+RUT + clave SII, «Sincronizar» arma la empresa con la ficha oficial y el
+**histórico de 3 años** se baja solo en background. Inmediatamente ve:
+
+**Alertas (Operación → Alertas):** tres grupos con datos reales de la
+bandeja —
+- 🚨 **Reclamados** (RCV con `fecha_reclamo`): conflicto formal con la
+  contraparte. NO contabilizar como gasto/crédito hasta resolver (el cierre
+  los bloquea). Muestra el monto en juego.
+- ⚠️ **En revisión / ERROR** y **sin contabilizar** (montos separados).
+- 📡 **Sync atrasada**: >30 días sin bajar RCV (o nunca) — advertencia de
+  datos viejos, enlaza a la bandejа.
+
+**Cobranza (Operación → Cobranza de Clientes):** la lista de clientes con
+saldo pendiente (cuenta corriente de facturas contabilizadas menos cobros),
+clasificada por mora: verde (<15 d), amarilla (15–30), roja (>30). Por cada
+factura abierta, el botón **«Pagada»** registra el cobro con la Tesorería
+(elección de banco en la propia fila): asiento del núcleo (Debe banco /
+Haber clientes) + movimiento aplicado a la factura + auditoría — el saldo
+baja al instante y el cliente desaparece de la lista al quedar en cero.
+Cobros PARCIALES o por transferencia no asociada: usaré el flujo normal de
+Tesorería → Cobros (el plan B — detección pasiva en cartolas — se conecta
+con la conciliación de la FASE 9.2).
+
+**En el Inicio:** el KPI «Cobranza pendiente» (con enlace directo) muestra
+el monto total y la cantidad de clientes en mora.
+
 ### 4.14 Administración (usuarios, empresas, períodos, auditoría)
 
 - **Empresas** (super_admin): crear con RUT válido (módulo 11) + clave SII
