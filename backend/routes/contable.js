@@ -74,7 +74,28 @@ router.post('/empresas/desde-sii', requireAdmin, async (req, res) => {
       tasaPpm: tasa_ppm,
       ip: ip(req),
     })
-    res.status(201).json({ ok: true, ...resultado })
+
+    // ONBOARDING COMPLETO (Fase 1 auto-histórico): tras el alta exitosa se
+    // lanza la ingestión de los últimos 36 meses del RCV en background — el
+    // usuario no tiene que pedirlo ni esperar: el dashboard se llena solo.
+    // Si el histórico falla (SII caído, rate-limit), el alta NO se cancela:
+    // queda como pendiente re-lanzable desde la vista Onboarding (idempotente).
+    let historico = null
+    try {
+      const onboarding = require('../core/onboarding')
+      const hasta = new Date()
+      const p = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
+      const finHistorico = p(new Date(hasta.getFullYear(), hasta.getMonth() - 1, 1)) // último mes cerrado
+      const desdeHistorico = p(new Date(hasta.getFullYear(), hasta.getMonth() - 36, 1)) // techo 36 meses
+      historico = onboarding.ingestarHistorico(db, {
+        empresaId: resultado.empresaId, usuarioId: req.user.id,
+        desde: desdeHistorico, hasta: finHistorico, ip: ip(req),
+      })
+    } catch (e) {
+      historico = { error: e.message } // registrado; no tumba el alta
+    }
+
+    res.status(201).json({ ok: true, ...resultado, historico })
   } catch (err) {
     const code = /Ya existe|inválida|inválido|obligatorios|Clave SII|no se pudo|no entregó|corresponde al RUT/.test(err.message) ? 400 : 500
     res.status(code).json({ ok: false, error: err.message })

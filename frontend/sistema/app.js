@@ -471,6 +471,8 @@ const MENU = [
   {
     seccion: 'Operación', items: [
       { key: 'inicio', label: 'Inicio — panel del período', permiso: null },
+      { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
+      { key: 'cobranza', label: 'Cobranza de Clientes', permiso: 'tesoreria:ver' },
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },

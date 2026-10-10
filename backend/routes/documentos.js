@@ -9,6 +9,7 @@ const express = require('express')
 const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const documentos = require('../core/documentos')
+const alertas = require('../core/alertas')
 const reglas = require('../core/reglas')
 const ingesta = require('../core/ingesta')
 const auditoria = require('../core/auditoria')
@@ -20,6 +21,16 @@ function ip(req) {
 }
 
 // ---------- Bandeja ----------
+
+// ---------- Alertas (Fase 2 onboarding JMV: reclamadas + pendientes + sync) ----------
+
+router.get('/empresas/:empresaId/alertas', requirePermiso('documentos:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, ...alertas.resumen(db, req.empresaId) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
 
 router.get('/empresas/:empresaId/documentos', requirePermiso('documentos:ver'), (req, res) => {
   try {

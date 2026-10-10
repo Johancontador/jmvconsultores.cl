@@ -10,10 +10,13 @@ VIEWS.inicio = {
   async render(cont) {
     const eid = S.empresa.id
     const pedido = window._inicioPeriodo || null
-    let d
+    let d, cobranzaRes = null
     try {
       const r = await apiGet(`/api/contable/empresas/${eid}/dashboard${pedido ? `?periodo=${pedido}` : ''}`)
       d = r.dashboard
+      // Fase 4: KPI de cobranza en el Inicio — fallo silencioso si el rol no
+      // incluye tesorería:ver (el dashboard no se rompe por eso).
+      try { cobranzaRes = await apiGet(`/api/contable/empresas/${eid}/cobranza?limit=1`) } catch { }
     } catch (err) {
       cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
       return
@@ -41,6 +44,7 @@ VIEWS.inicio = {
      </div>
 
      <div class="kpi-grid mt">
+       ${cobranzaRes ? `<div class="kpi ${cobranzaRes.total_pendiente > 0 ? 'warn' : 'up'}" style="cursor:pointer" onclick="location.hash='#cobranza'"><small>Cobranza pendiente</small><strong>${fmtCorto(cobranzaRes.total_pendiente || 0)}</strong><span class="sub">${(cobranzaRes.clientes || []).length} cliente(s) en mora → Cobranza</span></div>` : ''}
        <div class="kpi ${k.docs_total === 0 ? '' : (k.docs_sin_contabilizar ? 'warn' : 'up')}"><small>Contabilizados</small><strong>${k.docs_contabilizados}/${k.docs_total}</strong><span class="sub">${pct}% del período · ${k.docs_sin_contabilizar} por decisión humana (§43)</span></div>
        <div class="kpi ${k.asientos_cuadrado ? 'up' : 'bad'}"><small>Asientos del período</small><strong>${k.asientos_n}</strong><span class="sub">ΣD = ΣH ${k.asientos_cuadrado ? '' : 'DESCUADRE'}</span></div>
        <div class="kpi"><small>Cuentas por pagar</small><strong>${k.cxp === null ? '—' : fmtCorto(k.cxp)}</strong><span class="sub">proveedores · saldo acumulado</span></div>

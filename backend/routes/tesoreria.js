@@ -9,6 +9,7 @@ const express = require('express')
 const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const teso = require('../core/tesoreria')
+const cobranza = require('../core/cobranza')
 const formatos = require('../core/tesoreria-cartola-formatos')
 
 const router = express.Router()
@@ -148,6 +149,33 @@ router.post('/empresas/:empresaId/tesoreria/pagos', requirePermiso('tesoreria:op
       ip: ip(req),
     })
     res.status(201).json({ ok: true, ...r })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+// ---------- Cobranza (Fase 3) — vista de saldos + botón «Pagada» ----------
+
+router.get('/empresas/:empresaId/cobranza', requirePermiso('tesoreria:ver'), (req, res) => {
+  try {
+    res.json(cobranza.saldosClientes(db, {
+      empresaId: req.empresaId,
+      limit: req.query.limit ? Number(req.query.limit) : 500,
+    }))
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
+router.post('/empresas/:empresaId/cobranza/:documentoId/pagada', requirePermiso('tesoreria:operar'), (req, res) => {
+  try {
+    const b = req.body || {}
+    res.status(201).json(cobranza.marcarPagada(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id,
+      documentoId: Number(req.params.documentoId),
+      bancoCuentaId: b.banco_cuenta_id, fecha: b.fecha || null,
+      monto: b.monto ?? null, glosa: b.glosa || null, ip: ip(req),
+    }))
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

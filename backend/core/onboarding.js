@@ -285,8 +285,19 @@ function ingestarHistorico(dbParam, { empresaId, usuarioId, desde, hasta, ip = n
   if (!clave) throw new Error('La empresa no tiene clave SII configurada')
 
   const periodos = []
-  let p = String(desde)
-  while (p <= String(hasta) && periodos.length < 24) {
+  // TECHO de histórico: 36 meses (3 años) — pedía JMV para onboarding completo.
+  // Recorte por el FINAL (se conservan los meses MÁS RECIENTES): si el rango
+  // pedido excede 36, el `desde` efectivo se empuja hacia adelante hasta que
+  // [desde_efectivo..hasta] sea 36 meses; los meses viejos quedan fuera.
+  let desdeEfectivo = String(desde)
+  {
+    let y = Number(hasta.slice(0, 4)), m = Number(hasta.slice(4))
+    for (let i = 0; i < 35; i++) { m -= 1; if (m <= 0) { m += 12; y -= 1 } }
+    const minimo = `${y}${String(m).padStart(2, '0')}`
+    if (desdeEfectivo < minimo) desdeEfectivo = minimo
+  }
+  let p = String(desdeEfectivo)
+  while (p <= String(hasta) && periodos.length < 36) {
     periodos.push(p)
     p = periodoSiguiente(p)
   }

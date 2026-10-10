@@ -207,6 +207,27 @@ test('ingestarHistorico: validaciones de rango y empresa', () => {
   }), /no encontrada/i)
 })
 
+test('Fase 1 · techo de histórico en 36 meses (3 años): rango mayor se recorta a 36', async () => {
+  // Mock que FALLA SIEMPRE: el test valida el PLAN de períodos (36 recientes),
+  // NO insertar documentos que contaminarían los tests siguientes (este archivo
+  // comparte la misma BD con los demás jobs del core).
+  rcv.consultarRCV = async () => { throw new Error('mock plan-only') }
+  try {
+    const job = onboarding.ingestarHistorico(db, {
+      empresaId: EMP.empresaId, usuarioId: usuarioPyme, desde: '202210', hasta: '202610',
+    })
+    assert.strictEqual(job.periodos.length, 36, `techo 36 (llegaron ${job.periodos.length})`)
+    assert.strictEqual(job.periodos[0], '202311', 'el recorte conserva los MESES RECIENTES: desde efectivo = hasta-35')
+    assert.strictEqual(job.periodos[35], '202610', 'último período = hasta')
+    // esperar el fin del job para no dejar actividad asíncrona colgando
+    const t = onboarding.trabajos.get(job.jobId)
+    await t.promise
+    assert.strictEqual(t.estado, 'completado_con_errores')
+  } finally {
+    restaurarRCV()
+  }
+})
+
 test('ingestarHistorico con SII mockeado: inserta, marca checklist, audita y es idempotente', async () => {
   mockearRCV()
   try {
