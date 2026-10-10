@@ -134,4 +134,24 @@ router.get('/engagement', guardCrm, (req, res) => {
   res.json(crm.engagement(db, { usuarioId: req.user.id }))
 })
 
+/* -------------------- RETENCIÓN PROACTIVA (Fase C) -------------------- */
+
+router.get('/alertas', guardCrm, (req, res) => {
+  res.json(crm.alertasRetencion(db))
+})
+
+router.post('/campanas/lote', guardCrm, (req, res) => {
+  try {
+    res.status(201).json(crm.generarCampanaLote(db, {
+      usuarioId: req.user.id,
+      plantilla: req.body.plantilla,
+      periodo: req.body.periodo || null,
+      etiqueta: req.body.etiqueta || null,
+      etapa: req.body.etapa || null,
+      contacto: req.body.contacto || null,
+      ip: req.ip,
+    }))
+  } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+})
+
 module.exports = router

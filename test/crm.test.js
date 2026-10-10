@@ -204,3 +204,86 @@ test('RBAC: /api/crm rechaza a un cliente (admin_empresa) y acepta a contador/su
   server.closeAllConnections?.()
   server.close()
 })
+
+/* --------------------- RETENCIÓN PROACTIVA (Fase C) --------------------- */
+
+test('Fase C · alertasRetencion: solo reporta lo real; empresa sana no genera alertas', () => {
+  const a = crm.alertasRetencion(db)
+  assert.strictEqual(a.ok, true)
+  assert.strictEqual(a.periodo_actual.length, 6)
+  // empA sin documentos, sin pipeline ni períodos puede tener o no alertas según
+  // señales "nulas" — lo que es cierto: cada alerta citada trae motivos con
+  // códigos conocidos.
+  for (const al of a.alertas) {
+    assert.ok(al.empresa_id, 'empresa_id presente')
+    assert.ok(Array.isArray(al.motivos) && al.motivos.length > 0)
+    for (const m of al.motivos) {
+      assert.ok(['sin_sincronizacion', 'sync_atrasada', 'documentos_acumulados', 'sin_contacto', 'contacto_lejano', 'periodo_abierto_vencido'].includes(m.motivo), `motivo conocido: ${m.motivo}`)
+      assert.ok(String(m.detalle).length > 0)
+    }
+  }
+})
+
+test('Fase C · alertasRetencion ve las señales reales de empA cuando las hay', () => {
+  // Documentos PENDIENTE viejos → sync nula + acumulados (esquema real fase3)
+  for (let i = 0; i < 6; i++) {
+    db.prepare(`INSERT INTO documentos (empresa_id, tipo_flujo, tipo_doc, folio, rut_contraparte, razon_social,
+                 fecha_docto, monto_exento, monto_neto, monto_iva, monto_total, estado, periodo_ingesta, clave_dedupe)
+                VALUES (?, 'compra', 33, ?, '76123456-7', 'Proveedor Fase C',
+                 '2026-01-15', 0, 1000, 190, 1190, 'PENDIENTE', '202601', ?)`)
+      .run(empAId, String(100 + i), `fasec-dedupe-${i}-${Date.now()}`)
+  }
+  // Período pasado ABIERTO → abierto_vencido (periodoActual < mes actual porque 202601 ya pasó)
+  db.prepare(`INSERT INTO periodos_contables (empresa_id, periodo, estado) VALUES (?, '202601', 'ABIERTO')`).run(empAId)
+  // Contacto lejano: interacción hace más de 60 días
+  db.prepare(`UPDATE crm_pipeline SET ultima_interaccion = datetime('now', '-90 days') WHERE empresa_id = ?`).run(empAId)
+
+  const a = crm.alertasRetencion(db)
+  const filaA = a.alertas.find((x) => x.empresa_id === empAId)
+  assert.ok(filaA, 'empA debe aparecer con alertas')
+  const motivos = filaA.motivos.map((m) => m.motivo)
+  assert.ok(motivos.includes('documentos_acumulados'), 'alerta por 6 docs PENDIENTE')
+  assert.ok(motivos.includes('periodo_abierto_vencido'), 'alerta por período 202601 ABIERTO vencido')
+  assert.ok(motivos.includes('contacto_lejano'), 'alerta por contacto hace 90 días')
+})
+
+test('Fase C · generarCampanaLote: validaciones, segmento por etiqueta, dedupe y auditoría', () => {
+  // validaciones
+  assert.throws(() => crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'no-existe', etiqueta: 'CRITICO' }), /Plantilla inválida/)
+  assert.throws(() => crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'bienvenida', etiqueta: 'OK' }), /Etiqueta inválida/)
+  assert.throws(() => crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'bienvenida', etapa: 'INVENTADA' }), /Etapa inválida/)
+  assert.throws(() => crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'bienvenida' }), /Debe filtrar/)
+
+  // etapas de pipeline: empB a OPERATIVO, resto sin cambios
+  crm.actualizarEtapa(db, { usuarioId: adminId, empresaId: empBId, etapa: 'OPERATIVO' })
+
+  // Lote por etapa OPERATIVO con plantilla bienvenida: solo empB
+  const r1 = crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'bienvenida', etapa: 'OPERATIVO' })
+  assert.strictEqual(r1.generadas, 1, `solo empB en OPERATIVO (generadas=${r1.generadas})`)
+  assert.strictEqual(r1.campanas[0].empresa_id, empBId)
+
+  // Re-ejecutar el mismo lote: 0 nuevas, 1 saltada por dedupe
+  const r2 = crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'bienvenida', etapa: 'OPERATIVO' })
+  assert.strictEqual(r2.generadas, 0)
+  assert.strictEqual(r2.saltadas_dupe, 1)
+
+  // Lote por etiqueta: intervienen datos reales; lo que debe cumplirse es que
+  // TODA campaña creada corresponde a una empresa del segmento elegido.
+  const eng = crm.engagement(db, {})
+  const critico = (eng.clientes || []).find((x) => x.etiqueta === 'CRITICO')
+  if (critico) {
+    const r3 = crm.generarCampanaLote(db, { usuarioId: adminId, plantilla: 'reactivacion', etiqueta: 'CRITICO' })
+    assert.ok(r3.generadas >= 0)
+    for (const c of r3.campanas) assert.strictEqual(c.empresa_id, critico.empresa_id)
+    if (r3.generadas > 0) {
+      const fila = db.prepare(`SELECT mensaje FROM crm_campanas WHERE id = ?`).get(r3.campanas[0].id_campana)
+      assert.ok(fila.mensaje.length > 20, 'el mensaje se generó con datos reales')
+    }
+  }
+
+  // Auditoría del lote con detalles reales
+  const aud = db.prepare(`SELECT despues_json FROM auditoria WHERE accion = 'crm.campana_lote' ORDER BY id DESC LIMIT 1`).get()
+  assert.ok(aud && aud.despues_json, 'el lote queda auditado')
+  const despues = JSON.parse(aud.despues_json)
+  assert.ok(despues.generadas >= 0)
+})

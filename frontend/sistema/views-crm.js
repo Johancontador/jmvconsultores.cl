@@ -22,13 +22,14 @@ const SALUD_CHIP = { SANO: 'contabilizado', ATENCION: 'pendiente', CRITICO: 'anu
 async function renderCrm() {
   const wrap = document.getElementById('sys-view')
   wrap.innerHTML = '<div class="empty">Cargando CRM…</div>'
-  let pipeline, recordatorios, campanas, engagement
+  let pipeline, recordatorios, campanas, engagement, alertas
   try {
-    ;[pipeline, recordatorios, campanas, engagement] = await Promise.all([
+    ;[pipeline, recordatorios, campanas, engagement, alertas] = await Promise.all([
       apiGet('/api/crm/pipeline'),
       apiGet('/api/crm/recordatorios'),
       apiGet('/api/crm/campanas'),
       apiGet('/api/crm/engagement'),
+      apiGet('/api/crm/alertas'),
     ])
   } catch (err) {
     wrap.innerHTML = `<div class="empty">${esc(err.message)}</div>`
@@ -39,7 +40,32 @@ async function renderCrm() {
   const resumen = engagement.resumen || {}
 
   wrap.innerHTML = `
-    <div class="kpi-grid">
+    <div class="card" id="crm-retencion">
+      <h3>Retención proactiva</h3>
+      <p class="sub">Clientes con señales reales de riesgo (sin adivinar): sync SII &gt; 30 d, ≥5 docs pendientes, contacto &gt; 60 d o último período vencido aún ABIERTO.</p>
+      <div class="tbl-wrap" style="border:none"><table class="tbl">
+        <thead><tr><th>Cliente</th><th>Señales</th></tr></thead>
+        <tbody>${(alertas.alertas || []).map((a) => `<tr>
+          <td><b>${esc(a.nombre)}</b><div class="sub mono">${esc(a.rut)}</div></td>
+          <td>${a.motivos.map((m) => `<span class="chip anulado">${esc(m.motivo)}</span> <span class="sub">${esc(m.detalle)}</span>`).join('<br>')}</td>
+        </tr>`).join('') || '<tr><td class="muted">Sin alertas — portafolio al día.</td></tr>'}</tbody>
+      </table></div>
+      ${(alertas.alertas || []).length ? `<div class="frm-row mt">
+        <span class="sub">Lote por segmento:</span>
+        <select id="crm-lote-seg" class="form-input" style="width:auto">
+          <option value="etiqueta:CRITICO">engagement: CRÍTICO</option>
+          <option value="etiqueta:ATENCION">engagement: ATENCIÓN</option>
+          <option value="etapa:OPERATIVO">etapa: OPERATIVO</option>
+        </select>
+        <select id="crm-lote-plantilla" class="form-input" style="width:auto">
+          ${(campanas.plantillas || []).map((t) => `<option>${t}</option>`).join('')}
+        </select>
+        <button id="crm-lote-gen" class="btn btn-primary btn-sm">Generar mensajes por lote</button>
+        <span id="crm-lote-out" class="sub"></span>
+      </div>` : ''}
+    </div>
+
+    <div class="kpi-grid mt">
       <div class="kpi up"><small>Sanos</small><strong style="color:var(--success)">${resumen.SANO ?? 0}</strong></div>
       <div class="kpi"><small>Atención</small><strong style="color:var(--warning)">${resumen.ATENCION ?? 0}</strong></div>
       <div class="kpi"><small>Críticos</small><strong style="color:var(--danger)">${resumen.CRITICO ?? 0}</strong></div>
@@ -165,6 +191,21 @@ async function renderCrm() {
         plantilla: document.getElementById('crm-cam-plantilla').value,
       })
       document.getElementById('crm-cam-previa').innerHTML = `<b>Previsualización:</b> ${esc(r.mensaje)}`
+      renderRoute()
+    } catch (e) { showToast(e.message, 'error') }
+  })
+  // ---- lote de retención (Fase C) ----
+  document.getElementById('crm-lote-gen')?.addEventListener('click', async () => {
+    const [kind, ...rest] = (document.getElementById('crm-lote-seg').value || '').split(':')
+    const val = rest.join(':') || null
+    const body = { plantilla: document.getElementById('crm-lote-plantilla').value }
+    if (kind === 'etiqueta') body.etiqueta = val
+    else if (kind === 'etapa') body.etapa = val
+    try {
+      const r = await apiPost('/api/crm/campanas/lote', body)
+      document.getElementById('crm-lote-out').textContent =
+        `${r.generadas} generadas · ${r.saltadas_dupe} ya existían · ${r.saltadas_nada} fuera del segmento`
+      showToast(`Lote: ${r.generadas} campaña(s) generada(s)`, r.generadas ? 'success' : 'info')
       renderRoute()
     } catch (e) { showToast(e.message, 'error') }
   })

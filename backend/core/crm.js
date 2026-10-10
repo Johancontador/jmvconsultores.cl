@@ -296,6 +296,97 @@ function engagement(db, { usuarioId, ip = null }) {
   }
 }
 
+/* ======================= 5b. RETENCIÓN PROACTIVA (Fase C) ======================= */
+
+/**
+ * Alertas de retención consolidadas, SOLO de datos reales (mismas consultas
+ * que engagement — nada nuevo que adivinar). Una alerta por empresa con
+ * motivo(s): sincronización rezagada/atrasada, documentos acumulados,
+ * contacto lejano, último período aún ABIERTO de un mes ya vencido.
+ */
+function alertasRetencion(db) {
+  const per = periodoActual()
+  const salida = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1 ORDER BY nombre`).all().flatMap((e) => {
+    const dias = diasUltimaSincronizacion(db, e.id)
+    const pendientes = db.prepare(`SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ? AND estado = 'PENDIENTE'`).get(e.id)?.n || 0
+    const etapaRow = db.prepare(`SELECT etapa, ultima_interaccion FROM crm_pipeline WHERE empresa_id = ?`).get(e.id)
+    const cierre = db.prepare(`SELECT estado, periodo FROM periodos_contables WHERE empresa_id = ? ORDER BY periodo DESC LIMIT 1`).get(e.id)
+    const motivos = []
+    if (dias === null) motivos.push({ motivo: 'sin_sincronizacion', detalle: 'ninguna ingesta registrada' })
+    else if (dias > 30) motivos.push({ motivo: 'sync_atrasada', detalle: `${dias} días sin sincronizar` })
+    if (pendientes >= 5) motivos.push({ motivo: 'documentos_acumulados', detalle: `${pendientes} documentos PENDIENTE` })
+    const diasContacto = (() => {
+      if (!etapaRow?.ultima_interaccion) return null
+      const f = new Date(String(etapaRow.ultima_interaccion).replace(' ', 'T') + 'Z')
+      if (Number.isNaN(f.getTime())) return null
+      return Math.max(0, Math.floor((Date.now() - f.getTime()) / 86400e3))
+    })()
+    if (!etapaRow?.ultima_interaccion) motivos.push({ motivo: 'sin_contacto', detalle: 'ninguna interacción registrada' })
+    else if (diasContacto > 60) motivos.push({ motivo: 'contacto_lejano', detalle: `${diasContacto} días desde el último contacto` })
+    if (cierre?.estado === 'ABIERTO' && String(cierre.periodo) < per) motivos.push({ motivo: 'periodo_abierto_vencido', detalle: `período ${cierre.periodo} aún ABIERTO (mes vencido)` })
+    if (motivos.length === 0) return []
+    return [{ empresa_id: e.id, rut: e.rut, nombre: e.nombre, etapa: etapaRow?.etapa || 'PROSPECTO', motivos }]
+  })
+  return { ok: true, generado_en: new Date().toISOString(), periodo_actual: per, empresas_con_alertas: salida.length, alertas: salida }
+}
+
+/**
+ * Fase C: genera campañas en LOTE para todas las empresas que comparten la
+ * misma oportunidad retención/según engagement. Dedupe honesto: si ya existe
+ * una campaña de esa plantilla+periodo SIN enviar para la empresa, no repetir.
+ * UNA entrada de auditoría por corrida (crm.campana_lote). Nunca envía sola:
+ * seguirá siendo el despacho quien marque `enviado` (Acción humana).
+ */
+function generarCampanaLote(db, { usuarioId, plantilla, periodo = null, etiqueta = null, etapa = null, contacto = null, ip = null }) {
+  const fn = PLANTILLAS_CAMPANA[plantilla]
+  if (!fn) throw new Error(`Plantilla inválida: ${plantilla} (válidas: ${Object.keys(PLANTILLAS_CAMPANA).join(', ')})`)
+  if (etiqueta && !['SANO', 'ATENCION', 'CRITICO'].includes(etiqueta)) throw new Error(`Etiqueta inválida: ${etiqueta} (válidas: SANO, ATENCION, CRITICO)`)
+  if (etapa && !ETAPAS.includes(etapa)) throw new Error(`Etapa inválida: ${etapa} (válidas: ${ETAPAS.join(', ')})`)
+  if (!etiqueta && !etapa) throw new Error('Debe filtrar por etiqueta (engagement) o etapa (pipeline)')
+  const per = periodo || periodoActual()
+  // Engagement se computa UNA vez para todo el lote (O(n)), no una por empresa.
+  const engagementLote = etiqueta ? engagement(db, {}).clientes || [] : null
+
+  const destinoIds = db.prepare(`SELECT id FROM empresas WHERE activo = 1 ORDER BY nombre`).all().map((r) => r.id)
+  let generadas = 0, saltadas_dupe = 0, saltadas_nada = 0
+  const idsCreadas = []
+  const empresasDetalle = []
+  for (const empresaId of destinoIds) {
+    if (etapa) {
+      const fila = db.prepare(`SELECT etapa FROM crm_pipeline WHERE empresa_id = ?`).get(empresaId)
+      const etapaActual = fila?.etapa || 'PROSPECTO'
+      if (etapaActual !== etapa) { saltadas_nada++; continue }
+    }
+    if (etiqueta) {
+      const cli = engagementLote.find((x) => x.empresa_id === empresaId)
+      if (!cli || cli.etiqueta !== etiqueta) { saltadas_nada++; continue }
+    }
+    const dup = db.prepare(
+      `SELECT id FROM crm_campanas WHERE empresa_id = ? AND plantilla = ? AND periodo = ? AND enviado = 0`
+    ).get(empresaId, plantilla, per)
+    if (dup) { saltadas_dupe++; continue }
+    const emp = db.prepare(`SELECT rut, nombre FROM empresas WHERE id = ?`).get(empresaId)
+    const datos = { empresa: emp.nombre, contacto, periodo: per, dias: 0, cantidad: 0 }
+    if (plantilla === 'reactivacion') datos.dias = diasUltimaSincronizacion(db, empresaId)
+    if (plantilla === 'frost') {
+      const pend = db.prepare(`SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ? AND estado = 'PENDIENTE'`).get(empresaId)
+      datos.cantidad = pend?.n || 0
+    }
+    const mensaje = fn(datos)
+    const info = db.prepare(`INSERT INTO crm_campanas (empresa_id, plantilla, periodo, mensaje) VALUES (?, ?, ?, ?)`).run(empresaId, plantilla, per, mensaje)
+    idsCreadas.push(info.lastInsertRowid)
+    generadas++
+    empresasDetalle.push({ empresa_id: empresaId, rut: emp.rut, id_campana: info.lastInsertRowid })
+  }
+  if (generadas > 0) {
+    registrarAccion(db, {
+      empresaId: null, usuarioId, accion: 'crm.campana_lote', entidad: 'crm_campanas',
+      entidadId: idsCreadas.join(','), despues: { plantilla, periodo: per, etiqueta, etapa, generadas }, ip,
+    })
+  }
+  return { ok: true, plantilla, periodo: per, filtro: { etiqueta, etapa }, generadas, saltadas_dupe, saltadas_nada, campanas: empresasDetalle }
+}
+
 /* ========================= 5. MIGRACIONES ========================= */
 
 function migracionesCrm(db) {
@@ -340,5 +431,6 @@ module.exports = {
   listarRecordatorios, crearRecordatorio, completarRecordatorio,
   listarCampanas, generarCampana, marcarEnviado,
   engagement, diasUltimaSincronizacion,
+  alertasRetencion, generarCampanaLote,
   migracionesCrm,
 }
