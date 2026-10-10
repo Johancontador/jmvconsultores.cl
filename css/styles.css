@@ -86,6 +86,8 @@ h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; }
 .btn--primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(46, 134, 200, 0.55); }
 .btn--light { background: #fff; color: var(--navy); }
 .btn--light:hover { transform: translateY(-2px); }
+.btn--ghost { background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; }
+.btn--ghost:hover { transform: translateY(-2px); border-color:#fff; background: rgba(255,255,255,.06); }
 .btn--sm { padding: 11px 20px; font-size: 0.9rem; min-height: 44px; }
 .btn--lg { padding: 17px 30px; font-size: 1.08rem; }
 .btn--full { width: 100%; }

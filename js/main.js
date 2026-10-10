@@ -5,6 +5,7 @@
 
 /* ⚙️ CONFIGURACIÓN — EDITA AQUÍ TUS DATOS REALES */
 const CONFIG = {
+  appUrl: "https://app.jmvconsultores.cl", // Acceso al Software Contable (producción)
   whatsapp: "56975752213", // ✅ Número real: 56 + 9 + número, sin + ni espacios
   email: "contacto@jmvconsultores.cl",
 };
