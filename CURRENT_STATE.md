@@ -1,6 +1,6 @@
 # CURRENT_STATE — Estado actual del proyecto (base del Software Contable JMV)
 
-> Fecha: 2026-10-05 · Commit base: `7d7a565` (master) · Suite: 301 verdes
+> Fecha: 2026-10-10 · Commit base: `5fd4da0` (master) · Suite: 322 verdes
 > Este documento es el inventario **factual** de lo que existe hoy. Nada aquí es aspiracional.
 > Los documentos ARCHITECTURE.md, DATA_MODEL.md, INTEGRATIONS.md y ROADMAP.md parten de este estado y no lo repiten.
 
@@ -80,6 +80,10 @@ backend/
     asientos-externos.js    receptor de centralizaciones externas — Geo Daniela (FASE 9.1)
     dte.js                  emisión de DTE para empresas cliente: config del emisor (certificado/CAF
                             cifrados), folios, emitir 33/34/56/61, estado SII real, reintentos (BLOQUE 2)
+  crm.js                  CRM del despacho (Fases B+C): pipeline de etapas, recordatorios,
+                            campañas por plantillas con datos reales (envío humano),
+                            engagement con score 0-100 y alertas de retención demasiado
+                            reales; lote por segmento con dedupe por plantilla+período
     tesoreria-cartola-formatos.js   conectores de cartolas por formato CSV/XLSX (FASE 9.2)
     clientes.js             CRUD clientes con scoping user_id, validación RUT/PPM/teléfono (legacy)
     informe.js              iniciar/consultar/listar/eliminar informes (async en background)
@@ -246,7 +250,11 @@ Validación con datos reales: cliente 3 (76.312.274-3), rango Ene–Sep 2026 mod
 
 - **Arquitectura UI profesional (FASES 1-4, commit `7d7a565`):** tema claro/oscuro/sistema persistente con toggle en el header (`tema.js` + tokens en app.css); sys-header con breadcrumb por sección; buscador del menú lateral con filtrado en vivo; **UITabla** en `shared/uitoolkit.js` (buscador sin acentos con resaltado `<mark>`, orden por columna usando el valor crudo — los montos formateados ordenan numérico, bug corregido y verificado en vivo —, paginación, exportación CSV/XLS con BOM, copiar, imprimir, tfoot con totales de lo filtrado) y **UIForms** (validación requerido/rut/email/min con mensajes inline). Libros C/V y Bandeja de Documentos reescritas sobre UITabla (fin del scraping de DOM); **Dashboard Tributario** (#analitica) con KPIs anuales + variación, barras 12 meses, top 20 clientes/proveedores y alertas de duplicados/RUT inválidos (`core/analitica.js`, 12 tests); modal de nueva empresa valida con UIForms antes de llamar al SII. Verificado en vivo con navegador headless (shell, dashboard, tema, buscador, libros, documentos con paginación, modal sin crear nada): consola sin errores, 22 empresas intactas.
 
-- Tests `npm test` en verde (301). CI en verde en cada push.
+- Tests `npm test` en verde (322: 319 del CRM Fase B/acceso/buscador + 3 de Fase C). CI en verde en cada push.
+
+- **CRM de fidelización (Fases B y C, commits `09cb9fa`…`5fd4da0`):** módulo exclusivo del despacho (roles contador/super_admin — un cliente JAMÁS lo ve) sobre la vista #crm del shell, cross-empresa (portafolio completo). **Fase B** — pipeline de etapas (PROSPECTO→ONBOARDING→OPERATIVO→RIESGO→PERDIDO, auditado), recordatorios con fecha/idempotencia, campañas por plantillas con datos reales (el envío es SIEMPRE humano: "Marcar enviado"), engagement con score 0-100 por señales reales (sync SII fresca, docs pendientes, cierre del período, contacto) con etiquetas SANO/ATENCIÓN/CRÍTICO. **Fase C (retención proactiva)** — panel de alertas consolidadas solo con datos reales (sin_sincronizacion, sync_atrasada >30 d, documentos_acumulados ≥5 PENDIENTE, sin_contacto/contacto_lejano >60 d, periodo_abierto_vencido) y **generación de campañas por lote** por segmento (etiqueta de engagement o etapa del pipeline) con dedupe honesto (plantilla+período sin enviar no se repite), engagement computado una vez por lote (O(n)) y UNA entrada de auditoría por corrida (`crm.campana_lote`). Rutas `/api/crm/alertas` + `POST /api/crm/campanas/lote` bajo `guardCrm`. Tablas `crm_pipeline/crm_recordatorios/crm_campanas` (migración idempotente). Procedimiento paso a paso en [docs/MANUAL.md](docs/MANUAL.md) §4.15.
+
+- **Acceso admin para clientes + usuarios temporales (commit `09cb9fa`):** el admin crea un usuario con el correo del cliente; clave provisional pronunciable mostrada UNA vez, nace con cambio forzado (`debe_cambiar_clave`) que el primer login exige concluir; en su onboarding ingresa RUT + clave SII y la empresa se arma sola con la ficha oficial del SII (`empresas-sii`) quedando ligado a esa única empresa con rol admin_empresa (no ve otras). Búsqueda global de empresa en el menú (`core/buscador.js`).
 
 - **UI de Facturación Electrónica (BLOQUE 4, frontend) + design audit:** las tres vistas en `/sistema/` (`views-dte.js`): bandeja de DTEs emitidos (KPIs por estado, filtros tipo/estado con query en el hash, acciones por fila: consultar estado SII verbatim y reintentar con el mismo folio, botón de sincronización DTE→contabilidad con resumen de ambas pasadas), configuración del emisor (ficha con certificado .pfx subido desde archivo y contraseña — cifrados en el servidor, jamás releídos —, tabla de CAFs con folios usados y carga por pegado del XML, idempotente) y emisión 33/34/56/61 (receptor completo, referencia condicional para notas con CodRef 1/2/3, ítems dinámicos con totales en vivo idénticos a `calcularMontos`, clave de idempotencia generada al abrir el formulario). Design audit documentado en [docs/DESIGN-AUDIT-DTE.md](docs/DESIGN-AUDIT-DTE.md): 5 hallazgos corregidos (bug del router con query en el hash compartido por todas las vistas, matriz de faltantes en vez del muro repetido ×4, jerarquía de acciones, montos en mono tabular, base tipográfica de la app a 16px) — Design Score B → A, suite 279/279.
 

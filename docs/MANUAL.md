@@ -332,6 +332,55 @@ histórico de centralizaciones recibidas y el contrato visible.
 - **Auditoría** (`auditoria:ver`): bitácora completa — quién, qué, cuándo,
   antes/después. Toda mutación del sistema queda aquí.
 
+### 4.15 CRM — Fidelización de Clientes (exclusivo del despacho)
+
+> Vista **CRM → Clientes — Pipeline y Salud**. Solo roles **contador y
+> super_admin** la ven y operan (un cliente JAMÁS: es la gestión interna del
+> despacho). No depende de la empresa activa: muestra el portafolio completo.
+
+**A. Pipeline de clientes.** Cada empresa vive en una etapa:
+`PROSPECTO → ONBOARDING → OPERATIVO → RIESGO → PERDIDO`. En la tabla del CRM
+cambie la etapa con el selector de la fila (+ Interacción para registrar el
+contacto de hoy). Cambiar de etapa queda auditado y actualiza "últ. contacto".
+
+**B. Salud (engagement).** Score 0–100 por cliente calculado SOLO con datos
+reales del sistema: frescura de la última sincronización SII (+40 ≤15 días,
++20 ≤30), documentos pendientes de contabilizar (+20 en cero, +10 si <5),
+cierre del último período (+20 CERRADO, +10 en curso) y frescura del contacto
+(+20 ≤30 días, +10 ≤60). Etiquetas: SANO ≥75 / ATENCIÓN ≥45 / CRÍTICO <45.
+Nada adivinado: lo que no hay datos, no puntúa.
+
+**C. Retención proactiva (Fase C).** Panel superior con las alertas
+consolidadas por cliente y su motivo exacto:
+
+| Señal | Umbral (puro dato, no opinión) |
+|---|---|
+| `sin_sincronizacion` / `sync_atrasada` | sin ingesta registrada / > 30 días |
+| `documentos_acumulados` | ≥ 5 documentos PENDIENTE |
+| `sin_contacto` / `contacto_lejano` | sin interacción registrada / > 60 días |
+| `periodo_abierto_vencido` | último período del cliente aún ABIERTO y de un mes ya vencido |
+
+Debajo, **"Lote por segmento"**: elija segmento (engagement CRÍTICO/ATENCIÓN o
+una etapa del pipeline) + plantilla → "Generar mensajes por lote". Crea una
+campaña por empresa del segmento; el resultado nombra lo generado, lo saltado
+por ya existir y lo fuera de segmento. Re-lanzar el mismo lote NO duplica
+(dedupe por plantilla+período mientras no se haya enviado).
+
+**D. Recordatorios.** Tareas con fecha (cierre de período, F29, PPM, llamada,
+sincronización) por cliente — la agenda operativa del despacho. Crear en el
+card izquierdo, competar con ✓ (idempotente, auditado).
+
+**E. Campañas de fidelización.** Mensajes generados desde plantillas
+(bienvenida, ppm_f29, cierre, reactivación, frost) con datos reales del
+sistema (nombre, período, días sin sincronizar, pendientes). Generar solo
+PREPARA el texto: el envío por WhatsApp/correo lo hace el despacho FUERA del
+sistema y se registra con "Marcar enviado" (acción humana, nunca automática).
+
+**Interpretación en una frase:** el CRM no inventa oportunidades — todas las
+señales salen del mismo datos que la contabilidad (documentos, sincronización,
+períodos); su trabajo es la rutina semanal: mirar el panel de retención,
+generar los mensajes del lote que corresponda y despacharlos a mano.
+
 ---
 
 ## 5. Administración del sistema (JMV)
