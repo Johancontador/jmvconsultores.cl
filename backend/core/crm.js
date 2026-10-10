@@ -31,7 +31,7 @@ const PLANTILLAS_CAMPANA = {
   ppm_f29: (d) => `Hola ${d.contacto || d.empresa}: está próximo el pago de PPM (mes ${d.periodo}). Su F29 estimado ya está listo en el sistema — cualquier ajuste lo revisamos juntos antes de declarar.`,
   cierre: (d) => `Hola ${d.contacto || d.empresa}: el cierre del período ${d.periodo} está listo para su revisión. Confirme su checklist en el sistema para bloquear el mes.`,
   reactivacion: (d) => `Hola ${d.contacto || d.empresa}: hemos notado que su sincronización con el SII lleva ${d.dias} días sin actualizar. ¿Agendamos una revisión rápida?`,
-  frost: (d) => `Hola ${d.contacto || d.empresa}: le recordamos que tiene documentos pendientes de contabilizar (${d.cantidad}). Los revisamos y送上 en los próximos días.`,
+  frost: (d) => `Hola ${d.contacto || d.empresa}: le recordamos que tiene documentos pendientes de contabilizar (${d.cantidad}). Los revisamos y los procesamos en los próximos días.`,
 }
 
 function periodoActual() {
