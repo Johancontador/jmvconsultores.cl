@@ -1,5 +1,14 @@
 # 🚀 Despliegue — De local a producción pública
 
+> **✅ 2026-10-10: SISTEMA EN LÍNEA bajo el dominio corporativo** — el sistema
+> contable corre en **https://app.jmvconsultores.cl** (y la landing corporativa en
+> jmvconsultores.cl / www), todos vía el túnel Cloudflare `jmv-app` con
+> servicios systemd permanentes (`jmv-tunnel` y `jmv-www` en el VPS; el 3500
+> recibe la ruta `app` directamente — nginx-iva/8443 queda como fallback).
+> La guía operativa detallada (mapa del stack, unit files, playbook de
+> incidentes, URLs usadas de la API y el historial de la sesión) vive en el
+> VPS: `/home/johan/OPSGUIDE.md`.
+
 Estado actual: **VPS con Docker + nginx** (funcionando). Este documento evalúa los
 caminos para exponer la app públicamente con dominio, y recomienda uno.
 
