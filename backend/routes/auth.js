@@ -57,8 +57,8 @@ function rateLimitLogin(req, res, next) {
 }
 
 router.post('/login', rlDb.middleware('login', {
-  limite: LIMITE_LOGIN, ventanaMs: VENTANA_LOGIN_MS,
-  mensaje: 'Demasiados intentos de login. Intente de nuevo en 15 minutos.',
+  limite: LIMITE_LOGIN, ventanaMs: VENTANA_LOGIN_MS, // el 429 ya incluye los minutos restantes via mensajeConReintente
+  mensaje: 'Demasiados intentos de login.',
 }), (req, res) => {
   const { username, password } = req.body
   if (!username || !password) {
