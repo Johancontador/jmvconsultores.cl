@@ -543,6 +543,17 @@ const MENU = [
     ]
   },
   {
+    // PORTAL DE INTELIGENCIA COMERCIAL — capa read-only por empresa. Los datos
+    // SIEMPRE se resuelven server-side contra /api/portal (aislamiento §8) —
+    // esta sección solo consume, jamás clasifica ni contabiliza.
+    seccion: 'Portal de cliente', items: [
+      { key: 'portal-inicio', label: 'Portal — Inicio ejecutivo', permiso: null },
+      { key: 'portal-ventas', label: 'Portal — Ventas y movimientos', permiso: null },
+      { key: 'portal-cartera', label: 'Portal — Cartera de clientes', permiso: null },
+      { key: 'portal-reportes', label: 'Portal — Reportes guardados', permiso: null },
+    ]
+  },
+  {
     seccion: 'Configuración', items: [
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
       { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },

@@ -80,6 +80,10 @@ app.use('/api/pagos', require('./routes/pagos'))
 app.use('/api/dte', requireAuth, require('./routes/dte'))
 // CRM (Fase B): pipeline/recordatorios/campañas/engagement — exclusivo despacho.
 app.use('/api/crm', requireAuth, require('./routes/crm'))
+// PORTAL (inteligencia comercial): capa read-only por cliente — el router
+// trae SU PROPIO aislamiento por empresa (guard server-side en cada endpoint).
+app.use('/api/portal', requireAuth, require('./routes/portal').construirRouter(require('./db')))
+require('./routes/portal').ensureTablaReportes(require('./db'))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })
