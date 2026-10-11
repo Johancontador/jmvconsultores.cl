@@ -113,6 +113,14 @@ async function boot() {
     if (!estado.autenticado) return renderLogin()
     const me = await apiGet('/api/auth/me')
     setUser(me.user)
+    // BUGFIX QA (CYESISTEMA1): un usuario temporal que ya cambió su clave pero
+    // AÚN no tiene empresa debe aterrizar en el onboarding (RUT + clave SII),
+    // no en «Sin empresas asignadas» sin salida. Solo aplica a no-admin: los
+    // super admin pueden entrar sin empresa propia (trabajan con cualquiera).
+    if (!S.empresa && !S.superAdmin) {
+      renderOnboardingEmpresa()
+      return
+    }
     renderShell()
     navigate(location.hash || '#inicio')
   } catch {
@@ -558,10 +566,13 @@ const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
 
 function renderShell() {
   if (!S.empresa) {
+    // BUGFIX QA (CYESISTEMA1): el no-admin SIN empresa aterriza en onboarding
+    // vía boot(); este ramo queda como salvavidas si algo llega acá sin pasar
+    // por boot (nada lo hace hoy, pero no debe ser un callejón sin texto).
     $app().innerHTML = `<div class="sys-login"><div class="login-card" style="max-width:460px">
-     <h2>Sin empresas asignadas</h2>
-     <p class="sub">Tu usuario (${esc(S.user.username)}) no tiene acceso a ninguna empresa. Contacta a JMV Consultores.</p>
-     <button class="btn btn-secondary" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>boot())">Salir</button>
+     <h2>Completa el ingreso de tu empresa</h2>
+     <p class="sub">Tu usuario (${esc(S.user.username)}) aún no tiene una empresa vinculada. Vuelve a entrar para completar el onboarding, o contacta a JMV Consultores.</p>
+     <button class="btn btn-secondary" onclick="fetch('/api/auth/logout',{method:'POST'}).then(()=>boot())">Volver a entrar</button>
    </div></div>`
     return
   }
