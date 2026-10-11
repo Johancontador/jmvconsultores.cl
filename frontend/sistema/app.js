@@ -348,7 +348,9 @@ async function cargarNotificaciones() {
     }).catch(() => {})) // 404 = conciliación aún sin ejecutar en el período (no es error)
   }
   if (tiene('dte:ver')) {
-    tareas.push(apiGet(`/api/dte/empresas/${eid}`).then((r) => {
+    // BUGFIX QA: el header consultaba /api/dte/empresas/:id que NO EXISTE
+    // (el listado real es /dtes) — 404 en consola en cada carga del shell.
+    tareas.push(apiGet(`/api/dte/empresas/${eid}/dtes?limit=50`).then((r) => {
       const rechazados = (r.dtes || []).filter((d) => d.estado === 'RECHAZADO')
       if (rechazados.length) items.push({ nivel: 'error', hash: '#dte', texto: `${rechazados.length} DTE(s) RECHAZADO(s) por el SII — requiere corrección y reenvío`, etiqueta: 'DTEs' })
     }).catch(() => {}))
