@@ -1,6 +1,6 @@
 'use strict'
 /**
- * Tests de la_cutre nocturna 2026-10-11:
+ * Tests de la racha nocturna 2026-10-11:
  *  1) reset-clave por admin (provisional mostrada una vez, cambio forzado, sesiones revocadas)
  *  2) reactivar un usuario desactivado
  *  3) eliminar definitivo (protegido: admin principal, propio usuario; borra rastro)

@@ -985,7 +985,7 @@ async function admUsuarios(body) {
          <tr><td><b>super_admin</b></td><td>JMV (dueño del sistema)</td><td>TODO: crear empresas y usuarios, perfiles, licencias, DTE, todas las empresas</td><td>—</td></tr>
          <tr><td><b>contador</b></td><td>El contador JMV que atiende al cliente</td><td>Conta completa: clasificar, contabilizar, cerrar período, conciliar, tesorería, activos, emitir DTEs de sus clientes, ver auditoría</td><td>Crear/eliminar usuarios del sistema ni licencias</td></tr>
          <tr><td><b>admin_empresa</b></td><td>El dueño de la empresa cliente</td><td>SU empresa: onboarding SII, traer su histórico, ver reportes, configurar SU emisor DTE, pagar SU suscripción, editar su ficha</td><td>Ver OTRAS empresas, cerrar período, operar tesorería</td></tr>
-         <tr><td><b>auditor</b></td><td>Revisión externa (fiscalizador, SII, contador外的)</td><td>SOLO LECTURA de todo: documentos, asientos, reportes, banco</td><td>Nada de escritura: sin clasificar, sin contabilizar, sin emitir</td></tr>
+         <tr><td><b>auditor</b></td><td>Revisión externa (fiscalizador, SII, contador externo)</td><td>SOLO LECTURA de todo: documentos, asientos, reportes, banco</td><td>Nada de escritura: sin clasificar, sin contabilizar, sin emitir</td></tr>
          <tr><td><b>tesorería</b></td><td>Asistente de pagos/cobranzas de la empresa</td><td>Bancos, libro banco, conciliación bancaria, reportes</td><td>Contabilizar, emitir DTE, registros de compras/ventas</td></tr>
        </tbody>
      </table></div>

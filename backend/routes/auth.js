@@ -374,7 +374,7 @@ router.delete('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
     return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
   }
 
-  // Desactivación correda con revocación de sesiones: un usuario desactivado
+  // Desactivación concurrida con revocación de sesiones: un usuario desactivado
   // no debe seguir con sesión viva (login ya rechaza activo=0).
   db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id)
   registrarAccion(db, {

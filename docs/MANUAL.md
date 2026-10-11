@@ -370,7 +370,7 @@ el monto total y la cantidad de clientes en mora.
     pausa el acceso.
   - Asignar rol por empresa en «Roles en [empresa]»
     (`empresas/:id/usuarios`). Cambiar rol o quitar acceso es inmediato.
-  - **Perfiles de usuario**: la tarjeta final del tab explina qué puede
+  - **Perfiles de usuario**: la tarjeta final del tab explica qué puede
     hacer cada rol por empresa (super_admin, contador, admin_empresa,
     auditor, tesorería) — qué puede y qué no; un mismo usuario puede
     tener roles distintos en empresas distintas. Consultar antes de
