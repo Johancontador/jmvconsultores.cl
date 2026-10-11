@@ -65,6 +65,18 @@ function limpiarVencidos(db, ahora = Date.now(), gracia = 2 * 60 * 60 * 1000) {
   return db.prepare(`DELETE FROM rate_limit WHERE inicio_ms < ?`).run(ahora - LIMPIEZA_CADA_MS - gracia).changes
 }
 
+/** Formatea un milisegundos restantes como mensaje humanizado (min/seg). */
+function mensajeConReintente(mensaje, restanteMs) {
+  if (!Number.isFinite(restanteMs) || restanteMs <= 0) return mensaje
+  const minutos = Math.floor(restanteMs / 60000)
+  const segundos = Math.ceil((restanteMs % 60000) / 1000)
+  const partes = []
+  if (minutos > 0) partes.push(`${minutos} minuto${minutos !== 1 ? 's' : ''}`)
+  if (segundos > 0 && minutos < 3) partes.push(`${segundos} segundo${segundos !== 1 ? 's' : ''}`)
+  const faltan = partes.length ? partes.join(' y ') : 'menos de un segundo'
+  return `${mensaje} Podrá intentar de nuevo en ${faltan}.`
+}
+
 /** Middleware Express: rate-limit SQLite por clave-compuesta.
  *  'porIp' compone la clave con el scope + IP del request (detrás de nginx con
  *  trust proxy 1, req.ip ya es el cliente real). */
@@ -74,7 +86,7 @@ function middleware(scope, { limite, ventanaMs, mensaje = 'Demasiadas solicitude
     const ip = req.ip || req.connection?.remoteAddress || 'unknown'
     const r = consumir(db, { clave: `${scope}:${ip}`, limite, ventanaMs })
     if (!r.permitido) {
-      return res.status(429).json({ ok: false, error: mensaje, reintente_en_ms: r.reset_en_ms })
+      return res.status(429).json({ ok: false, error: mensajeConReintente(mensaje, r.reset_en_ms), reintente_en_ms: r.reset_en_ms })
     }
     next()
   }
@@ -91,4 +103,4 @@ function migrar(db) {
   `)
 }
 
-module.exports = { consumir, limpiarVencidos, middleware, migrar, LIMPIEZA_CADA_MS }
+module.exports = { consumir, limpiarVencidos, middleware, migrar, mensajeConReintente, LIMPIEZA_CADA_MS }

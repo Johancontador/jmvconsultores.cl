@@ -44,7 +44,12 @@ function rateLimitLogin(req, res, next) {
     registro.inicio = ahora
   }
   if (registro.count >= LIMITE_LOGIN) {
-    return res.status(429).json({ ok: false, error: 'Demasiados intentos de login. Intente de nuevo en 15 minutos.' })
+    const restanteMs = registro.inicio + VENTANA_LOGIN_MS - ahora
+    return res.status(429).json({
+      ok: false,
+      error: rlDb.mensajeConReintente('Demasiados intentos de login.', restanteMs),
+      reintente_en_ms: Math.max(0, restanteMs),
+    })
   }
   registro.count++
   loginIntentos.set(ip, registro)
