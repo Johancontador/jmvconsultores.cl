@@ -65,6 +65,16 @@ VIEWS.inicio = {
        </div>
      </div>
 
+     <!-- BLOQUE 4 (unificación UX): trabajos largos y última sincronización —
+          observabilidad real sin disparar nada (endpoint de lectura pura). -->
+     <div class="card mt" id="inicio-jobs">
+       <div class="flex" style="justify-content:space-between">
+         <h3 style="margin:0">Trabajos y sincronización</h3>
+         <span class="muted" id="jobs-sub" style="font-size:var(--fs-xs)">cargando…</span>
+       </div>
+       <div id="jobs-cuerpo" class="mt">${window.UIEstado ? UIEstado.cargando('Consultando estado de trabajos…') : ''}</div>
+     </div>
+
      <div class="card mt">
        <div class="flex" style="justify-content:space-between">
          <h3 style="margin:0">Ventas vs compras — últimos 6 meses</h3>
@@ -133,6 +143,38 @@ VIEWS.inicio = {
     document.getElementById('inicio-periodo').addEventListener('change', () => {
       window._inicioPeriodo = leerPeriodo('inicio-periodo') || null
       renderRoute()
+    })
+
+    // Trabajos y sincronización: 1 fetch de lectura pura; si falla, el bloque
+    // muestra el error SIN romper el dashboard (no es un KPI crítico).
+    apiGet(`/api/contable/empresas/${eid}/jobs/estado`).then((r) => {
+      const j = r.resumen
+      const sub = document.getElementById('jobs-sub')
+      const cuerpo = document.getElementById('jobs-cuerpo')
+      if (!cuerpo) return
+      sub.textContent = j.ultima_sync
+        ? `última sync: ${perDisplay(j.ultima_sync.periodo)} (${(j.ultima_sync.cuando || '').slice(0, 16).replace('T', ' ')})`
+        : 'sin sincronización registrada'
+      if (!r.trabajos.length) {
+        cuerpo.innerHTML = window.UIEstado
+          ? UIEstado.vacio('Sin trabajos registrados', 'Cuando se lance una extracción del histórico o la sincronización diaria, aparecerá aquí su avance.', '')
+          : '<p class="muted">Sin trabajos.</p>'
+        return
+      }
+      // Sin jobs CRÍTICOS: tarjetas resumen; con jobs: línea de estado por job
+      const filas = r.trabajos.map((t) => {
+        const familia = t.estado === 'completado' ? 'contabilizado' : (t.estado === 'fallido' ? 'error' : (t.estado === 'ejecutando' ? 'propuesto' : 'pendiente'))
+        const tipo = t.tipo === 'historico_rcv' ? 'Histórico RCV' : (t.tipo === 'sync_diaria' ? 'Sync diaria' : esc(t.tipo))
+        return `
+          <div class="alerta ${t.estado === 'fallido' ? 'error' : (t.estado === 'completado' ? 'ok' : 'info')}">
+            <div class="tx"><b>${tipo}</b><span class="muted"> — ${esc(t.periodo)}</span>${t.error ? `<span class="muted" style="display:block">${esc(t.error)}</span>` : ''}</div>
+            ${window.UIEstado ? UIEstado.chip(esc(t.estado), familia) : esc(t.estado)}
+          </div>`
+      }).join('')
+      cuerpo.innerHTML = `<div class="alerta-lista">${filas}</div>`
+    }).catch(() => {
+      const cuerpo = document.getElementById('jobs-cuerpo')
+      if (cuerpo) cuerpo.innerHTML = window.UIEstado ? UIEstado.vacio('No se pudo consultar el estado de trabajos', 'El resto del panel funciona normalmente; reintenta más tarde.', '') : '<p class="muted">Sin estado de trabajos.</p>'
     })
   },
 }

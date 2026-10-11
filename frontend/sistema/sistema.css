@@ -272,6 +272,51 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .mb { margin-bottom: var(--space-5); }
 .flex { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .empty { text-align: center; color: var(--fg-muted); padding: var(--space-10) var(--space-4); font-size: var(--fs-sm); }
+
+/* Estados compartidos (ui.js) — mandato §7/§9: spinner visible, vacío que
+   explica la causa, error con acción de reintento. Tokens del tema: OK en
+   claro y oscuro sin cambios. */
+.ui-loading { display: flex; align-items: center; gap: var(--space-3); color: var(--fg-muted); font-size: var(--fs-sm); padding: var(--space-5); }
+.ui-spin {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border-default); border-top-color: var(--accent);
+  animation: ui-rot 0.8s linear infinite;
+}
+@keyframes ui-rot { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .ui-spin { animation: none; border-top-color: var(--accent); } }
+.ui-empty {
+  text-align: center; padding: var(--space-10) var(--space-4);
+  border: 1px dashed var(--border-default); border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+.ui-empty b { display: block; font-family: var(--font-display); font-size: var(--fs-md); color: var(--fg-secondary); margin-bottom: var(--space-1); }
+.ui-empty p { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--fg-muted); }
+.ui-error {
+  border: 1px solid var(--danger-soft); border-left: 3px solid var(--danger);
+  background: var(--bg-elevated); border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5); font-size: var(--fs-sm);
+}
+.ui-error p { margin: var(--space-1) 0 0; }
+
+/* Chips de filtros activos (§7): aparecen sobre la tabla, cada uno con su X */
+.filtros-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-2) 0; }
+.filtros-chips .fchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-soft); color: var(--accent);
+  border-radius: var(--radius-full); padding: 2px 10px; font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+}
+.filtros-chips .fchip button { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-sm); padding: 0; line-height: 1; }
+.filtros-chips .fchip button:hover { opacity: 0.7; }
+
+/* Panel de filtros avanzados: colapsable (details/summary nativo) */
+.filtros-avanzado summary {
+  cursor: pointer; color: var(--fg-muted); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: var(--fw-semibold);
+  user-select: none; margin-top: var(--space-2);
+}
+.filtros-avanzado summary:hover { color: var(--accent); }
+.filtros-avanzado[open] summary { margin-bottom: var(--space-2); }
+.filtros-avanzado .filtros-bar { padding-top: var(--space-2); border-top: 1px dashed var(--border-subtle); }
 .section-title { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 600; margin: var(--space-8) 0 var(--space-4); }
 .checkline { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-2) 0; font-size: var(--fs-sm); color: var(--fg-secondary); }
 .checkline::before { font-weight: 700; flex: none; width: 22px; }

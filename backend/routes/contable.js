@@ -377,6 +377,30 @@ router.get('/empresas/:empresaId/buscador', requirePermiso('reportes:ver'), (req
 
 // ---------- Auditoría ----------
 
+// BLOQUE 4 (UX): estado OBSERVABLE de los trabajos largos de esta empresa
+// (ingesta histórica, sync diaria). Lectura pura: jamás dispara nada.
+router.get('/empresas/:empresaId/jobs/estado', requirePermiso('documentos:ver'), (req, res) => {
+  try {
+    const jobsP = require('../core/jobs-persistentes')
+    const filas = jobsP.listar(db, { empresaId: req.empresaId, limit: 20 })
+    const resumen = {
+      activos: filas.filter((j) => ['pendiente', 'ejecutando'].includes(j.estado)).length,
+      fallidos_recientes: filas.filter((j) => j.estado === 'fallido' && (Date.now() - new Date(j.terminado_en || 0).getTime()) < 48 * 60 * 60e3).length,
+      ultima_sync: (() => {
+        const s = filas.find((j) => j.tipo === 'sync_diaria' && j.estado === 'completado')
+        return s ? { cuando: s.terminado_en, periodo: s.periodo_hasta } : null
+      })(),
+    }
+    res.json({ ok: true, resumen, trabajos: filas.map((j) => ({
+      id: j.id, tipo: j.tipo, estado: j.estado,
+      periodo: j.periodo_desde === j.periodo_hasta ? j.periodo_desde : `${j.periodo_desde}–${j.periodo_hasta}`,
+      intentos: j.intentos, error: j.error, actualizado_en: j.actualizado_en,
+    })) })
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message })
+  }
+})
+
 router.get('/empresas/:empresaId/auditoria', requirePermiso('auditoria:ver'), (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500)
   const offset = Number(req.query.offset) || 0

@@ -469,20 +469,25 @@ function pintarResultados(drop, q, grupos) {
  */
 const MENU = [
   {
-    seccion: 'Operación', items: [
-      { key: 'inicio', label: 'Inicio — panel del período', permiso: null },
+    seccion: 'Inicio', items: [
+      { key: 'inicio', label: 'Panel del período', permiso: null },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
-      { key: 'cobranza', label: 'Cobranza de Clientes', permiso: 'tesoreria:ver' },
-      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
-      { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
-      { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
     ]
   },
   {
-    seccion: 'SII y Tributación', items: [
+    seccion: 'Empresas y clientes', items: [
+      { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
+      { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
+      { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
+      { key: 'crm', label: 'Pipeline y Salud', permiso: 'empresas:ver' },
+      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
+    ]
+  },
+  {
+    seccion: 'Operación SII', items: [
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
-      { key: 'analitica', label: 'Dashboard Tributario', permiso: 'reportes:ver' },
-      { key: 'onboarding', label: 'Onboarding desde el SII', permiso: 'documentos:ver' },
+      { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
+      { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
     ]
   },
   {
@@ -498,21 +503,13 @@ const MENU = [
       { key: 'propuestas', label: 'Propuestas y Conciliación', permiso: 'propuestas:ver' },
       { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
       { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
+      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
+      { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
     ]
   },
   {
     seccion: 'Tesorería', items: [
       { key: 'tesoreria', label: 'Bancos, Libro Banco y Conciliación', permiso: 'tesoreria:ver' },
-    ]
-  },
-  {
-    seccion: 'Centralizaciones', items: [
-      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
-    ]
-  },
-  {
-    seccion: 'Activos', items: [
-      { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
     ]
   },
   {
@@ -527,18 +524,14 @@ const MENU = [
     ]
   },
   {
-    seccion: 'Cierre', items: [
-      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
+    seccion: 'Herramientas', items: [
+      { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
     ]
   },
   {
-    seccion: 'CRM', items: [
-      { key: 'crm', label: 'Clientes — Pipeline y Salud', permiso: 'empresas:ver' },
-    ]
-  },
-  {
-    seccion: 'Empresa', items: [
+    seccion: 'Configuración', items: [
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
+      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
       { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
       { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
       { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },

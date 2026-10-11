@@ -619,20 +619,69 @@ VIEWS.reportes = {
         { label: 'Centros de costo', desc: 'En preparación' },
       ] },
     ]
+    // Favoritos y recientes (§10 mandato): en localStorage, sin backend — son
+    // accesos, no módulos nuevos. Cada entrada guarda anchor+tab.
+    const KEY_FAV = 'jmv_fav_reports'
+    const KEY_REC = 'jmv_recent_reports'
+    const leerLista = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]').slice(0, 6) } catch { return [] } }
+    const favs = leerLista(KEY_FAV)
+    const recientes = leerLista(KEY_REC)
+    const firma = (it) => it.hash + (it.tabVal ? `@${it.tabVal}` : '')
+    const esFav = (it) => favs.some((f) => (typeof f === 'string' ? f : f.hash) === firma(it))
+    // registrar 'recientes' al abrir un reporte real (no al cargar el centro)
+    const registrarReciente = (it) => {
+      if (!it || !it.hash) return
+      try {
+        const lista = leerLista(KEY_REC).filter((r) => (typeof r === 'string' ? r : r.hash) !== firma(it))
+        lista.unshift({ hash: it.hash, tabVar: it.tabVar, tabVal: it.tabVal, label: it.label })
+        localStorage.setItem(KEY_REC, JSON.stringify(lista.slice(0, 6)))
+      } catch { /* localStorage lleno/bloqueado: no fatalo */ }
+    }
+
     cont.innerHTML = `
      <div class="frm-row mb">
        <div><span class="frm-label">Período de trabajo</span>${inputPeriodoHTML('rep-periodo-global', periodo)}</div>
+       <div style="min-width:220px"><span class="frm-label">Buscar reporte</span><input id="rep-buscar" type="search" class="form-input" placeholder="p. ej. balance, IVA, clientes…" style="width:100%"></div>
        <span class="hint" style="align-self:end">Los reportes abren con este período preseleccionado.</span>
      </div>
-     ${grupos.map((g) => `
+     <div id="rep-filas">
+     ${favs.length ? `
        <div class="card mb">
+         <h3>Favoritos</h3>
+         <div class="rep-grid">
+           ${favs.map((f) => {
+             const h = typeof f === 'string' ? f : f.hash
+             const tv = typeof f === 'string' ? null : f.tabVar
+             const tvl = typeof f === 'string' ? null : f.tabVal
+             const lbl = typeof f === 'string' ? h : (f.label || h)
+             return `<a class="rep-card" href="${h}"${tv ? ` data-tabvar="${tv}" data-tabval="${tvl}"` : ''}><b>${esc(lbl)}</b><span class="chip neutral">favorito</span></a>`
+           }).join('')}
+         </div>
+       </div>` : ''}
+     ${recientes.length && !favs.length ? `
+       <div class="card mb">
+         <h3>Recientes</h3>
+         <div class="rep-grid">
+           ${recientes.map((f) => {
+             const h = typeof f === 'string' ? f : f.hash
+             const tv = typeof f === 'string' ? null : f.tabVar
+             const tvl = typeof f === 'string' ? null : f.tabVal
+             const lbl = typeof f === 'string' ? h : (f.label || h)
+             return `<a class="rep-card" href="${h}"${tv ? ` data-tabvar="${tv}" data-tabval="${tvl}"` : ''}><b>${esc(lbl)}</b><span class="chip neutral">reciente</span></a>`
+           }).join('')}
+         </div>
+       </div>` : ''}
+     ${grupos.map((g) => `
+       <div class="card mb rep-grupo" data-grupo="${esc(g.titulo.toLowerCase())}">
          <h3>${esc(g.titulo)}</h3>
          <div class="rep-grid">
            ${g.items.map((it) => it.hash
-             ? `<a class="rep-card" href="${it.hash}"${it.tabVar ? ` data-tabvar="${it.tabVar}" data-tabval="${it.tabVal}"` : ''}><b>${esc(it.label)}</b><span>${esc(it.desc)}</span></a>`
+             ? `<a class="rep-card" href="${it.hash}" data-firma="${esc(firma(it))}"${it.tabVar ? ` data-tabvar="${it.tabVar}" data-tabval="${it.tabVal}"` : ''}><b>${esc(it.label)}</b><span>${esc(it.desc)}</span><button type="button" class="rep-fav" title="Favorito" aria-label="Alternar favorito" data-firma="${esc(firma(it))}" style="background:none;border:none;cursor:pointer;color:${esFav(it) ? 'var(--accent)' : 'var(--fg-muted)'};font-weight:700;padding:0 4px">${esFav(it) ? '★' : '☆'}</button></a>`
              : `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
          </div>
-       </div>`).join('')}`
+       </div>`).join('')}
+     </div>
+     <div id="rep-sin-resultados" style="display:none">${window.UIEstado ? UIEstado.vacio('Ningún reporte coincide con la búsqueda', 'Prueba con otro término: balance, IVA, clientes, banco…', '') : ''}</div>`
     document.getElementById('rep-periodo-global').addEventListener('change', () => {
       window._repPeriodo = leerPeriodo('rep-periodo-global') || periodo
       // Propaga el período del centro a los reportes que lo respetan.
@@ -642,12 +691,58 @@ VIEWS.reportes = {
       localStorage.setItem('iva_periodo_activo', window._repPeriodo)
       renderRoute()
     })
-    // Atajos con pestaña preseleccionada (Libro mayor, Libro banco,
-    // Conciliación): al hacer click se fija el estado de pestaña de la vista
-    // destino (window._ctaTab / window._tesoTab) antes de navegar al anchor.
-    cont.querySelectorAll('.rep-card[data-tabvar]').forEach((a) => {
+    // Búsqueda client-side sobre las tarjetas (§10): filtra por label/desc y
+    // muestra estado vacío del bloque cuando nada coincide.
+    const inputBuscar = document.getElementById('rep-buscar')
+    if (inputBuscar) inputBuscar.addEventListener('input', () => {
+      const q = inputBuscar.value.trim().toLowerCase()
+      let visibles = 0
+      cont.querySelectorAll('.rep-grupo').forEach((grp) => {
+        let grupoVisibles = 0
+        grp.querySelectorAll('.rep-card').forEach((card) => {
+          const texto = (card.textContent || '').toLowerCase()
+          const ok = !q || texto.includes(q)
+          card.style.display = ok ? '' : 'none'
+          if (ok && !card.classList.contains('rep-card-off')) grupoVisibles += 1
+        })
+        grp.style.display = grupoVisibles || !q ? '' : 'none'
+        visibles += grupoVisibles
+      })
+      const sin = document.getElementById('rep-sin-resultados')
+      if (sin) sin.style.display = (q && visibles === 0) ? '' : 'none'
+    })
+
+    // Favoritos: toggle persistente (localStorage) — el click del botón NO
+    // navega (stopPropagation + preventDefault del anchor).
+    cont.querySelectorAll('button.rep-fav').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const firmaBtn = btn.dataset.firma
+        const lista = (() => { try { return JSON.parse(localStorage.getItem(KEY_FAV) || '[]') } catch { return [] } })()
+        const idx = lista.findIndex((f) => (typeof f === 'string' ? f : f.hash) === firmaBtn)
+        if (idx >= 0) lista.splice(idx, 1)
+        else {
+          // guarda la fila completa (label/tab) para re-render de la sección Favoritos
+          const src = btn.closest('.rep-card')
+          lista.unshift({ hash: firmaBtn.split('@')[0], tabVal: firmaBtn.includes('@') ? firmaBtn.split('@')[1] : null, label: src ? (src.querySelector('b')?.textContent || firmaBtn) : firmaBtn })
+        }
+        try { localStorage.setItem(KEY_FAV, JSON.stringify(lista.slice(0, 6))) } catch { /* lleno */ }
+        renderRoute()
+      })
+    })
+
+    // Recientes: registrar al navegar a un reporte real (click en tarjeta con hash)
+    cont.querySelectorAll('a.rep-card[href]').forEach((a) => {
       a.addEventListener('click', () => {
-        window[a.dataset.tabvar] = a.dataset.tabval
+        const firmaA = a.dataset.firma || a.getAttribute('href')
+        const item = { hash: a.getAttribute('href'), tabVar: a.dataset.tabvar, tabVal: a.dataset.tabval, label: a.querySelector('b')?.textContent || '' }
+        try {
+          const lista = leerLista(KEY_REC).filter((r) => (typeof r === 'string' ? r : r.hash) !== firmaA)
+          lista.unshift(item)
+          localStorage.setItem(KEY_REC, JSON.stringify(lista.slice(0, 6)))
+        } catch { /* lleno */ }
+        if (a.dataset.tabvar) window[a.dataset.tabvar] = a.dataset.tabval
       })
     })
   },
