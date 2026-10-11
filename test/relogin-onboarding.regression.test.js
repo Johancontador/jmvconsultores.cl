@@ -45,9 +45,15 @@ test('re-login de usuario temporal ya sin clave provisional pero sin empresa: /m
   db.prepare(`INSERT INTO users (username, password_hash, is_admin, activo, debe_cambiar_clave) VALUES (?, ?, 0, 1, 0)`)
     .run('relogin-onb@example.org', hashPassword('SuClaveNueva1'))
 
+  // Cuota limpia: los tests comparten rate_limit SQLite por IP en el MISMO proceso.
+  // El req.ip puede ser '::ffff:127.0.0.1' (IPv4-mapped) — limpiar por prefijo.
+  db.prepare(`DELETE FROM rate_limit WHERE clave LIKE ?`).run('login:%')
+
   const rLogin = await fetch(`${base()}/login`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'RELLOGIN-ONB@example.org', password: 'SuClaveNueva1' }),
+    // OJO: RELLOGIN (doble L) era un typo que hacía fallar el login vero
+    // RELOGIN — el fold correcto de 'relogin-onb@example.org'.
+    body: JSON.stringify({ username: 'RELOGIN-ONB@example.org', password: 'SuClaveNueva1' }),
   })
   assert.strictEqual(rLogin.status, 200)
   const login = await rLogin.json()

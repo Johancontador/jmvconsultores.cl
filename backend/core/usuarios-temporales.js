@@ -28,6 +28,7 @@ const crypto = require('crypto')
 const { hashPassword, verifyPassword } = require('../services/password')
 const { registrarAccion } = require('./auditoria')
 const { esSuperAdmin, validarRut, normalizarRut } = require('./empresas')
+const { cifrar: bovedaCifrar } = require('./boveda')
 
 // Alfabeto sin ambigüedades (sin l/1/I/0/O) para lectura por teléfono/WhatsApp.
 const CONSONANTES = 'bdfhkprstvwyz'
@@ -161,9 +162,44 @@ async function onboardingEmpresa(db, { usuarioId, rut, claveSii, ip = null }) {
     WHERE ue.usuario_id = ? AND ue.activo = 1
   `).get(usuarioId)
   if (yaTiene) throw new Error(`Ya tienes empresa vinculada (${yaTiene.rut}): tu acceso está fijado a ella y no puede cambiarse`)
-  if (db.prepare(`SELECT id FROM empresas WHERE rut = ? AND activo = 1`).get(rutNorm)) {
-    throw new Error('Ese RUT ya tiene una empresa en el sistema; contacta a tu contador JMV')
+
+  // CASO RESUELTO (issue ventas@cyeclima.cl): la empresa ya existe en el
+  // sistema (la creó JMV o su dueño desde otro ingreso). El login SII con el
+  // RUT + clave del dueño DEMUESTRA la propiedad: si la ficha SII corresponde
+  // al RUT pedido, vinculamos ese usuario a la empresa EXISTENTE con su clave
+  // actualizada a la bóveda — sin crear duplicado ni pedir intervención de JMV.
+  const empresaExistente = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE rut = ? AND activo = 1`).get(rutNorm)
+  if (empresaExistente) {
+    // La credencial SII se debe validar contra el SII ANTES de dar acceso:
+    // guardamos la clave cifrada y el login se comprueba con una consulta
+    // ligera de sesión (obtenerSesion ya retorna 'Clave incorrecta' si no).
+    const { obtenerSesion } = require('../services/sii-session')
+    try {
+      await obtenerSesion(rutNorm, String(claveSii))
+    } catch (e) {
+      const msg = String(e.message || '')
+      if (/clave|incorrecta|inválida/i.test(msg)) throw new Error('Clave SII incorrecta para este RUT')
+      // Error de red/SII distinto: no puede probar la propiedad AHORA, pero no
+      // es culpa de las credenciales — exponer y dejar reintentar.
+      throw new Error(`No se pudo validar la clave contra el SII: ${msg}`)
+    }
+    const roRow = db.prepare(`SELECT id FROM roles WHERE codigo = 'admin_empresa'`).get()
+    const txV = db.transaction(() => {
+      // Clave SII nueva a la bóveda (la vieja pudo rotarse en el SII).
+      db.prepare(`UPDATE empresas SET clave_sii = ? WHERE id = ?`).run(bovedaCifrar(String(claveSii)), empresaExistente.id)
+      db.prepare(`INSERT INTO usuario_empresa (usuario_id, empresa_id, rol_id) VALUES (?, ?, ?)`)
+        .run(usuarioId, empresaExistente.id, roRow.id)
+    })
+    txV()
+    registrarAccion(db, {
+      empresaId: empresaExistente.id, usuarioId,
+      accion: 'onboarding.usuario_vinculado_existente', entidad: 'empresas',
+      entidadId: String(empresaExistente.id), despues: { rut: rutNorm, rol: 'admin_empresa' }, ip,
+    })
+    return { ok: true, empresaId: empresaExistente.id, empresa: { id: empresaExistente.id, rut: empresaExistente.rut, nombre: empresaExistente.nombre } }
   }
+
+  // (el caso de RUT ya existente se resolvió ARRIBA: vinculación validada)
   // Credencial SII obligatoria y con largo razonable antes de ir al SII.
   if (!claveSii || String(claveSii).length < 6) {
     throw new Error('La clave SII es obligatoria (se usa solo para sincronizar tus documentos)')

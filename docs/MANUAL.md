@@ -357,11 +357,29 @@ el monto total y la cantidad de clientes en mora.
 - **Empresas** (super_admin): crear con RUT válido (módulo 11) + clave SII
   (cifrada AES-256-GCM en bóveda). Empresas creadas por JMV reciben licencia
   HEREDADA (nunca bloqueadas — son clientes de servicio cobrados fuera).
-- **Usuarios**: crear usuario y asignar rol por empresa
-  (`empresas/:id/usuarios`). Cambiar rol o quitar acceso es inmediato.
+- **Usuarios** (super_admin, Administración → Usuarios): en la tarjeta
+  «Usuarios del sistema", por cada usuario disponible:
+  - **Reset clave**: genera clave provisional nueva; se muestra UNA vez para
+    mandarla por WhatsApp; el usuario la cambia en su próximo login
+    (cambio forzado). Todas sus sesiones vivas se cierran.
+  - **Desactivar**: cierra conexión y sesiones, conserva el historial
+    (bitácora, roles, auditoría). Reactivable en un click.
+  - **Eliminar** (definitivo): IRRECUPERABLE — borra usuario, sesiones,
+    roles y su rastro de auditoría. Protegido: no se puede eliminar al
+    admin principal del sistema ni a ti mismo. Preferí Desactivar si solo
+    pausa el acceso.
+  - Asignar rol por empresa en «Roles en [empresa]»
+    (`empresas/:id/usuarios`). Cambiar rol o quitar acceso es inmediato.
+  - **Perfiles de usuario**: la tarjeta final del tab explina qué puede
+    hacer cada rol por empresa (super_admin, contador, admin_empresa,
+    auditor, tesorería) — qué puede y qué no; un mismo usuario puede
+    tener roles distintos en empresas distintas. Consultar antes de
+    asignar (el rol controla TODA la aislamiento y permisos de UI/API).
 - **Períodos**: crear, cerrar (§4.10) y reabrir (excepcional, auditado).
 - **Auditoría** (`auditoria:ver`): bitácora completa — quién, qué, cuándo,
-  antes/después. Toda mutación del sistema queda aquí.
+  antes/después. Toda mutación del sistema queda aquí. Las acciones de
+  gestión de usuarios (desactivar, reactivar, reset, eliminar, vínculo de
+  onboarding) se registran en la bitácora sin claves ni secretos.
 
 ### 4.15 CRM — Fidelización de Clientes (exclusivo del despacho)
 

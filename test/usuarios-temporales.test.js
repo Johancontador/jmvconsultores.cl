@@ -131,14 +131,17 @@ test('onboardingEmpresa: bloqueado si debe cambiar clave, RUT malo, sin clave SI
   )
 })
 
-test('RUT ya registrado como empresa activa es rechazado en onboarding (self-service ya cubría esto, aquí igual)', async () => {
+test('RUT ya registrado LINKEA la empresa existente (2026-10-11): sin clave válida del SII no da acceso', async () => {
   const r = utemp.crearUsuarioTemporal(db, { adminId, username: 'nuevo3@example.org' })
   db.prepare(`UPDATE users SET debe_cambiar_clave = 0 WHERE id = ?`).run(r.usuarioId)
-  // usar el RUT existente (Otra SA)
+  // usar el RUT existente (Otra SA): la clave SII que llega NO se puede validar
+  // (no hay SII real en tests) → el core rechaza con mensaje claro, no crea duplicado
   await assert.rejects(
     () => utemp.onboardingEmpresa(db, { usuarioId: r.usuarioId, rut: '1000000-9', claveSii: 'xxxxxx' }),
-    /ya tiene una empresa/i,
+    /validar la clave contra el SII|Clave SII incorrecta|ya tiene una empresa/i,
   )
+  // Y NO se creó ninguna asignación (el acceso se da solo con credencial probada):
+  assert.strictEqual(db.prepare(`SELECT count(*) as n FROM usuario_empresa WHERE usuario_id = ?`).get(r.usuarioId).n, 0)
 })
 
 test('integración /api/auth: login entrega debe_cambiar_clave y el cambio de clave lo concluye', async () => {

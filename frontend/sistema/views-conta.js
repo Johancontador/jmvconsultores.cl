@@ -930,12 +930,21 @@ async function admUsuarios(body) {
      <div class="card">
        <h3>Usuarios del sistema</h3>
        <div class="tbl-wrap" style="border:none"><table class="tbl">
-         <tbody>${(us.usuarios || []).map((u) => `<tr>
+         <thead><tr><th>Usuario</th><th>Estado</th><th>Alta</th><th>Acciones</th></tr></thead>
+         <tbody>${(us.usuarios || []).map((u) => `<tr data-uid="${u.id}">
            <td><b>${esc(u.username)}</b>${u.is_admin ? ' <span class="chip clasificado">admin</span>' : ''}</td>
            <td><span class="chip ${u.activo ? 'contabilizado' : 'anulado'}">${u.activo ? 'activo' : 'inactivo'}</span></td>
            <td class="sub mono">${esc((u.creado_en || '').slice(0, 10))}</td>
+           <td>
+             <button class="btn btn-secondary btn-sm" data-modo="reset" data-uid="${u.id}" ${u.id === S.user.id ? 'disabled title="Usa el cambio de clave normal"' : ''}>Reset clave</button>
+             ${u.activo
+               ? `<button class="btn btn-secondary btn-sm" data-modo="desactivar" data-uid="${u.id}" ${u.id === S.user.id ? 'disabled title="No puedes desactivar tu propia cuenta"' : ''}>Desactivar</button>`
+               : `<button class="btn btn-secondary btn-sm" data-modo="reactivar" data-uid="${u.id}">Reactivar</button>`}
+             <button class="btn btn-secondary btn-sm" data-modo="definitivo" data-uid="${u.id}" ${u.id === S.user.id ? 'disabled' : ''}>Eliminar</button>
+           </td>
          </tr>`).join('')}</tbody>
        </table></div>
+       <p class="sub">Reset clave → genera provisional nueva (se muestra una vez, el usuario la cambia al entrar). Desactivar → conservado para historial. Eliminar → irrecuperable y auditado; no se puede borrar al admin principal ni a ti mismo.</p>
        <div class="frm-row mt">
          <input id="us-new" class="form-input" placeholder="usuario nuevo" style="width:150px">
          <input id="us-pass" class="form-input" type="password" placeholder="contraseña (8+)" style="width:170px">
@@ -966,6 +975,21 @@ async function admUsuarios(body) {
          <button class="btn btn-primary btn-sm" id="as-add">Asignar rol</button>
        </div>
      </div>
+   </div>
+   <div class="card mt">
+     <h3>Perfiles de usuario — qué puede hacer cada uno</h3>
+     <p class="sub">Un PERFIL (rol) define qué capacidades tiene el usuario DENTRO de cada empresa. Un mismo usuario puede tener roles distintos en empresas distintas (ej: contador en tu despacho, auditor en otra). El rol lo asigna el super admin desde esta pantalla.</p>
+     <div class="tbl-wrap"><table class="tbl">
+       <thead><tr><th>Perfil</th><th>Para quién</th><th>Puede</th><th>No puede</th></tr></thead>
+       <tbody>
+         <tr><td><b>super_admin</b></td><td>JMV (dueño del sistema)</td><td>TODO: crear empresas y usuarios, perfiles, licencias, DTE, todas las empresas</td><td>—</td></tr>
+         <tr><td><b>contador</b></td><td>El contador JMV que atiende al cliente</td><td>Conta completa: clasificar, contabilizar, cerrar período, conciliar, tesorería, activos, emitir DTEs de sus clientes, ver auditoría</td><td>Crear/eliminar usuarios del sistema ni licencias</td></tr>
+         <tr><td><b>admin_empresa</b></td><td>El dueño de la empresa cliente</td><td>SU empresa: onboarding SII, traer su histórico, ver reportes, configurar SU emisor DTE, pagar SU suscripción, editar su ficha</td><td>Ver OTRAS empresas, cerrar período, operar tesorería</td></tr>
+         <tr><td><b>auditor</b></td><td>Revisión externa (fiscalizador, SII, contador外的)</td><td>SOLO LECTURA de todo: documentos, asientos, reportes, banco</td><td>Nada de escritura: sin clasificar, sin contabilizar, sin emitir</td></tr>
+         <tr><td><b>tesorería</b></td><td>Asistente de pagos/cobranzas de la empresa</td><td>Bancos, libro banco, conciliación bancaria, reportes</td><td>Contabilizar, emitir DTE, registros de compras/ventas</td></tr>
+       </tbody>
+     </table></div>
+     <p class="sub">El rol se asigna POR EMPRESA en «Roles en [empresa]» arriba. Un super_admin también necesita una empresa activa para ver datos; por eso el selector de empresa muestra todas cuando es super_admin.</p>
    </div>`
 
   document.getElementById('us-add').addEventListener('click', async () => {
@@ -977,6 +1001,45 @@ async function admUsuarios(body) {
       showToast('Usuario creado', 'success')
       renderRoute()
     } catch (err) { showToast(err.message, 'error') }
+  })
+
+  // Acciones por usuario: reset de clave, desactivar/reactivar, eliminar definitivo.
+  document.querySelectorAll('#tab-usuarios button[data-modo]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const uid = b.dataset.uid
+      const modo = b.dataset.modo
+      const nombre = b.closest('tr')?.querySelector('td b')?.textContent || `usuario ${uid}`
+      if (modo === 'definitivo') {
+        if (!confirm(`¿ELIMINAR DEFINITIVAMENTE a ${nombre}? Esta acción es irrecuperable (borra auditoría, sesiones y roles). Préferible desactivar si solo pausa el acceso.`)) return
+      } else if (modo === 'desactivar') {
+        if (!confirm(`¿Desactivar a ${nombre}? Sus sesiones vivas se cierran y no podrá entrar, pero los datos se conservan.`)) return
+      }
+      const out = document.getElementById('us-cli-resultado')
+      try {
+        if (modo === 'reset') {
+          const r = await apiPost(`/api/auth/usuarios/${uid}/reset-clave`, {})
+          out.innerHTML = `
+            <div class="card" style="border:1px solid var(--ok)">
+              <h3>🔑 Clave de ${esc(r.username)} reseteada</h3>
+              <p>Clave provisional (muéstrala al usuario, no queda registrada):</p>
+              <p style="font-family:var(--mono);font-size:1.15rem"><b>${esc(r.clave_provisional)}</b></p>
+              <p class="sub">El usuario la cambia de inmediato en su próximo login y sigue su flujo normal.</p>
+            </div>`
+        } else if (modo === 'desactivar') {
+          await apiDelete(`/api/auth/usuarios/${uid}`)
+          showToast('Usuario desactivado', 'success')
+          renderRoute()
+        } else if (modo === 'reactivar') {
+          await apiPost(`/api/auth/usuarios/${uid}/reactivar`, {})
+          showToast('Usuario reactivado', 'success')
+          renderRoute()
+        } else if (modo === 'definitivo') {
+          await apiDelete(`/api/auth/usuarios/${uid}/definitivo`)
+          showToast('Usuario eliminado definitivamente', 'success')
+          renderRoute()
+        }
+      } catch (err) { showToast(err.message, 'error') }
+    })
   })
   document.getElementById('us-cli-add').addEventListener('click', async () => {
     const email = document.getElementById('us-cli').value.trim()

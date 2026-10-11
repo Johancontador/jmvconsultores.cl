@@ -32,6 +32,8 @@ const server2 = app2.listen(0)
 const base2 = () => `http://127.0.0.1:${server2.address().port}/api/auth`
 
 test('login acepta username con distinto case que el almacenado (regresión CYESISTEMA)', async () => {
+  // Cuota limpia por prefijo (req.ip puede ser '::ffff:127.0.0.1').
+  db.prepare(`DELETE FROM rate_limit WHERE clave LIKE ?`).run('login:%')
   db.prepare(`INSERT INTO users (username, password_hash, is_admin, activo, debe_cambiar_clave) VALUES (?, ?, 0, 1, 1)`)
     .run('regresion-case-login@example.org', hashPassword('ClaveForte123'))
 

@@ -56,8 +56,9 @@ test('integración: el 429 del login lleva el mensaje con minutos incluidos', as
   const base = `http://127.0.0.1:${server2.address().port}/api/auth`
 
   try {
-    // Agotar los 5 intentos de login desde 127.0.0.1.
-    for (let i = 0; i < 5; i++) {
+  // Cuota limpia por prefijo (req.ip puede ser '::ffff:127.0.0.1').
+  db.prepare(`DELETE FROM rate_limit WHERE clave LIKE ?`).run('login:%')
+  for (let i = 0; i < 5; i++) {
       await fetch(`${base}/login`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ username: 'nadie-rate-msg@example.org', password: 'mal' }),

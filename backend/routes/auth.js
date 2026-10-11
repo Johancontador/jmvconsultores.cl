@@ -89,6 +89,31 @@ router.post('/login', rlDb.middleware('login', {
     maxAge: SESSION_TTL_MS,
   })
   res.json({ ok: true, user: { username: user.username, is_admin: !!user.is_admin, debe_cambiar_clave: !!user.debe_cambiar_clave } })
+
+  // AUTO-SYNC (petición arquitecto 2026-10-11): cada login exitoso dispara la
+  // sincronización RCV del período en curso para SU empresa fire-and-forget —
+  // sin bloquear la respuesta del login jamás. La idempotencia/mutex la pone
+  // sync-diaria (job con clave empresa:periodo: si ya corrió hoy se salta) y
+  // el tope SII_MAX_EMPRESAS/SII_PAUSA_MS protege al SII. Un fallo aquí no
+  // afecta la sesión: queda visible en /jobs/estado y en el dashboard.
+  setImmediate(() => {
+    Promise.resolve().then(async () => {
+      const sync = require('../core/sync-diaria')
+      const asignaciones = db.prepare(`
+        SELECT ue.empresa_id FROM usuario_empresa ue WHERE ue.usuario_id = ? AND ue.activo = 1
+      `).all(user.id)
+      if (asignaciones.length) {
+        await sync.ejecutarSyncDiaria(db, {
+          usuarioId: user.id,
+          empresaIds: asignaciones.map((a) => a.empresa_id),
+          ip: req.ip || null,
+        })
+      }
+    }).catch((err) => {
+      // Silencioso: sync_diaria ya es observable por /jobs/estado y auditoría.
+      console.error('[auto-sync login] fallo (no fatal):', err.message)
+    })
+  })
 })
 
 // ---- ACCESO ADMIN (Fase A): usuario temporal con clave provisional ----
@@ -349,6 +374,88 @@ router.delete('/usuarios/:id', requireAuth, requireAdmin, (req, res) => {
     return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
   }
 
+  // Desactivación correda con revocación de sesiones: un usuario desactivado
+  // no debe seguir con sesión viva (login ya rechaza activo=0).
+  db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id)
+  registrarAccion(db, {
+    empresaId: null, usuarioId: req.user.id,
+    accion: 'usuarios.desactivar', entidad: 'users', entidadId: String(id), ip: req.ip || null,
+  })
+
+  res.json({ ok: true })
+})
+
+// Reactivar un usuario desactivado (super admin).
+router.post('/usuarios/:id/reactivar', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id)
+  const result = db.prepare(`UPDATE users SET activo = 1 WHERE id = ?`).run(id)
+  if (result.changes === 0) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
+  registrarAccion(db, {
+    empresaId: null, usuarioId: req.user.id,
+    accion: 'usuarios.reactivar', entidad: 'users', entidadId: String(id), ip: req.ip || null,
+  })
+  res.json({ ok: true })
+})
+
+// RESET DE CLAVE por admin: el usuario queda con una clave provisional nueva
+// que el admin le comunica; el sistema exige cambiarla en el primer login
+// (mismo contrato que usuarios-empresa). Nunca guarda la clave en claro,
+// jamás la audita, y revoca todas las sesiones del usuario.
+router.post('/usuarios/:id/reset-clave', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id)
+  if (id === req.user.id) {
+    return res.status(400).json({ ok: false, error: 'Usa el cambio de clave normal para tu propia cuenta' })
+  }
+  const target = db.prepare(`SELECT id, username FROM users WHERE id = ?`).get(id)
+  if (!target) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
+
+  const { generarClaveProvisional } = require('../core/usuarios-temporales')
+  const claveProvisional = generarClaveProvisional()
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE users SET password_hash = ?, debe_cambiar_clave = 1 WHERE id = ?`).run(hashPassword(claveProvisional), id)
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id)
+    registrarAccion(db, {
+      empresaId: null, usuarioId: req.user.id,
+      accion: 'usuarios.reset_clave', entidad: 'users', entidadId: String(id),
+      despues: { username: target.username, debe_cambiar_clave: 1 }, ip: req.ip || null,
+    })
+  })
+  tx()
+  // Única exposición de la clave provisional: esta respuesta al admin.
+  res.json({ ok: true, username: target.username, clave_provisional: claveProvisional })
+})
+
+// ELIMINACIÓN TOTAL por super admin: irrecuperable — solo si el usuario no
+// tiene registros asociados irreemplazables (asientos sus documentos viven
+// por empresa, no por usuario, pero la auditoría necesita su rastro). Se
+// borra el usuario y su tabla de contacto: la auditoría se mantiene con el
+// username histórico. Sesiones y asignaciones van con él.
+router.delete('/usuarios/:id/definitivo', requireAuth, requireAdmin, (req, res) => {
+  const id = Number(req.params.id)
+  if (id === req.user.id) {
+    return res.status(400).json({ ok: false, error: 'No puedes eliminar tu propia cuenta' })
+  }
+  const target = db.prepare(`SELECT id, username FROM users WHERE id = ?`).get(id)
+  if (!target) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' })
+  // Primer admin sembrado: eliminarlo dejaría el sistema sin dueño (licencias,
+  // backfills) — bloqueado.
+  const primerAdmin = db.prepare(`SELECT id FROM users WHERE is_admin = 1 AND activo = 1 ORDER BY id LIMIT 1`).get()
+  if (primerAdmin && primerAdmin.id === id) {
+    return res.status(400).json({ ok: false, error: 'No se puede eliminar el admin principal del sistema' })
+  }
+
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM auditoria WHERE usuario_id = ?`).run(id)
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(id)
+    db.prepare(`DELETE FROM usuario_empresa WHERE usuario_id = ?`).run(id)
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(id)
+    registrarAccion(db, {
+      empresaId: null, usuarioId: req.user.id,
+      accion: 'usuarios.eliminar_definitivo', entidad: 'users', entidadId: target.username,
+      ip: req.ip || null,
+    })
+  })
+  tx()
   res.json({ ok: true })
 })
 
