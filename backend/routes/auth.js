@@ -60,7 +60,11 @@ router.post('/login', rlDb.middleware('login', {
     return res.status(400).json({ ok: false, error: 'Usuario y contraseña requeridos' })
   }
 
-  const user = db.prepare(`SELECT * FROM users WHERE username = ? AND activo = 1`).get(username)
+  // BUGFIX QA (issue CYESISTEMA): los usuarios temporales nacen en minúsculas
+  // (validarFormulario normaliza), pero el login comparaba exacto: escribir
+  // CYESISTEMA daba 401 aunque la clave fuera correcta. La comparación es
+  // case-insensitive por diseño (SQLite en ASCII — đủ para el alfabeto admitido).
+  const user = db.prepare(`SELECT * FROM users WHERE username = ? COLLATE NOCASE AND activo = 1`).get(String(username).trim())
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
   }

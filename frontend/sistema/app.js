@@ -243,8 +243,12 @@ function renderCambioForzado(username) {
         password_actual: document.getElementById('cf-actual').value,
         password_nueva: nueva,
       })
-      showToast('Clave actualizada. Ahora formulario de tu empresa.', 'success')
-      renderOnboardingEmpresa()
+      // BUGFIX QA: /api/auth/password revoca TODAS las sesiones del usuario
+      // (correcto por seguridad), así que la sesión de este login ya no existe:
+      // enviar al onboarding acá producía 401 en bucle. Volver al login para
+      // re-autenticar con la nueva clave.
+      showToast('Clave actualizada. Vuelve a entrar con tu nueva clave.', 'success')
+      renderLogin()
     } catch (ex) {
       err.textContent = ex.message
       err.hidden = false
