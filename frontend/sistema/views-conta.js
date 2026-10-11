@@ -1004,7 +1004,7 @@ async function admUsuarios(body) {
   })
 
   // Acciones por usuario: reset de clave, desactivar/reactivar, eliminar definitivo.
-  document.querySelectorAll('#tab-usuarios button[data-modo]').forEach((b) => {
+  document.querySelectorAll('#adm-body button[data-modo]').forEach((b) => {
     b.addEventListener('click', async () => {
       const uid = b.dataset.uid
       const modo = b.dataset.modo
