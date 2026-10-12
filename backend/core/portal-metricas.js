@@ -285,4 +285,59 @@ function catalogo() {
   return CATALOGO
 }
 
-module.exports = { CATALOGO, resumen, movimientos, cartera, catalogo, periodoPrevio }
+/**
+ * Serie mensual INTERACTIVA (dashboard §A): los últimos `meses` (1..24) a
+ * partir del mes ancla `hasta` (AAAAMM; default: el último con RCV de ese
+ * flujo, o el mes en curso si la empresa recién parte). Meses SIN documentos
+ * quedan en `null` (nunca 0: sin datos ≠ cero, §7) — el front los pinta vacíos.
+ * Difiere de serie_anual del resumen (que fija el año calendario): esta es la
+ * que alimenta el rango móvil y el toggle venta/compra del dashboard.
+ */
+function serie(db, { empresaId, meses = 12, hasta = null, flujo = 'venta' }) {
+  const f = flujo === 'compra' ? 'compra' : 'venta'
+  const n = Math.min(Math.max(Number(meses) || 12, 1), 24)
+
+  // Ancla: mes explícito > último con datos del flujo > mes en curso.
+  let fin = String(hasta || '').replace(/\D/g, '').slice(0, 6)
+  if (!/^\d{6}$/.test(fin)) {
+    const r = db.prepare(
+      `SELECT MAX(periodo_ingesta) AS p FROM documentos WHERE empresa_id = ? AND tipo_flujo = ?`
+    ).get(empresaId, f)
+    if (r && r.p) fin = String(r.p)
+  }
+  if (!/^\d{6}$/.test(fin)) {
+    const d = new Date()
+    fin = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  // Lista de períodos descendente desde `fin` hacia atrás, luego ascendente.
+  let y = Number(fin.slice(0, 4)), m = Number(fin.slice(4))
+  const periodos = []
+  for (let i = 0; i < n; i++) {
+    periodos.push(`${y}${String(m).padStart(2, '0')}`)
+    m--; if (m <= 0) { m += 12; y-- }
+  }
+  periodos.reverse()
+  const desde = periodos[0]
+
+  const rows = db.prepare(`
+    SELECT periodo_ingesta AS p, COALESCE(SUM(${SIGNO_NC}(monto_neto)), 0) AS neto, COUNT(*) AS docs
+    FROM documentos
+    WHERE empresa_id = ? AND tipo_flujo = ? AND ${WHERE_VIVOS}
+      AND periodo_ingesta >= ? AND periodo_ingesta <= ?
+    GROUP BY 1
+  `).all(empresaId, f, desde, fin)
+  const mapa = new Map(rows.map((r) => [r.p, r]))
+
+  return {
+    flujo: f,
+    desde,
+    hasta: fin,
+    meses: periodos.map((p) => {
+      const r = mapa.get(p)
+      return { periodo: p, neto: r ? r.neto : null, docs: r ? r.docs : 0 }
+    }),
+  }
+}
+
+module.exports = { CATALOGO, resumen, movimientos, cartera, catalogo, serie, periodoPrevio }

@@ -144,6 +144,29 @@ function construirRouter(db) {
     } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
   })
 
+  /* --------------------- SERIE INTERACTIVA (dashboard) --------------------- */
+
+  /**
+   * Serie móvil para el dashboard: ?meses=12&hasta=202609&flujo=venta.
+   * Los parámetros se limpian server-side (meses 1-24; hasta AAAAMM; flujo
+   * binario) — el front no manda SQL ni números sueltos.
+   */
+  router.get('/empresas/:empresaId/serie', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      res.json({
+        ok: true,
+        serie: portal.serie(db, {
+          empresaId: id,
+          meses: req.query.meses,
+          hasta: cleanPeriodo(req.query.hasta),
+          flujo: req.query.flujo === 'compra' ? 'compra' : 'venta',
+        }),
+      })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
   /* -------------------------- CARTERA (§C) -------------------------- */
 
   router.get('/empresas/:empresaId/cartera', (req, res) => {

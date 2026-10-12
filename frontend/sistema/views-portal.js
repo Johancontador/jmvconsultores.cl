@@ -30,102 +30,234 @@ function perLabelPortal(p) {
   return `${meses[Number(p.slice(4)) - 1] || ''} ${p.slice(0, 4)}`
 }
 
-/** Canvas simple de barras (SVG, sin dependencias): serie {meses[], neto[]} */
-function barrasSerieHTML(serie) {
+/**
+ * Canvas simple de barras (SVG, sin dependencias): serie {meses[], neto[]}.
+ * INTERACTIVO: cada barra con datos es un rect clicable (`data-periodo`);
+ * `alClic(periodo)` dispara el drill-down del dashboard. Meses sin datos
+ * (null) quedan como raya vacía NO clicable.
+ */
+function barrasSerieHTML(serie, alClic = null) {
   const conDatos = serie.filter((s) => s.neto !== null && s.neto !== undefined)
+  const accion = alClic || (() => {})
   if (!conDatos.length) {
-    return UIEstado.vacio('Sin datos en el año', 'Todavía no hay documentos de venta vivos en este período.')
+    return UIEstado.vacio('Sin datos en el rango', 'Todavía no hay documentos vivos en los períodos consultados.')
   }
   const max = Math.max(...conDatos.map((s) => Math.abs(s.neto)), 1)
-  const W = 720, H = 200, bw = W / 12
+  const W = 720, H = 200, bw = W / serie.length
   const barras = serie.map((s, i) => {
     if (s.neto === null || s.neto === undefined) {
       return `<rect x="${i * bw + bw * 0.15}" y="${H - 4}" width="${bw * 0.7}" height="4" fill="var(--border)"/>`
     }
     const h = Math.max(4, Math.round((Math.abs(s.neto) / max) * (H - 20)))
-    return `<rect x="${i * bw + bw * 0.15}" y="${H - h}" width="${bw * 0.7}" height="${h}" rx="3" fill="var(--primary)" opacity="0.85"><title>${perLabelPortal(s.periodo)}: ${fmtCLP(s.neto)}</title></rect>`
+    const clicable = alClic ? ` class="pb-barra" data-periodo="${s.periodo}" style="cursor:pointer"` : ''
+    return `<rect${clicable} x="${i * bw + bw * 0.15}" y="${H - h}" width="${bw * 0.7}" height="${h}" rx="3" fill="var(--primary)" opacity="0.85"><title>${perLabelPortal(s.periodo)}: ${fmtCLP(s.neto)} — clic para ver detalle</title></rect>`
   }).join('')
   const labels = serie.map((s, i) =>
     `<text x="${i * bw + bw / 2}" y="${H - 0}" font-size="10" text-anchor="start" fill="var(--muted)" transform="rotate(45 ${i * bw + bw / 2} ${H})">${s.periodo.slice(4)}</text>`).join('')
-  return `<svg viewBox="0 0 ${W} ${H + 16}" role="img" aria-label="Venta neta mensual" style="width:100%;height:auto">${barras}${labels}</svg><div class="hint" style="margin-top:6px">${conDatos.length} mes(es) con datos de ${serie.length}. Escala máx: ${fmtCLP(max)}.</div>`
+  return `<svg viewBox="0 0 ${W} ${H + 16}" role="img" aria-label="Ventas mensuales" style="width:100%;height:auto">${barras}${labels}</svg><div class="hint" style="margin-top:6px">${conDatos.length} mes(es) con datos de ${serie.length}${alClic ? ' — clic en una barra para ver el detalle del mes' : ''}. Escala máx: ${fmtCLP(max)}.</div>`
 }
 
 /* ------------------------------ §A: INICIO ------------------------------ */
 
 window.VIEWS['portal-inicio'] = {
-  titulo: 'Portal — Inicio ejecutivo',
+  titulo: 'Portal — Dashboard',
   async render(cont) {
     const eid = S.empresa.id
-    const periodo = leerPeriodo('portal-periodo') || periodoActual()
+    // Estado INTERACTIVO del dashboard: vive solo dentro de la vista. Cada
+    // control (rango, flujo, drill-down) muta este objeto y repinta la zona
+    // afectada sin recargar todo.
+    const estado = { flujo: 'venta', meses: 12 }
+
     cont.innerHTML = `
       <div class="card">
-        <div class="frm-row" style="align-items:end;justify-content:space-between">
-          <div>
-            <span class="frm-label">Período</span>
-            ${inputPeriodoHTML('portal-periodo', periodo)}
-          </div>
-          <button class="btn btn-secondary" id="portal-recargar">Actualizar</button>
+        <div class="frm-row" style="align-items:end;gap:16px">
+          <div><span class="frm-label">Flujo</span>
+            <div class="frm-row" style="gap:0">
+              <button class="btn ${estado.flujo === 'venta' ? 'btn-primary' : 'btn-secondary'}" id="pd-flujo-venta">Ventas</button>
+              <button class="btn ${estado.flujo === 'compra' ? 'btn-primary' : 'btn-secondary'}" id="pd-flujo-compra">Compras</button>
+            </div></div>
+          <div><span class="frm-label">Rango</span>
+            <select id="pd-meses" class="form-input" style="width:auto">
+              <option value="6">Últimos 6 meses</option>
+              <option value="12" selected>Últimos 12 meses</option>
+              <option value="24">Últimos 24 meses</option>
+            </select></div>
+          <div><span class="frm-label">Hasta (mes ancla)</span>${inputPeriodoHTML('pd-hasta', '')}</div>
+          <button class="btn btn-secondary" id="pd-recargar">Aplicar</button>
         </div>
+        <p class="hint mt">Todo es consultable: el gráfico, los clientes y el detalle de mes provienen SIEMPRE del servidor (aislamiento §8); nada se calcula en el navegador.</p>
       </div>
-      <div id="portal-resumen">${UIEstado.cargando('Consultando métricas de tu empresa…')}</div>`
+      <div id="pd-zona">${UIEstado.cargando('Consultando métricas de tu empresa…')}</div>
+      <div id="pd-detalle"></div>`
 
-    const cargar = async () => {
-      const zona = document.getElementById('portal-resumen')
+    // — KPIs del flujo activo — llama /serie (rango móvil) y /resumen (KPI del
+    // flujo activo, período ancla). El resumen es de venta por diseño (§A);
+    // si el flujo es compra, se ocultan los KPIs de clientes de venta.
+    const flujoLabel = () => (estado.flujo === 'venta' ? 'Venta neta' : 'Compras netas')
+
+    async function pintarDashboard() {
+      const zona = document.getElementById('pd-zona')
       if (!zona) return
-      zona.innerHTML = UIEstado.cargando('Consultando métricas de tu empresa…')
+      zona.innerHTML = UIEstado.cargando('Consultando serie y KPIs…')
       try {
-        const r = await apiGet(`/api/portal/empresas/${eid}/resumen?periodo=${leerPeriodo('portal-periodo')}`)
-        if (r.sin_datos || !r.resumen) {
+        const qsSerie = `meses=${estado.meses}&flujo=${estado.flujo}&hasta=${leerPeriodo('pd-hasta') || ''}`
+        const sr = await apiGet(`/api/portal/empresas/${eid}/serie?${qsSerie}`)
+        const S_ = sr.serie
+        if (!S_.meses.length || S_.meses.every((m) => m.neto === null)) {
           zona.innerHTML = UIEstado.vacio(
-            'Sin RCV de ventas para este período',
-            'Cuando tu empresa tenga documentos de venta sincronizados del SII, aquí verás el resumen. Esto NO es cero: significa que no hay datos que mostrar.')
+            `Sin RCV de ${estado.flujo === 'venta' ? 'ventas' : 'compras'} en el rango`,
+            'Cuando tu empresa tenga documentos sincronizados del SII en los últimos meses, aquí verás el dashboard. Esto NO es cero: significa que no hay datos que mostrar.')
           return
         }
-        const R = r.resumen
-        const vari = R.ventas.variacion_pct
-        zona.innerHTML = `
-          <div class="card">
-            <h3>Venta neta de ${perLabelPortal(R.periodo)}</h3>
-            <div style="font-size:var(--fs-xl);font-weight:700">${fmtCLP(R.ventas.neta)}</div>
-            <p class="muted">Variación vs. ${perLabelPortal(R.periodo_previo)}: <b>${fmtPctPortal(vari)}</b>
-              ${vari === null ? '<span class="hint">(sin datos del mes comparable — no se muestra como 0%)</span>' : ''}</p>
-            <div class="frm-row mt" style="gap:24px">
-              <div><span class="frm-label">Clientes compradores</span><div style="font-weight:600">${fmtCLP(R.clientes_compradores)}</div></div>
-              <div><span class="frm-label">Ticket prom. por documento</span><div style="font-weight:600">${fmtCLP(R.ticket_promedio_documento)}</div></div>
-              <div><span class="frm-label">Ticket prom. por cliente</span><div style="font-weight:600">${fmtCLP(R.ticket_promedio_cliente)}</div></div>
-              <div><span class="frm-label">Concentración top 5</span><div style="font-weight:600">${fmtPctPortal(R.concentracion_top5_pct)}</div></div>
+        // KPIs del mes ancla (último con datos de la serie): usamos /resumen
+        // solo para venta; para compra mostramos solo la serie + totales.
+        let kpis = ''
+        if (estado.flujo === 'venta') {
+          const r = await apiGet(`/api/portal/empresas/${eid}/resumen?periodo=${S_.hasta}`)
+          if (r.resumen) {
+            const R = r.resumen
+            const vari = R.ventas.variacion_pct
+            kpis = `
+              <div class="card">
+                <h3>${flujoLabel()} de ${perLabelPortal(R.periodo)}</h3>
+                <div style="font-size:var(--fs-xl);font-weight:700">${fmtCLP(R.ventas.neta)}</div>
+                <p class="muted">Variación vs. ${perLabelPortal(R.periodo_previo)}: <b>${fmtPctPortal(vari)}</b>
+                  ${vari === null ? '<span class="hint">(sin datos del mes comparable — no se muestra como 0%)</span>' : ''}</p>
+                <div class="frm-row mt" style="gap:24px">
+                  <div><span class="frm-label">Clientes compradores</span><div style="font-weight:600">${fmtCLP(R.clientes_compradores)}</div></div>
+                  <div><span class="frm-label">Ticket prom. por documento</span><div style="font-weight:600">${fmtCLP(R.ticket_promedio_documento)}</div></div>
+                  <div><span class="frm-label">Ticket prom. por cliente</span><div style="font-weight:600">${fmtCLP(R.ticket_promedio_cliente)}</div></div>
+                  <div><span class="frm-label">Concentración top 5</span><div style="font-weight:600">${fmtPctPortal(R.concentracion_top5_pct)}</div></div>
+                </div>
+              </div>`
+          }
+        } else {
+          const r = await apiGet(`/api/portal/empresas/${eid}/movimientos?flujo=compra&desde=&hasta=${S_.hasta}&limit=1`)
+          const neto = r.neto || 0
+          kpis = `
+            <div class="card">
+              <h3>Compras netas de ${perLabelPortal(S_.hasta)}</h3>
+              <div style="font-size:var(--fs-xl);font-weight:700">${fmtCLP(neto)}</div>
+              <p class="hint">Total del período ancla; el detalle mes a mes está en el gráfico. Las NC de compra (60/61) descuentan una vez.</p>
+            </div>`
+        }
+        zona.innerHTML = `${kpis}
+          <div class="card mt">
+            <div class="frm-row" style="align-items:baseline;justify-content:space-between">
+              <h3>${estado.flujo === 'venta' ? 'Ventas' : 'Compras'} netas — ${perLabelPortal(S_.desde)} a ${perLabelPortal(S_.hasta)}</h3>
+              <span class="hint">Clic en una barra para ver el detalle del mes</span>
             </div>
+            <div id="pd-grafico">${barrasSerieHTML(S_.meses, (p) => abrirDetalle(p))}</div>
+            ${estado.flujo === 'venta' ? `<div class="card mt">
+              <h3>Principales clientes de ${perLabelPortal(S_.hasta)}</h3>
+              <div id="pd-top">${UIEstado.cargando()}</div>
+            </div>` : ''}
           </div>
-          <div class="card mt">
-            <h3>Evolución mensual del ${String(R.periodo).slice(0, 4)}</h3>
-            ${barrasSerieHTML(R.serie_anual)}
-          </div>
-          <div class="card mt">
-            <h3>Principales clientes por venta neta</h3>
-            ${R.top_clientes.length ? `
-              <table class="tbl">
-                <thead><tr><th>Cliente</th><th style="text-align:right">Docs</th><th style="text-align:right">Venta neta</th></tr></thead>
-                <tbody>
-                  ${R.top_clientes.map((c) => `
-                    <tr>
-                      <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
-                      <td style="text-align:right">${c.docs}</td>
-                      <td style="text-align:right">${fmtCLP(c.neto)}</td>
-                    </tr>`).join('')}
-                </tbody>
-              </table>` : UIEstado.vacio('Sin clientes en el período', '')}
-          </div>
-          <p class="hint mt">Fuente: RCV del SII (último período con datos: <b>${perLabelPortal(R.cobertura.ultimo_periodo_con_datos)}</b>).
-            Vendedor, productos (SKU), costos, morosidad y cotizaciones no existen en esta fuente todavía — ese análisis no se ofrece para no inventar datos.
+          <p class="hint mt">Fuente: RCV del SII. Vendedor, productos (SKU), costos, morosidad y cotizaciones no existen en esta fuente todavía — ese análisis no se ofrece para no inventar datos.
             Los montos son los informados al SII; las notas de crédito (60/61) descuentan una vez.</p>`
+        if (estado.flujo === 'venta') await pintarTop(S_.hasta)
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message, '<button class="btn btn-secondary mt" onclick="location.reload()">Reintentar</button>')
       }
     }
 
-    document.getElementById('portal-recargar').addEventListener('click', cargar)
-    document.getElementById('portal-periodo').addEventListener('change', cargar)
-    await cargar()
+    async function pintarTop(p) {
+      const zona = document.getElementById('pd-top')
+      if (!zona) return
+      try {
+        const r = await apiGet(`/api/portal/empresas/${eid}/resumen?periodo=${p}`)
+        if (!r.resumen || !r.resumen.top_clientes.length) {
+          zona.innerHTML = UIEstado.vacio('Sin clientes en el período', 'No hay documentos de venta vivos en ese mes para listar clientes.')
+          return
+        }
+        zona.innerHTML = `
+          <table class="tbl">
+            <thead><tr><th>Cliente</th><th style="text-align:right">Docs</th><th style="text-align:right">Venta neta</th><th></th></tr></thead>
+            <tbody>
+              ${r.resumen.top_clientes.map((c) => `
+                <tr>
+                  <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
+                  <td style="text-align:right">${c.docs}</td>
+                  <td style="text-align:right">${fmtCLP(c.neto)}</td>
+                  <td><button class="btn btn-secondary" data-ver-mes="${p}" data-ver-rut="${esc(c.rut)}">Ver detalle</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`
+        zona.querySelectorAll('[data-ver-mes]').forEach((b) =>
+          b.addEventListener('click', () => abrirDetalle(b.dataset.verMes, b.dataset.verRut)))
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    /** Drill-down: detalle de UN mes (y opcionalmente de UN RUT) en /pd-detalle. */
+    async function abrirDetalle(periodo, rut = null) {
+      const zona = document.getElementById('pd-detalle')
+      if (!zona) return
+      zona.innerHTML = UIEstado.cargando(`Consultando detalle de ${perLabelPortal(periodo)}…`)
+      try {
+        const qs = `desde=${periodo}&hasta=${periodo}&tipo_flujo=${estado.flujo}${rut ? `&rut=${encodeURIComponent(rut)}` : ''}`
+        const r = await apiGet(`/api/portal/empresas/${eid}/movimientos?${qs}&limit=100`)
+        if (!r.total) {
+          zona.innerHTML = UIEstado.vacio(
+            `Sin documentos en ${perLabelPortal(periodo)}${rut ? ` de ${rut}` : ''}`,
+            'El filtro no tiene documentos vivos que listar. Sin datos ≠ cero.')
+          return
+        }
+        zona.innerHTML = `
+          <div class="card mt" style="overflow:auto">
+            <div class="frm-row" style="justify-content:space-between;align-items:baseline">
+              <h3>Detalle: ${estado.flujo === 'venta' ? 'ventas' : 'compras'} de ${perLabelPortal(periodo)}${rut ? ` — ${esc(rut)}` : ''}</h3>
+              <button class="btn btn-secondary" id="pd-detalle-cerrar">Cerrar</button>
+            </div>
+            <div class="frm-row" style="gap:24px">
+              <div><span class="frm-label">Documentos</span><div style="font-weight:600">${fmtCLP(r.total)}</div></div>
+              <div><span class="frm-label">Neto del filtro</span><div style="font-weight:600">${fmtCLP(r.neto)}</div></div>
+              <div><span class="frm-label">Total (con IVA)</span><div style="font-weight:600">${fmtCLP(r.monto_total)}</div></div>
+            </div>
+            <table class="tbl mt">
+              <thead><tr><th>Fecha</th><th>Folio</th><th>Tipo</th><th>Contraparte</th><th style="text-align:right">Neto</th><th style="text-align:right">Total</th></tr></thead>
+              <tbody>
+                ${r.movimientos.map((m) => `
+                  <tr>
+                    <td>${esc(m.fecha_docto || '')}</td>
+                    <td class="mono">${esc(m.folio)}</td>
+                    <td>${Number(m.tipo_doc) === 61 ? UIEstado.chip('NC', 'advertencia') : esc(m.tipo_doc)}</td>
+                    <td>${esc(m.razon_social || '')}<span class="hint"> ${esc(m.rut_contraparte)}</span></td>
+                    <td style="text-align:right">${fmtCLP(m.monto_neto)}</td>
+                    <td style="text-align:right">${fmtCLP(m.monto_total)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+            <p class="hint mt">Mostrando hasta 100 documentos de ${fmtCLP(r.total)} del filtro del mes. Exportar desde «Ventas y movimientos» con el mismo filtro.</p>
+          </div>`
+        zona.querySelector('#pd-detalle-cerrar').addEventListener('click', () => { zona.innerHTML = '' })
+        zona.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    // Controles del dashboard — cada uno repinta sin recargar la vista.
+    document.getElementById('pd-flujo-venta').addEventListener('click', () => {
+      estado.flujo = 'venta'
+      document.getElementById('pd-flujo-venta').className = 'btn btn-primary'
+      document.getElementById('pd-flujo-compra').className = 'btn btn-secondary'
+      pintarDashboard()
+    })
+    document.getElementById('pd-flujo-compra').addEventListener('click', () => {
+      estado.flujo = 'compra'
+      document.getElementById('pd-flujo-compra').className = 'btn btn-primary'
+      document.getElementById('pd-flujo-venta').className = 'btn btn-secondary'
+      pintarDashboard()
+    })
+    document.getElementById('pd-meses').addEventListener('change', (e) => {
+      estado.meses = Number(e.target.value)
+      pintarDashboard()
+    })
+    document.getElementById('pd-hasta').addEventListener('change', pintarDashboard)
+    document.getElementById('pd-recargar').addEventListener('click', pintarDashboard)
+    await pintarDashboard()
   },
 }
 
@@ -240,6 +372,50 @@ window.VIEWS['portal-cartera'] = {
       controlar: ['Controlar', 'neutral'],
       sin_datos: ['Sin datos en la ventana', 'neutral'],
     }
+    // Filtro INTERACTIVO de segmento: null = todos; el chip activo se pinta
+    // distinto y la tabla se re-renderiza localmente (los datos ya están en
+    // memoria; el backend no se vuelve a llamar).
+    let segmentoActivo = null
+    let clientesCache = []
+
+    function tablaCarteraHTML() {
+      const fila = clientesCache.filter((c) => !segmentoActivo || c.segmento === segmentoActivo)
+      if (!fila.length) {
+        return UIEstado.vacio('Ningún cliente en este segmento', 'Quita el filtro para ver toda la cartera.')
+      }
+      return `
+        <table class="tbl">
+          <thead><tr><th>Cliente</th><th>Segmento</th><th style="text-align:right">Docs (per.)</th><th style="text-align:right">Neto per.</th><th style="text-align:right">Neto prev.</th><th style="text-align:right">Variación</th></tr></thead>
+          <tbody>
+            ${fila.map((c) => `
+              <tr>
+                <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
+                <td>${UIEstado.chip(SEGMENTOS[c.segmento] ? SEGMENTOS[c.segmento][0] : c.segmento, SEGMENTOS[c.segmento] ? SEGMENTOS[c.segmento][1] : 'neutral')}</td>
+                <td style="text-align:right">${c.docs_periodo}</td>
+                <td style="text-align:right">${fmtCLP(c.neto_periodo)}</td>
+                <td style="text-align:right">${fmtCLP(c.neto_previo)}</td>
+                <td style="text-align:right">${fmtPctPortal(c.variacion_pct)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="hint mt">Mostrando ${fila.length} de ${clientesCache.length} cliente(s). Un cliente «sin_datos» NO significa que se haya perdido: significa que la ventana consultada no registra compras suyas. Umbrales: período = ${perLabelPortal(C.periodo)}, previo = ${perLabelPortal(C.periodo_previo)}, ventana = 12 meses.</p>`
+    }
+
+    function conectarFiltroSegmentos() {
+      const zonaTabla = document.getElementById('pc-tabla')
+      if (!zonaTabla) return
+      zonaTabla.querySelectorAll('[data-seg]').forEach((ch) => {
+        ch.addEventListener('click', () => {
+          const k = ch.dataset.seg
+          segmentoActivo = (segmentoActivo === k) ? null : k
+          zonaTabla.querySelectorAll('[data-seg]').forEach((x) => {
+            x.className = `btn ${x.dataset.seg === segmentoActivo ? 'btn-primary' : 'btn-secondary'}`
+          })
+          zonaTabla.querySelector('#pc-tabla-body').innerHTML = tablaCarteraHTML()
+        })
+      })
+      zonaTabla.querySelector('#pc-tabla-body').innerHTML = tablaCarteraHTML()
+    }
 
     const cargar = async () => {
       const zona = document.getElementById('pc-result')
@@ -251,33 +427,23 @@ window.VIEWS['portal-cartera'] = {
           return
         }
         const C = r.cartera
+        segmentoActivo = null
+        clientesCache = C.clientes
         zona.innerHTML = `
           <div class="card">
-            <h3>Segmentos (regla explícita)</h3>
+            <h3>Segmentos (regla explícita) — clic en un segmento para filtrar la tabla</h3>
             <p class="hint">${esc(C.regla)}</p>
-            <div class="frm-row mt" style="gap:18px">
-              ${Object.entries(C.resumen).map(([k, n]) => `
-                <div><span class="frm-label">${SEGMENTOS[k][0]}</span>
-                  <div style="font-size:var(--fs-lg);font-weight:700">${n}</div></div>`).join('')}
+            <div id="pc-tabla">
+              <div class="frm-row mt" style="gap:18px">
+                ${Object.entries(C.resumen).map(([k, n]) => `
+                  <button class="btn btn-secondary" data-seg="${k}" title="Filtrar por ${SEGMENTOS[k][0]}">
+                    ${SEGMENTOS[k][0]}: <b>${n}</b>
+                  </button>`).join('')}
+              </div>
+              <div id="pc-tabla-body" class="mt" style="overflow:auto"></div>
             </div>
-          </div>
-          <div class="card mt" style="overflow:auto">
-            <table class="tbl">
-              <thead><tr><th>Cliente</th><th>Segmento</th><th style="text-align:right">Docs (per.)</th><th style="text-align:right">Neto per.</th><th style="text-align:right">Neto prev.</th><th style="text-align:right">Variación</th></tr></thead>
-              <tbody>
-                ${C.clientes.map((c) => `
-                  <tr>
-                    <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
-                    <td>${UIEstado.chip(SEGMENTOS[c.segmento] ? SEGMENTOS[c.segmento][0] : c.segmento, SEGMENTOS[c.segmento] ? SEGMENTOS[c.segmento][1] : 'neutral')}</td>
-                    <td style="text-align:right">${c.docs_periodo}</td>
-                    <td style="text-align:right">${fmtCLP(c.neto_periodo)}</td>
-                    <td style="text-align:right">${fmtCLP(c.neto_previo)}</td>
-                    <td style="text-align:right">${fmtPctPortal(c.variacion_pct)}</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-            <p class="hint mt">Un cliente «sin_datos» NO significa que se haya perdido: significa que la ventana consultada no registra compras suyas. Umbrales: período = ${perLabelPortal(C.periodo)}, previo = ${perLabelPortal(C.periodo_previo)}, ventana = 12 meses.</p>
           </div>`
+        conectarFiltroSegmentos()
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)
       }

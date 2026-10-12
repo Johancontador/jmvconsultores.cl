@@ -547,7 +547,7 @@ const MENU = [
     // SIEMPRE se resuelven server-side contra /api/portal (aislamiento §8) —
     // esta sección solo consume, jamás clasifica ni contabiliza.
     seccion: 'Portal de cliente', items: [
-      { key: 'portal-inicio', label: 'Portal — Inicio ejecutivo', permiso: null },
+      { key: 'portal-inicio', label: 'Portal — Dashboard interactivo', permiso: null },
       { key: 'portal-ventas', label: 'Portal — Ventas y movimientos', permiso: null },
       { key: 'portal-cartera', label: 'Portal — Cartera de clientes', permiso: null },
       { key: 'portal-reportes', label: 'Portal — Reportes guardados', permiso: null },

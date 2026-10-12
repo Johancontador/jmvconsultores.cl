@@ -180,6 +180,50 @@ test('T1.5: sin datos = null y cobertura — el período vacío no aparece como 
   assert.ok(r.cobertura.ultimo_periodo_con_datos >= '202609')
 })
 
+// ===================== T4: serie interactivo (dashboard) =====================
+
+test('T4.1: serie venta — 12 meses desde el ancla, null en meses sin datos', () => {
+  const r = metricas.serie(db, { empresaId: empresaA, meses: 12, hasta: '202609', flujo: 'venta' })
+  assert.strictEqual(r.flujo, 'venta')
+  assert.strictEqual(r.hasta, '202609')
+  assert.strictEqual(r.desde, '202510', '12 meses hacia atrás desde 202609 (sep→oct 2025)')
+  assert.strictEqual(r.meses.length, 12)
+  const sep = r.meses.find((m) => m.periodo === '202609')
+  assert.strictEqual(sep.neto, 140000, 'septiembre de A con NC descontada una vez')
+  const ago = r.meses.find((m) => m.periodo === '202608')
+  assert.strictEqual(ago.neto, 200000)
+  const vacio = r.meses.find((m) => m.periodo === '202607')
+  assert.strictEqual(vacio.neto, null, 'mes sin datos es null (nunca 0)')
+  assert.strictEqual(vacio.docs, 0)
+})
+
+test('T4.2: serie compra — el ANULADO no entra y el flujo es exclusivo', () => {
+  const r = metricas.serie(db, { empresaId: empresaA, meses: 6, hasta: '202609', flujo: 'compra' })
+  const sep = r.meses.find((m) => m.periodo === '202609')
+  assert.strictEqual(sep.neto, 30000, 'la compra de 30000; el ANULADO de venta no entra a compra')
+})
+
+test('T4.3: serie mes DEFAULT usa el último con datos del flujo', () => {
+  const r = metricas.serie(db, { empresaId: empresaA, meses: 3, flujo: 'venta' })
+  assert.strictEqual(r.hasta, '202609', 'el ancla es el último período con RCV de venta')
+})
+
+test('T4.4: serie HTTP — solo SU empresa, parámetros limpiados server-side', async () => {
+  const ok = await get(`${baseUrl}/empresas/${empresaA}/serie?meses=6&hasta=202609&flujo=venta`, headerA())
+  assert.strictEqual(ok.status, 200)
+  assert.strictEqual(ok.body.serie.meses.length, 6)
+  assert.strictEqual(ok.body.serie.hasta, '202609')
+  // B con sesión de A → 403 (aislamiento igual que las otras rutas)
+  const denegado = await get(`${baseUrl}/empresas/${empresaB}/serie`, headerA())
+  assert.strictEqual(denegado.status, 403)
+  // meses fuera de rango y basura se normalizan (no explota)
+  const raro = await get(`${baseUrl}/empresas/${empresaA}/serie?meses=999&hasta=xyz`, headerA())
+  assert.strictEqual(raro.status, 200)
+  assert.ok(raro.body.serie.meses.length >= 1 && raro.body.serie.meses.length <= 24)
+})
+
+// ===================== RESTO =====================
+
 // ===================== T2: aislamiento negativo (HTTP real) =====================
 
 test('T2.1: GET resumen de empresa B con sesión de A → 403', async () => {
