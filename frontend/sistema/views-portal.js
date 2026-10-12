@@ -455,6 +455,128 @@ window.VIEWS['portal-cartera'] = {
   },
 }
 
+/* ----------------------- FASE A: PRODUCTOS (§7.2) ----------------------- */
+
+window.VIEWS['portal-productos'] = {
+  titulo: 'Portal — Productos vendidos',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <div class="frm-row" style="align-items:end">
+          <div><span class="frm-label">Desde</span>${inputPeriodoHTML('pp-desde', periodoActual())}</div>
+          <div><span class="frm-label">Hasta</span>${inputPeriodoHTML('pp-hasta', periodoActual())}</div>
+          <button class="btn btn-primary" id="pp-buscar">Buscar</button>
+        </div>
+        <p class="hint mt">Fuente REAL: los ítems de los DTE que tu empresa EMITE con el sistema (emisor propio). NO incluye lo registrado solo vía RCV de terceros: esa fuente no existe en el SII — no se inventa.</p>
+      </div>
+      <div id="pp-result">${UIEstado.cargando()}</div>`
+
+    const cargar = async () => {
+      const zona = document.getElementById('pp-result')
+      zona.innerHTML = UIEstado.cargando('Agregando ítems de tus DTE emitidos…')
+      try {
+        const desde = leerPeriodo('pp-desde'), hasta = leerPeriodo('pp-hasta')
+        const r = await apiGet(`/api/portal/empresas/${eid}/productos?desde=${desde}&hasta=${hasta}&limit=200`)
+        if (!r.dtes_analizados || !r.productos.length) {
+          zona.innerHTML = UIEstado.vacio(
+            'Sin DTE emitidos con ítems en el rango',
+            'La sección de productos se construye SOLO con lo emitido por tu empresa en estos meses. Si facturas siempre fuera del sistema, aquí no hay datos que mostrar (no es cero: no hay fuente).')
+          return
+        }
+        zona.innerHTML = `
+          <div class="card">
+            <h3>Productos ordenados por venta neta (${perLabelPortal(desde)} a ${perLabelPortal(hasta)})</h3>
+            <p class="hint">${r.dtes_analizados} DTE(s) analizados. Las notas de crédito (61) descuentan de cantidades y netos una vez.</p>
+            <table class="tbl">
+              <thead><tr><th>Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Venta neta</th><th style="text-align:right">Precio prom.</th></tr></thead>
+              <tbody>
+                ${r.productos.map((p) => `
+                  <tr>
+                    <td>${esc(p.nombre)}</td>
+                    <td style="text-align:right">${p.cantidad}</td>
+                    <td style="text-align:right">${fmtCLP(p.neto)}</td>
+                    <td style="text-align:right">${p.precio_promedio === null ? '—' : fmtCLP(p.precio_promedio)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+            <p class="hint mt">El costo y el margen NO se muestran: no existe fuente de costos en el sistema (doc maestro §7.3) — no se estima.</p>
+          </div>`
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    document.getElementById('pp-buscar').addEventListener('click', cargar)
+    ;['pp-desde', 'pp-hasta'].forEach((id) => document.getElementById(id).addEventListener('change', cargar))
+    await cargar()
+  },
+}
+
+/* ----------------------- FASE B: COBRANZA (§7.4) ----------------------- */
+
+window.VIEWS['portal-cobranza'] = {
+  titulo: 'Portal — Cobranza',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <div class="frm-row" style="align-items:end">
+          <div><span class="frm-label">Mora amarilla (días)</span><input id="pcb-amar" type="number" class="form-input" value="15" style="width:auto"></div>
+          <div><span class="frm-label">Mora roja (días)</span><input id="pcb-rojo" type="number" class="form-input" value="30" style="width:auto"></div>
+          <button class="btn btn-primary" id="pcb-cargar">Ver cobranza</button>
+        </div>
+        <p class="hint mt">Vista de SALDOS de documentos de venta CONTABILIZADOS sin cobro completo (misma fuente de cuenta corriente del sistema). Para cobrar/pagar usa el sistema interno — el portal es solo lectura.</p>
+      </div>
+      <div id="pcb-result">${UIEstado.cargando()}</div>`
+
+    const cargar = async () => {
+      const zona = document.getElementById('pcb-result')
+      zona.innerHTML = UIEstado.cargando('Consultando saldos de tu cuenta corriente…')
+      try {
+        const amar = Number(document.getElementById('pcb-amar').value) || 15
+        const rojo = Number(document.getElementById('pcb-rojo').value) || 30
+        const r = await apiGet(`/api/portal/empresas/${eid}/cobranza?dias_amarillo=${amar}&dias_rojo=${rojo}`)
+        const C = r.cobranza
+        if (!C.clientes.length) {
+          zona.innerHTML = UIEstado.vacio(
+            'Ningún cliente con saldo pendiente',
+            'Tu cuenta corriente no tiene documentos contabilizados con cobro pendiente. Si acabas de contabilizar, vuelve a consultar en unos segundos.')
+          return
+        }
+        const NIVEL = { rojo: 'danger', amarillo: 'advertencia', verde: 'success' }
+        zona.innerHTML = `
+          <div class="card">
+            <h3>Total pendiente de cobro</h3>
+            <div style="font-size:var(--fs-xl);font-weight:700">${fmtCLP(C.total_pendiente)}</div>
+            <p class="hint">${C.clientes.length} cliente(s) con saldo. Umbrales aplicados: amarillo ≥ ${C.umbrales.amarillo} días, rojo ≥ ${C.umbrales.rojo} días. Fuente: cuenta corriente interna (generado ${esc((C.generado || '').slice(0, 16).replace('T', ' '))}).</p>
+          </div>
+          <div class="card mt" style="overflow:auto">
+            <table class="tbl">
+              <thead><tr><th>Cliente</th><th>Mora</th><th style="text-align:right">Saldo</th><th style="text-align:right">Días mora máx.</th><th>Docs abiertos</th></tr></thead>
+              <tbody>
+                ${C.clientes.map((c) => `
+                  <tr>
+                    <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
+                    <td>${UIEstado.chip(c.nivel, NIVEL[c.nivel] || 'neutral')}</td>
+                    <td style="text-align:right">${fmtCLP(c.saldo)}</td>
+                    <td style="text-align:right">${c.mora_max_dias}</td>
+                    <td>${c.documentos_abiertos.map((d) =>
+                      `<span class="hint mono">F${esc(d.folio)} ${esc(d.fecha_docto)} ${fmtCLP(d.monto)} (${d.mora_dias}d)</span>`).join('<br>')}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    document.getElementById('pcb-cargar').addEventListener('click', cargar)
+    await cargar()
+  },
+}
+
 /* ------------------------- §H: REPORTES GUARDADOS ------------------------- */
 
 window.VIEWS['portal-reportes'] = {

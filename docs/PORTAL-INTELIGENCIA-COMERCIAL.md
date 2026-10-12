@@ -1,8 +1,8 @@
 # PORTAL DE INTELIGENCIA COMERCIAL — auditoría, arquitectura, datos y plan
 
-> Estado actual (commit `de20931`): **FASES 1-5, 7 implementadas y probadas (suite 392/392)**.
-> Sin deploy a producción (requisito del masterplan §11: no desplegar sin autorización).
-> Este documento se actualiza con lo QUE EXISTE en el código, no con lo que se supone.
+> Estado actual (commit `9798b36` + fases A/B): **FASES 1-5, 7 + Dashboard interactivo + Productos + Cobranza, probadas (suite 401/401)**.
+> Deploy a producción ACTIVO: https://app.jmvconsultores.cl (VPS hook post-receive, `git push vps master`).
+> Este documento se actualiza con lo que EXISTE en el código, no con lo que se supone.
 
 ## 1. Arquitectura real encontrada (FASE 1)
 
@@ -113,15 +113,22 @@ Abrir/Duplicar/Eliminar. Sin lienzo libre ni SQL.
   empresa inexistente 403 · expuesta no: reportes ajenos NO borrables ni
   listables (T3.2, T3.3).
 
-## 7. Brechas y plan (FASE 6 aún no ejecutada)
+## 7. Brechas y plan (FASE 6 restante)
 
 | # | Brecha | Fuente propuesta | Condición |
 |---|---|---|---|
 | 1 | Vendedor | No existe; se necesita campo en ERP futuro o DTE (`FolioRef` no lo trae) | Nueva integración |
-| 2 | SKU / cantidad / familia | Detalle de ítems del DTE propio (emisor BLOQUE 2) | **Existe** — el emisor DTE guarda `items` con `descripcion/cantidad/precio`; alimentar el portal desde él |
+| 2 | ~~SKU / cantidad / familia~~ **EQUISTO EN FASE A (§7.2)** | `dte_emitidos.items_json` del emisor propio | **IMPLEMENTADO** — `core/portal-productos.js` + `/api/portal/empresas/:id/productos` + vista `portal-productos` |
 | 3 | Costo y margen | Hoja de costos por SKU a definir | Nueva fuente; NO estimar |
-| 4 | Deuda/banco §F | `cobranza.js` + `teso_aplicaciones` ya cubren cobros aplicados; falta crédito autorizado | Síntesis portal §F con esa fuente |
+| 4 | ~~Deuda/banco §F~~ **HECHO en FASE B (§7.4)** | `cobranza.js` (saldosClientes, mora) — lectura sola | **IMPLEMENTADO** — `/api/portal/empresas/:id/cobranza` + vista `portal-cobranza` (solo lectura); crédito autorizado sigue pendiente |
 | 5 | Cotizaciones §G | Nuevo módulo con estados reales | Fuera de alcance declarado (no inventar) |
+
+### Dashboard interactivo (增量 sobre §A)
+
+`portal-inicio` reescrito como dashboard: serie móvil `/serie` (1-24 meses,
+anla configurable, toggle venta/compra), barras SVG CLIABLES con drill-down
+del mes (y por cliente RUT) vía `/movimientos`, chips de segmento en cartera
+que filtran la tabla local. Tests T4.* + T5.*(26 en portal.test.js).
 
 ## 8. Archivos (todos verificados con `node --check` y suite)
 
@@ -130,9 +137,9 @@ Abrir/Duplicar/Eliminar. Sin lienzo libre ni SQL.
   `frontend/sistema/app.js` (sección de menú) · `frontend/sistema/index.html` (script tag) ·
   `package.json` (suite) · `test/portal.test.js` (nuevo).
 
-## 9. Pendientes para producción (FASE 6 + deploy)
+## 9. Pendientes (FASE 6 restante)
 
-1. Sección Productos (desde el emisor DTE, cuando las empresas emitan).
-2. Sección Cobranza §F con `cobranza.js` + crédito autorizado.
-3. Vendedor / margen / cotizaciones (fuentes nuevas).
-4. Sincronización y deploy una vez aprobado (VPS/GitHub) — **no hecho a propósito**.
+1. **Vendedor / margen / cotizaciones** (fuentes nuevas — NO existentes, no se dibujan).
+2. Crédito autorizado en cobranza (fuente nueva).
+3. QA visual en navegador con sesión real (bloqueado por entorno de cookies del dueño).
+4. Sincronizar a GitHub (repo de código — hoy solo deploy interno al VPS).

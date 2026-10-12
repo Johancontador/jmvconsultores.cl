@@ -18,6 +18,8 @@ const express = require('express')
 const { registrarAccion } = require('../core/auditoria')
 const { rolEnEmpresa, esSuperAdmin } = require('../core/empresas')
 const portal = require('../core/portal-metricas')
+const portalProductos = require('../core/portal-productos')
+const cobranzaCore = require('../core/cobranza')
 
 function construirRouter(db) {
   const router = express.Router()
@@ -164,6 +166,49 @@ function construirRouter(db) {
           flujo: req.query.flujo === 'compra' ? 'compra' : 'venta',
         }),
       })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  /* --------------------- PRODUCTOS (FASE A, §7.2) --------------------- */
+
+  /**
+   * Productos vendidos de SU empresa: agrega lícita de ítems de DTE EMITIDOS
+   * propios (dte_emitidos.items_json). Fuente declarada: NO cubre RCV de
+   * terceros — si la empresa no emitió, responde lista vacía con
+   * periodo_cobertura null (sin datos ≠ cero).
+   */
+  router.get('/empresas/:empresaId/productos', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      res.json({
+        ok: true,
+        ...portalProductos.productosVendidos(db, {
+          empresaId: id,
+          desde: cleanPeriodo(req.query.desde),
+          hasta: cleanPeriodo(req.query.hasta),
+          limit: req.query.limit,
+        }),
+      })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  /* --------------------- COBRANZA (FASE B, §7.4) --------------------- */
+
+  /**
+   * Vista de lectura de cobranza del portal: los SALDOS de cuenta corriente
+   * de venta CONTABILIZADA (motor core `saldosClientes`), con umbral de mora
+   * configurable. SOLO LECTURA: cobrar/pagar queda en el sistema operativo
+   * (tesoreria/marcarPagada), NUNCA desde el portal del cliente.
+   */
+  router.get('/empresas/:empresaId/cobranza', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const amarillo = Math.max(1, Number(req.query.dias_amarillo) || 15)
+      const rojo = Math.max(amarillo + 1, Number(req.query.dias_rojo) || 30)
+      const r = cobranzaCore.saldosClientes(db, { empresaId: id, diasMoraAmarillo: amarillo, diasMoraRojo: rojo })
+      res.json({ ok: true, cobranza: { clientes: r.clientes, total_pendiente: r.total_pendiente, generado: r.generado, umbrales: { amarillo, rojo } } })
     } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
   })
 

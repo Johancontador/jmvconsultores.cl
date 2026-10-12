@@ -25,6 +25,7 @@ process.env.DB_PATH = dbFile
 const db = require('../backend/db')
 const { construirRouter } = require('../backend/routes/portal')
 const metricas = require('../backend/core/portal-metricas')
+const portalProductos = require('../backend/core/portal-productos')
 
 const express = require('express')
 const { requireAuth } = require('../backend/middleware/requireAuth')
@@ -90,6 +91,37 @@ test.before(() => {
   insertar.run(empresaA, 'venta', 33, '0501', '2025-01-05', '55555555-5', 'Cliente Viejo', 10000, 1900, 11900, 'PENDIENTE', '202501', 'pa-7')
   // B — un dato propio
   insertar.run(empresaB, 'venta', 33, '9001', '2026-09-05', '99999999-9', 'Cliente de B', 999999, 0, 999999, 'PENDIENTE', '202609', 'pb-1')
+
+  // FASE A — DTEs EMITIDOS con ítems (fuente real de la sección productos):
+  // empresa A emite 2 facturas (y 1 NC que descuenta) en 202609 + 1 en 202608.
+  const insDte = db.prepare(`
+    INSERT INTO dte_emitidos (empresa_id, tipo_dte, folio, fecha_emision,
+      receptor_rut, monto_neto, monto_total, items_json, estado)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const itemsServicio = JSON.stringify([
+    { nombre: 'Mensualidad Contable', cantidad: 1, precio: 50000 },
+    { nombre: 'Mensualidad Tributaria', cantidad: 2, precio: 20000 },
+  ])
+  insDte.run(empresaA, 33, 1, '2026-09-03', '11111111-1', 90000, 107100, itemsServicio, 'ACEPTADO')
+  insDte.run(empresaA, 33, 2, '2026-09-15', '22222222-2', 30000, 35700, JSON.stringify([
+    { nombre: 'Mensualidad Contable', cantidad: 1, precio: 30000 },
+  ]), 'ACEPTADO')
+  // NC emitida 61: descuenta la Mensualidad Tributaria (cant y neto una vez)
+  insDte.run(empresaA, 61, 1, '2026-09-20', '11111111-1', 20000, 23800, JSON.stringify([
+    { nombre: 'Mensualidad Tributaria', cantidad: 1, precio: 20000 },
+  ]), 'ACEPTADO')
+  insDte.run(empresaA, 33, 3, '2026-08-10', '11111111-1', 10000, 11900, JSON.stringify([
+    { nombre: 'Producto Agosto', cantidad: 4, precio: 2500 },
+  ]), 'ACEPTADO')
+  // ERROR: excluido de productos (como los ANULados en métricas)
+  insDte.run(empresaA, 33, 4, '2026-09-25', '33333333-3', 5000, 5950, JSON.stringify([
+    { nombre: 'Doc Con Error', cantidad: 1, precio: 5000 },
+  ]), 'ERROR')
+  // B emite una factura propia: no debe verse desde A (aislamiento)
+  insDte.run(empresaB, 33, 1, '2026-09-05', '99999999-9', 70000, 83300, JSON.stringify([
+    { nombre: 'Producto Solo De B', cantidad: 7, precio: 10000 },
+  ]), 'ACEPTADO')
 })
 
 const app = express()
@@ -222,7 +254,58 @@ test('T4.4: serie HTTP — solo SU empresa, parámetros limpiados server-side', 
   assert.ok(raro.body.serie.meses.length >= 1 && raro.body.serie.meses.length <= 24)
 })
 
-// ===================== RESTO =====================
+// ===================== FASE A: productos (§7.2) =====================
+
+test('T5.1: productos — agrega ítems de DTE emitidos, NC descuenta UNA vez, ERROR fuera', () => {
+  const r = portalProductos.productosVendidos(db, { empresaId: empresaA, desde: '202609', hasta: '202609' })
+  assert.strictEqual(r.dtes_analizados, 3, '2 facturas + 1 NC; el DTE en ERROR queda fuera')
+  const contable = r.productos.find((p) => p.nombre === 'Mensualidad Contable')
+  assert.strictEqual(contable.cantidad, 2, '1 + 1 de las dos facturas')
+  assert.strictEqual(contable.neto, 80000, '50000 + 30000')
+  assert.strictEqual(contable.precio_promedio, 40000)
+  const trib = r.productos.find((p) => p.nombre === 'Mensualidad Tributaria')
+  assert.strictEqual(trib.cantidad, 1, '2 emitidas - 1 por la NC (descuenta una vez)')
+  assert.strictEqual(trib.neto, 20000, '40000 emitido - 20000 NC')
+  assert.ok(!r.productos.some((p) => p.nombre === 'Doc Con Error'), 'el DTE ERROR no aporta productos')
+})
+
+test('T5.2: productos — rango excluye el mes de agosto', () => {
+  const r = portalProductos.productosVendidos(db, { empresaId: empresaA, desde: '202609', hasta: '202609' })
+  assert.ok(!r.productos.some((p) => p.nombre === 'Producto Agosto'), 'agosto fuera del filtro 202609')
+  const wide = portalProductos.productosVendidos(db, { empresaId: empresaA, desde: '202608', hasta: '202609' })
+  assert.ok(wide.productos.some((p) => p.nombre === 'Producto Agosto'))
+})
+
+test('T5.3: productos /cobranza — aislamiento HTTP real (A NO ve los dtes de B ni cobranza de B)', async () => {
+  const rp = await get(`${baseUrl}/empresas/${empresaB}/productos`, headerA())
+  assert.strictEqual(rp.status, 403)
+  const rc = await get(`${baseUrl}/empresas/${empresaB}/cobranza`, headerA())
+  assert.strictEqual(rc.status, 403)
+  const ok = await get(`${baseUrl}/empresas/${empresaA}/productos?desde=202601&hasta=202612`, headerA())
+  assert.strictEqual(ok.status, 200)
+  assert.ok(!ok.text, 'respuesta JSON')
+  assert.ok(!JSON.stringify(ok.body).includes('Producto Solo De B'), 'el producto de B no aparece en la respuesta para A')
+  assert.ok(ok.body.productos.some((p) => p.nombre === 'Mensualidad Contable'))
+})
+
+test('T5.4: productos — sin emisiones = lista vacía con cobertura null (sin datos ≠ cero)', () => {
+  const r = portalProductos.productosVendidos(db, { empresaId: empresaB, desde: '202601', hasta: '202601' })
+  assert.strictEqual(r.productos.length, 0)
+  assert.strictEqual(r.periodo_cobertura, null)
+})
+
+// ===================== FASE B: cobranza (§7.4) =====================
+
+test('T5.5: cobranza — solo lectura; saldos de contabilizados; umbrales en la respuesta', async () => {
+  // Sin documentos contabilizados todavía en A → lista vacía (no ceros falsos,
+  // «sin datos»), con la forma OK del endpoint.
+  const r = await get(`${baseUrl}/empresas/${empresaA}/cobranza?dias_amarillo=10&dias_rojo=45`, headerA())
+  assert.strictEqual(r.status, 200)
+  assert.strictEqual(r.body.ok, true)
+  assert.strictEqual(r.body.cobranza.total_pendiente, 0)
+  assert.strictEqual(r.body.cobranza.umbrales.amarillo, 10)
+  assert.strictEqual(r.body.cobranza.umbrales.rojo, 45)
+})
 
 // ===================== T2: aislamiento negativo (HTTP real) =====================
 

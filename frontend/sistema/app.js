@@ -550,6 +550,8 @@ const MENU = [
       { key: 'portal-inicio', label: 'Portal — Dashboard interactivo', permiso: null },
       { key: 'portal-ventas', label: 'Portal — Ventas y movimientos', permiso: null },
       { key: 'portal-cartera', label: 'Portal — Cartera de clientes', permiso: null },
+      { key: 'portal-productos', label: 'Portal — Productos vendidos', permiso: null },
+      { key: 'portal-cobranza', label: 'Portal — Cobranza (solo lectura)', permiso: null },
       { key: 'portal-reportes', label: 'Portal — Reportes guardados', permiso: null },
     ]
   },
