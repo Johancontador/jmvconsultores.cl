@@ -550,6 +550,11 @@ VIEWS.auditoria = {
      <div id="aud-tabla"></div>`
     UITabla.montar({
       mount: document.getElementById('aud-tabla'),
+      // B3 extendido: la bitácora agrupa por acción (clic en el encabezado del
+      // grupo colapsa/expande) y congela la fecha al cruzar horizontalmente.
+      congelar: true,
+      agrupar: { key: 'accion', label: 'acción' },
+      agrupadoPorDefecto: false,
       columnas: [
         { key: 'fecha_txt', label: 'Fecha' },
         { key: 'username', label: 'Usuario', valor: (a) => a.username || String(a.usuario_id || '') },
@@ -1232,6 +1237,8 @@ VIEWS.balance8 = {
     const colNum8 = (key, label) => ({ key, label, num: true, valor: (f) => (f[key] ? fmtM(f[key]) : '—'), crudo: (f) => f[key] || 0 })
     UITabla.montar({
       mount: document.getElementById('b8-tabla'),
+      // B3 extendido: 8 columnas numéricas — código/cuenta congeladas al cruzar.
+      congelar: true,
       columnas: [
         { key: 'codigo', label: 'Código' },
         { key: 'nombre', label: 'Cuenta' },
@@ -1395,6 +1402,8 @@ VIEWS.resultados = {
     for (const t of tablasRes) {
       UITabla.montar({
         mount: document.getElementById(t.id),
+        // B3 extendido: congela código/cuenta en los dos bloques del ER.
+        congelar: true,
         columnas: [
           { key: 'codigo', label: 'Código' },
           { key: 'nombre', label: 'Cuenta' },
@@ -1466,6 +1475,8 @@ function vistaCuentaCorriente(rol) {
       })
       UITabla.montar({
         mount: document.getElementById('cc-resumen'),
+        // B3 extendido: congela el RUT al cruzar hacia los saldos.
+        congelar: true,
         columnas: [
           { key: 'rut', label: 'RUT' },
           { key: 'razon_social', label: 'Razón social', valor: (r) => r.razon_social || '—' },
@@ -1498,6 +1509,8 @@ function vistaCuentaCorriente(rol) {
       if (cc.detalle) {
         UITabla.montar({
           mount: document.getElementById('cc-detalle-tabla'),
+          // B3 extendido: saldo corrido — fecha y tipo fijas al cruzar.
+          congelar: true,
           columnas: [
             { key: 'fecha', label: 'Fecha', orden: false },
             { key: 'tipo', label: 'Tipo', orden: false },
