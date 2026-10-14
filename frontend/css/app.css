@@ -646,6 +646,12 @@ img, svg, video, canvas { display: block; max-width: 100%; }
 /* Empty state in table */
 .table-empty { text-align: center; color: var(--fg-muted); padding: var(--space-10) !important; }
 
+/* UITabla — extensiones B3 (agrupar por + congelar 1ª columna) */
+.uit-congelar thead th:first-child { position: sticky; left: 0; z-index: 3; background: var(--bg-elevated); }
+.uit-congelar tbody td:first-child { position: sticky; left: 0; z-index: 2; background: var(--bg-surface); }
+.dg-check { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-xs); color: var(--fg-secondary); cursor: pointer; user-select: none; }
+.dg-check input { accent-color: var(--accent); }
+
 /* Datagrid extras */
 .dg-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);

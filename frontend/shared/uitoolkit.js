@@ -115,6 +115,14 @@
       totalesHTML: opciones.totalesHTML || '',
       vacio: opciones.vacio || 'Sin datos',
       accionesExtra: opciones.accionesExtra || '',
+      // B3 (masterplan unificación): capacidades del datagrid integradas como
+      // opciones de UITabla — agrupar por UNA clave con encabezado de grupo
+      // colapsable + subtotal, y congelar la primera columna. La visibilidad
+      // de columnas sigue siendo exclusiva de datagrid.js (filaHTML fija).
+      agrupar: opciones.agrupar || null, // { key, label, nombreGrupo?, subtotal? }
+      agrupado: !!opciones.agrupar && opciones.agrupadoPorDefecto !== false,
+      congelar: !!opciones.congelar,
+      gruposCerrados: new Set(),
       mount: opciones.mount,
     }
     estado.set(id, st)
@@ -122,6 +130,10 @@
     const herramientas = `
       <div class="tbl-toolbar">
         <input type="search" id="${id}-q" placeholder="Buscar…" value="${esc(st.q)}" aria-label="Buscar en la tabla">
+        ${st.agrupar ? `<label class="dg-check" title="Agrupa las filas por ${esc(st.agrupar.label)} con subtotal por grupo">
+          <input type="checkbox" id="${id}-agr" ${st.agrupado ? 'checked' : ''}>
+          Agrupar por ${esc(st.agrupar.label)}
+        </label>` : ''}
         <span class="spacer"></span>
         <span class="hint" id="${id}-info"></span>
         <button class="btn btn-secondary btn-sm" id="${id}-csv" title="Descargar CSV">CSV</button>
@@ -137,7 +149,7 @@
     st.mount.innerHTML = `
       ${herramientas}
       <div class="tbl-wrap">
-        <table class="tbl">
+        <table class="tbl ${st.congelar ? 'uit-congelar' : ''}">
           <thead><tr>${head}</tr></thead>
           <tbody id="${id}-body"></tbody>
           ${st.totalesHTML ? `<tfoot id="${id}-foot"></tfoot>` : ''}
@@ -164,12 +176,18 @@
 
     function pintar() {
       const filas = filtrar(st)
-      const { pagina, total, paginas, actual } = paginar(st, filas)
-
       st.mount.querySelectorAll('th.th-sort').forEach((th) => {
         th.classList.toggle('asc', th.dataset.k === st.sortKey && st.sortDir === 'asc')
         th.classList.toggle('desc', th.dataset.k === st.sortKey && st.sortDir === 'desc')
       })
+      // B3: con la casilla de agrupar activa, la paginación se omite (las
+      // listas objetivo caben) y CADA grupo conserva el orden del filtrado.
+      if (st.agrupar && st.agrupado) return pintarAgrupado(filas)
+      pintarPlana(filas)
+    }
+
+    function pintarPlana(filas) {
+      const { pagina, total, paginas, actual } = paginar(st, filas)
 
       const body = document.getElementById(`${id}-body`)
       body.innerHTML = pagina.map((f) => st.filaHTML(f, (t, col) => resaltar(t, st.q))).join('')
@@ -193,6 +211,59 @@
         if (next) next.addEventListener('click', () => { st.pagina = Math.min(paginas, st.pagina + 1); pintar() })
       }
     }
+
+    function pintarAgrupado(filas) {
+      const body = document.getElementById(`${id}-body`)
+      if (!filas.length) {
+        body.innerHTML = `<tr><td colspan="${st.columnas.length}"><div class="empty">${esc(st.vacio)}</div></td></tr>`
+      } else {
+        const grupos = new Map()
+        for (const f of filas) {
+          const k = String(f[st.agrupar.key] ?? '—')
+          if (!grupos.has(k)) grupos.set(k, [])
+          grupos.get(k).push(f)
+        }
+        const frag = []
+        for (const [valor, filasGrupo] of grupos) {
+          const cerrado = st.gruposCerrados.has(valor)
+          const nombre = st.agrupar.nombreGrupo ? st.agrupar.nombreGrupo(valor) : valor
+          const subtotal = !cerrado && typeof st.agrupar.subtotal === 'function' ? st.agrupar.subtotal(filasGrupo) : ''
+          frag.push(`
+            <tr class="dg-group-header" data-grupo="${esc(valor)}" title="Clic para colapsar/expandir este grupo">
+              <td colspan="${st.columnas.length}">
+                <span class="dg-group-toggle${cerrado ? '' : ' open'}">▶</span><b>${esc(nombre)}</b>
+                <span class="dg-group-count">${filasGrupo.length} fila(s)</span>
+                ${subtotal ? `<span class="dg-group-subtotal">${subtotal}</span>` : ''}
+              </td>
+            </tr>`)
+          if (!cerrado) frag.push(filasGrupo.map((f) => st.filaHTML(f, (t, col) => resaltar(t, st.q))).join(''))
+        }
+        body.innerHTML = frag.join('')
+      }
+      // El total general del filtro sigue visible en el tfoot.
+      const foot = document.getElementById(`${id}-foot`)
+      if (foot) foot.innerHTML = typeof st.totalesHTML === 'function' ? st.totalesHTML(filas) : st.totalesHTML
+      const info = document.getElementById(`${id}-info`)
+      if (info) info.textContent = `${filas.length} fila(s) agrupadas por ${esc(st.agrupar.label)}`
+      const pag = document.getElementById(`${id}-pag`)
+      if (pag) pag.innerHTML = ''
+    }
+
+    // Delegación del cuerpo: colapsar/expandir un grupo con clic en su encabezado.
+    document.getElementById(`${id}-body`).addEventListener('click', (e) => {
+      const hd = e.target.closest('.dg-group-header')
+      if (!hd) return
+      const grupo = hd.dataset.grupo
+      if (st.gruposCerrados.has(grupo)) st.gruposCerrados.delete(grupo)
+      else st.gruposCerrados.add(grupo)
+      pintar()
+    })
+
+    document.getElementById(`${id}-agr`)?.addEventListener('change', (e) => {
+      st.agrupado = e.target.checked
+      st.pagina = 1
+      pintar()
+    })
 
     pintar()
 

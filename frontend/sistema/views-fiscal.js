@@ -256,6 +256,17 @@ async function pintarLibro(periodo, tab) {
 
   UITabla.montar({
     mount: document.getElementById('lb-tabla'),
+    // B3 (masterplan unificación): el libro agrupa por tipo de documento con
+    // subtotal por grupo y congela la fecha — capacidades del datagrid
+    // integradas en UITabla.
+    congelar: true,
+    agrupar: {
+      key: 'tipo_doc',
+      label: 'tipo de documento',
+      nombreGrupo: (v) => NOMBRES_TIPO_DOC[v] || `Tipo ${v}`,
+      subtotal: (fs) => `neto ${fmtM(fs.reduce((a, d) => a + (d.monto_neto || 0), 0))} · IVA ${fmtM(fs.reduce((a, d) => a + (d.monto_iva || 0), 0))} · total ${fmtM(fs.reduce((a, d) => a + (d.monto_total || 0), 0))}`,
+    },
+    agrupadoPorDefecto: true,
     columnas: [
       { key: 'fecha_docto', label: 'Fecha', valor: (d) => (d.fecha_docto || '').slice(0, 10) },
       { key: 'tipo_doc', label: 'Tipo', valor: (d) => NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}` },
@@ -365,6 +376,16 @@ VIEWS.documentos = {
 
     UITabla.montar({
       mount: document.getElementById('doc-tabla'),
+      // B3: la bandeja agrupa por flujo (Compras/Ventas) con subtotal del
+      // grupo y congela la columna Doc — la casilla vive en la toolbar.
+      congelar: true,
+      agrupar: {
+        key: 'tipo_flujo',
+        label: 'compras/ventas',
+        nombreGrupo: (v) => (v === 'compra' ? 'Compras' : 'Ventas'),
+        subtotal: (fs) => `total ${fmtM(fs.reduce((a, d) => a + (d.monto_total || 0), 0))} · neto ${fmtM(fs.reduce((a, d) => a + (d.monto_neto || 0), 0))} · IVA ${fmtM(fs.reduce((a, d) => a + (d.monto_iva || 0), 0))}`,
+      },
+      agrupadoPorDefecto: true,
       columnas: [
         { key: 'tipo_doc', label: 'Doc', valor: (d) => `${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc}` },
         { key: 'folio', label: 'Folio' },
