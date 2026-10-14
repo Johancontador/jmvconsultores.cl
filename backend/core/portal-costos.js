@@ -124,4 +124,46 @@ function margen(db, { empresaId, desde = null, hasta = null, limit = 100 } = {})
   }
 }
 
-module.exports = { ensureTablas, fijarCosto, listar, margen, normalizarProducto }
+/**
+ * Importa una hoja de costos pegada/subida como CSV "producto;costo"
+ * (separador ; o , detectado por fila; BOM y encabezado opcional tolerados).
+ * UPSERT idempotente por producto normalizado — re-importar el mismo archivo
+ * no duplica. Las líneas inválidas se REPORTAN con su motivo y no abortan el
+ * resto (medio import nunca: cada línea válida se guarda, la inválida lista).
+ */
+function importarCostosCSV(db, { empresaId, usuarioId, texto, ip = null }) {
+  const bruto = String(texto || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+  if (!bruto.trim()) throw new Error('El CSV está vacío')
+  const resultado = { ok: true, importados: 0, actualizados: 0, saltadas: [] }
+  for (const [i, cruda] of bruto.split('\n').entries()) {
+    const linea = cruda.trim()
+    if (!linea) continue
+    const sep = (linea.match(/;/g) || []).length >= (linea.match(/,/g) || []).length ? ';' : ','
+    const partes = linea.split(sep).map((c) => c.trim().replace(/^"|"$/g, ''))
+    if (partes.length < 2 || !partes[1]) {
+      resultado.saltadas.push({ linea: i + 1, motivo: 'Formato: se espera "producto;costo"' })
+      continue
+    }
+    const [producto, costoTxt] = partes
+    if (/^(producto|nombre)(del?producto)?$/i.test(producto)) continue // encabezado
+    const costoLimpio = costoTxt.replace(/\./g, '').replace(/,/g, '.').replace(/[^0-9.]/g, '')
+    const costo = Number(costoLimpio)
+    if (!costoLimpio || !Number.isInteger(costo) || costo < 0) {
+      resultado.saltadas.push({ linea: i + 1, motivo: `Costo inválido: "${costoTxt}"` })
+      continue
+    }
+    try {
+      const r = fijarCosto(db, { empresaId, usuarioId, producto, costoUnitario: costo, notas: 'importado CSV', ip })
+      if (r.actualizado) resultado.actualizados += 1
+      else resultado.importados += 1
+    } catch (err) {
+      resultado.saltadas.push({ linea: i + 1, motivo: err.message })
+    }
+  }
+  if (!resultado.importados && !resultado.actualizados && resultado.saltadas.length) {
+    throw new Error(`Ninguna línea importable — ${resultado.saltadas.length} saltadas: ${resultado.saltadas[0].motivo}`)
+  }
+  return resultado
+}
+
+module.exports = { ensureTablas, fijarCosto, listar, margen, importarCostosCSV, normalizarProducto }

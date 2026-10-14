@@ -144,4 +144,34 @@ function _fila(saldo, ficha, _unused) {
   }
 }
 
-module.exports = { ensureTablas, fijarAutorizado, listar, exposicion, normalizarRut }
+/**
+ * Enriquece UNA respuesta ya calculada de cobranza (saldosClientes) con el
+ * crédito autorizado digitado: cada cliente gana `credito_autorizado` (null
+ * si no tiene ficha — no se estima) y el resumen agrega `credito` con los
+ * con-distancia: sobrepasados / sin_ficha / total autorizado. Lectura pura.
+ */
+function enriquecerConCredito(db, { empresaId, saldos }) {
+  const fichas = new Map(listar(db, { empresaId }).map((f) => [f.rut_norm, f]))
+  let sobre = 0, sin = 0, auto = 0
+  const clientes = saldos.clientes.map((c) => {
+    const ficha = fichas.get(normalizarRut(c.rut)) || null
+    if (ficha === null) sin += 1
+    else {
+      auto += ficha.monto_autorizado
+      if (Number(c.saldo) > ficha.monto_autorizado) sobre += 1
+    }
+    return { ...c, rut_norm: normalizarRut(c.rut), credito_autorizado: ficha === null ? null : ficha.monto_autorizado }
+  })
+  return {
+    ...saldos,
+    clientes,
+    credito: {
+      regla: 'Crédito autorizado digitado por la empresa (Portal — Crédito autorizado). Cliente sin ficha: null — no se estima.',
+      total_autorizado: auto,
+      sobrepasados: sobre,
+      sin_ficha: sin,
+    },
+  }
+}
+
+module.exports = { ensureTablas, fijarAutorizado, listar, exposicion, enriquecerConCredito, normalizarRut }

@@ -835,6 +835,15 @@ window.VIEWS['portal-costos'] = {
           <div><span class="frm-label">Costo unitario <span class="hint">(entero)</span></span><input id="pcs-costo" type="number" min="0" step="1" class="form-input" style="width:auto"></div>
           <button class="btn btn-primary" id="pcs-guardar">Fijar / actualizar</button>
         </div>
+        <details class="mt">
+          <summary class="hint" style="cursor:pointer">Carga masiva: importar CSV (producto;costo)</summary>
+          <p class="hint mt">Un par por línea, separado por <b>;</b> (también acepta coma). Encabezado opcional. Valores chilenos con puntos de miles ok (<i>Mensualidad Contable;20.000</i>). Upsert idempotente: re-importar no duplica y las líneas inválidas se reportan sin abortar el resto.</p>
+          <div class="frm-row" style="align-items:end">
+            <div style="flex:2"><textarea id="pcs-csv" class="form-input" rows="4" placeholder="Mensualidad Contable;20000\nMensualidad Tributaria;10000"></textarea></div>
+            <button class="btn btn-secondary" id="pcs-csv-btn">Importar CSV</button>
+          </div>
+          <div id="pcs-csv-res" class="mt"></div>
+        </details>
       </div>
       <div id="pcs-result" class="mt">${UIEstado.cargando()}</div>`
 
@@ -847,6 +856,21 @@ window.VIEWS['portal-costos'] = {
         document.getElementById('pcs-costo').value = ''
         await cargar()
       } catch (err) { alert(err.message) }
+    }
+
+    async function importarCSV() {
+      const zona = document.getElementById('pcs-csv-res')
+      const texto = document.getElementById('pcs-csv').value
+      if (!texto.trim()) { alert('Pega el CSV primero'); return }
+      zona.innerHTML = UIEstado.cargando('Importando…')
+      try {
+        const r = await apiPost(`/api/portal/empresas/${eid}/costos-csv`, { texto_csv: texto })
+        zona.innerHTML = `<p class="hint">✅ ${r.importados} nuevo(s) + ${r.actualizados} actualizado(s)${r.saltadas.length ? ` · ⚠ ${r.saltadas.length} saltadas: ${r.saltadas.map((x) => `L${x.linea} (${esc(x.motivo)})`).join(', ')}` : ''}</p>`
+        document.getElementById('pcs-csv').value = ''
+        await cargar()
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
     }
 
     async function cargar() {
@@ -879,6 +903,7 @@ window.VIEWS['portal-costos'] = {
     }
 
     document.getElementById('pcs-guardar').addEventListener('click', guardar)
+    document.getElementById('pcs-csv-btn').addEventListener('click', importarCSV)
     await cargar()
   },
 }

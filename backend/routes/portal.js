@@ -293,6 +293,23 @@ function construirRouter(db) {
     } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
   })
 
+  /** Carga masiva de la hoja de costos: CSV "producto;costo", upsert idempotente. */
+  router.post('/empresas/:empresaId/costos-csv', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const r = portalCostos.importarCostosCSV(db, {
+        empresaId: id, usuarioId: req.user.id, texto: (req.body || {}).texto_csv, ip: req.ip,
+      })
+      registrarAccion(db, {
+        empresaId: id, usuarioId: req.user.id,
+        accion: 'portal.costos.importar_csv', entidad: 'portal_costos', entidadId: null,
+        despues: { importados: r.importados, actualizados: r.actualizados, saltadas: r.saltadas.length }, ip: req.ip,
+      })
+      res.status(201).json(r)
+    } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+  })
+
   router.get('/empresas/:empresaId/margen', (req, res) => {
     const id = accesoEmpresa(req, res, req.params.empresaId)
     if (!id) return

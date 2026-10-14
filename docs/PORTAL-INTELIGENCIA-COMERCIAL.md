@@ -154,7 +154,7 @@ asignados solo leen. Regla transversal (§42): lo sin fuente NO se estima:
 | Fase | Tabla | API | Vista | Principio |
 |---|---|---|---|---|
 | C — Crédito autorizado | `portal_credito` (UNIQUE empresa + RUT normalizado) | `GET/PUT /empresas/:id/credito` | `portal-credito`: fichas + exposición de cartera | sin ficha → SIN_CREDITO; exposición = saldos reales de cobranza (saldosClientes) vs autorizado |
-| D — Costos y margen | `portal_costos` (UNIQUE empresa + producto normalizado) | `GET/PUT /empresas/:id/costos`, `GET /empresas/:id/margen` | `portal-costos` (hoja) + columnas de margen/cobertura en `portal-productos` | margen SOLO con costo digitado; cobertura declara el % de venta con margen |
+| D — Costos y margen | `portal_costos` (UNIQUE empresa + producto normalizado) | `GET/PUT /empresas/:id/costos`, **`POST /empresas/:id/costos-csv`** (carga masiva), `GET /empresas/:id/margen` | `portal-costos` (hoja + importador CSV con resumen) + columnas de margen/cobertura en `portal-productos` | margen SOLO con costo digitado; cobertura declara el % de venta con margen; CSV upsert idempotente con líneas inválidas REPORTADAS (nunca media import silenciosa) |
 | E — Cotizaciones | `portal_cotizaciones` (estados con CHECK en la BD) | `GET/POST/PUT/DELETE /empresas/:id/cotizaciones` | `portal-cotizaciones`: embudo por estado + tasa ACEPTADA/ENVIADA | tasa null sin enviadas (no 0%); una ACEPTADA/PERDIDA no vuelve a abierta; todo auditado |
 
 **Tests (11 nuevos, portal.test.js T6/T7/T8):** upsert idempotente por RUT/producto
@@ -165,3 +165,10 @@ vez, ciclo y embudo de cotizaciones con fecha de cierre, aislamiento §8 en las
 6 rutas nuevas (403 en lectura y escritura cruzadas, datos de B jamás en el
 cuerpo para A) y escritura SOLO del dueño (contador de la misma empresa: lee
 200, escribe 403). Suite completa: 412/412.
+
+## 11. Incrementos del mismo día: CSV de costos + crédito en Cobranza interna
+
+1. **Carga masiva de la hoja de costos** (`importarCostosCSV` + `POST /empresas/:id/costos-csv`, escritura del dueño): CSV "producto;costo" con separador ; o ,, encabezado opcional, montos chilenos con puntos de miles (`20.000`), comillas toleradas; upsert idempotente — re-importar el MISMO archivo actualiza en vez de duplicar (probado); las líneas inválidas se REPORTAN con su línea y motivo sin abortar el resto; si NADA es importable → 400 sin media import (nada se escribe). UI: en Hoja de costos, plegable con textarea y resumen importados/actualizados/saltados. Fix de raíz cazado por el test: `Number('abc'→'')` era 0 — el texto limpio vacío se rechaza ANTES de convertir.
+2. **Crédito visible en Cobranza del sistema interno** (`enriquecerConCredito`, lectura pura en `GET /api/contable/empresas/:id/cobranza`): la respuesta conserva TODOS los campos de saldosClientes y agrega por cliente `credito_autorizado` (+`rut_norm`) y en la cabecera `credito {regla, total_autorizado, sobrepasados, sin_ficha}` — cliente sin ficha: null (no se estima). UI views-cobranza.js: KPI "Sobre su crédito" con conteo de sobrepasados y ficha por cliente con chip rojo cuando el saldo excede el crédito. El contador ve lo mismo que el portal — una sola fuente (portal_credito).
+
+**Tests 3 nuevos (T7.4/T7.5/T6.5):** importación idempotente con miles chilenos, saltadas con motivo, error limpio sin media import, 403 del contador y de la empresa cruzada, y enriquecimiento con sin-ficha=null. Suite completa: **415/415**.

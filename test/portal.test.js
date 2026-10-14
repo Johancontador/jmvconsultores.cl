@@ -624,3 +624,78 @@ test('T8.3: cotizaciones HTTP — aislamiento estricto y escritura del dueño', 
   })
   assert.strictEqual(malo.status, 400)
 })
+// ===================== CSV de costos + crédito en cobranza (incrementos Fases C/D) =====================
+
+test('T7.4: importarCostosCSV — upsert idempotente, miles chilenos, saltadas con motivo', () => {
+  const csv = [
+    'producto;costo', // encabezado tolerado
+    'Mensualidad Contable;22.000', // ya existe (18.000) → ACTUALIZA
+    'Licencia Anual Pro;120.000', // nuevo
+    '"Mensualidad Tributaria";10.000', // comillas toleradas → nuevo
+    'Sin costo;;', // línea inválida con 2 columnas vacías...
+    'Mensuel Rara;abc', // costo no numérico → saltada con motivo
+  ].join('\n')
+  const r = portalCostos.importarCostosCSV(db, { empresaId: empresaA, usuarioId: userA, texto: csv })
+  assert.strictEqual(r.importados, 2, 'Licencia Anual Pro + Mensualidad Tributaria')
+  assert.strictEqual(r.actualizados, 1, 'Mensualidad Contable actualizada a 22000')
+  const motivos = r.saltadas.map((x) => x.motivo).join(' | ')
+  assert.ok(motivos.includes('abc'), 'la línea con costo no numérico se reporta')
+  // Re-importar el MISMO csv: 0 nuevos, 2 actualizados (idempotente)
+  const r2 = portalCostos.importarCostosCSV(db, { empresaId: empresaA, usuarioId: userA, texto: csv })
+  assert.strictEqual(r2.importados, 0)
+  assert.strictEqual(r2.actualizados, 3, 'las tres líneas válidas ahora actualizan')
+  // El margen usa el costo nuevo
+  const m = portalCostos.margen(db, { empresaId: empresaA, desde: '202609', hasta: '202609' })
+  assert.strictEqual(m.productos.find((p) => p.nombre === 'Mensualidad Contable').costo_unitario, 22000)
+  // CSV vacío / todo inválido → error sin media importación (nada se escribe)
+  assert.throws(() => portalCostos.importarCostosCSV(db, { empresaId: empresaA, usuarioId: userA, texto: '' }), /vacío/)
+  const antes = portalCostos.listar(db, { empresaId: empresaA }).length
+  assert.throws(() => portalCostos.importarCostosCSV(db, { empresaId: empresaA, usuarioId: userA, texto: 'uno solo' }), /Ninguna línea importable/)
+  assert.strictEqual(portalCostos.listar(db, { empresaId: empresaA }).length, antes, 'sin en medio-import: nada cambió')
+})
+
+test('T7.5: costos-csv HTTP — escritura solo del dueño con resumen auditable', async () => {
+  // Contador de A (asignado, no dueño) NO puede importar
+  const solo = await fetch(`${baseUrl}/empresas/${empresaA}/costos-csv`, {
+    method: 'POST', headers: { ...headerC(), 'content-type': 'application/json' },
+    body: JSON.stringify({ texto_csv: 'X;1' }),
+  })
+  assert.strictEqual(solo.status, 403)
+  // A NO toca la empresa de B
+  const cruzado = await fetch(`${baseUrl}/empresas/${empresaB}/costos-csv`, {
+    method: 'POST', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ texto_csv: 'Producto Solo De B;1' }),
+  })
+  assert.strictEqual(cruzado.status, 403)
+  // Camino feliz del dueño + cuerpo inválido → 400 (nada parcial)
+  const ok = await fetch(`${baseUrl}/empresas/${empresaA}/costos-csv`, {
+    method: 'POST', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ texto_csv: 'Producto HTTP;15.000' }),
+  })
+  assert.strictEqual(ok.status, 201)
+  assert.strictEqual(JSON.parse(await ok.text()).importados, 1)
+  const malo = await fetch(`${baseUrl}/empresas/${empresaA}/costos-csv`, {
+    method: 'POST', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  assert.strictEqual(malo.status, 400)
+})
+
+test('T6.5: enriquecerConCredito — sin ficha null (no estimado), sobrepasados y resumen', () => {
+  const saldos = {
+    total_pendiente: 300000,
+    clientes: [
+      { rut: '12.345.678-5', razon_social: 'Cliente Crédito', saldo: 600000, mora_max_dias: 40, nivel: 'rojo', documentos_abiertos: [] },
+      { rut: '99.777.777-2', razon_social: 'Sin Ficha Ltda', saldo: 100000, mora_max_dias: 2, nivel: 'verde', documentos_abiertos: [] },
+    ],
+  }
+  const r = portalCredito.enriquecerConCredito(db, { empresaId: empresaA, saldos })
+  assert.strictEqual(r.total_pendiente, 300000, 'los campos de la cobranza base quedan intactos')
+  const con = r.clientes.find((c) => c.rut_norm === '123456785')
+  assert.strictEqual(con.credito_autorizado, 450000, 'ficha de T6.1')
+  const sin = r.clientes.find((c) => c.rut_norm === '997777772')
+  assert.strictEqual(sin.credito_autorizado, null, 'sin ficha NO se estima')
+  assert.strictEqual(r.credito.sobrepasados, 1)
+  assert.strictEqual(r.credito.sin_ficha, 1)
+  assert.ok(r.credito.regla.includes('no se estima'))
+})

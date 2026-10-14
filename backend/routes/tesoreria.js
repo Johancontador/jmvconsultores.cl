@@ -11,6 +11,7 @@ const { requirePermiso } = require('../middleware/requirePermiso')
 const teso = require('../core/tesoreria')
 const cobranza = require('../core/cobranza')
 const formatos = require('../core/tesoreria-cartola-formatos')
+const portalCredito = require('../core/portal-credito')
 
 const router = express.Router()
 
@@ -158,10 +159,14 @@ router.post('/empresas/:empresaId/tesoreria/pagos', requirePermiso('tesoreria:op
 
 router.get('/empresas/:empresaId/cobranza', requirePermiso('tesoreria:ver'), (req, res) => {
   try {
-    res.json(cobranza.saldosClientes(db, {
+    const saldos = cobranza.saldosClientes(db, {
       empresaId: req.empresaId,
       limit: req.query.limit ? Number(req.query.limit) : 500,
-    }))
+    })
+    // Crédito autorizado (Fase C portal): cada cliente con su ficha si existe —
+    // sin ficha queda null (no se estima). Lectura pura; la escritura es del dueño.
+    portalCredito.ensureTablas(db)
+    res.json(portalCredito.enriquecerConCredito(db, { empresaId: req.empresaId, saldos }))
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

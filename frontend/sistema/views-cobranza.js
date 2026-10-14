@@ -5,8 +5,7 @@
  * con antigüedad, y el botón «Pagada» por documento: registra el cobro
  * (backend: transacción única asiento núcleo + movimiento banco + vínculo)
  * y refresca sin recargar nada a mano.
- */
-/* global VIEWS, S, esc, apiGet, apiPost, showToast, renderRoute, fmt */
+ *//* global VIEWS, S, esc, apiGet, apiPost, showToast, renderRoute, fmt */
 
 VIEWS.cobranza = {
   titulo: 'Cobranza de Clientes',
@@ -29,6 +28,7 @@ async function renderCobranza(cnt) {
     return
   }
 
+  const CRED = cob.credito || null
   const sel = (id) => `
     <select class="form-input ccb-banco" data-doc="${id}" style="max-width:230px; padding:3px 6px">
       ${(bancos.bancos || []).map((b) => `<option value="${b.id}">${esc(b.banco)}${b.numero ? ' ' + esc(b.numero) : ''}</option>`).join('')}</select>`
@@ -39,6 +39,7 @@ async function renderCobranza(cnt) {
       <div class="kpi"><small>Clientes en mora</small><strong>${(cob.clientes || []).length}</strong></div>
       <div class="kpi"><small>Rojos (>30 d)</small><strong style="color:var(--danger)">${(cob.clientes || []).filter(c => c.nivel === 'rojo').length}</strong></div>
       <div class="kpi up"><small>Amarillos (15–30 d)</small><strong style="color:var(--warning)">${(cob.clientes || []).filter(c => c.nivel === 'amarillo').length}</strong></div>
+      ${CRED ? `<div class="kpi ${CRED.sobrepasados > 0 ? 'down' : 'up'}"><small>Sobre su crédito</small><strong style="color:var(--danger)">${CRED.sobrepasados}</strong><span class="sub">${CRED.sin_ficha} sin ficha · autorizado ${fmt(CRED.total_autorizado)}</span></div>` : ''}
     </div>
 
     ${(cob.clientes || []).length === 0
@@ -48,7 +49,8 @@ async function renderCobranza(cnt) {
       <div class="frm-row" style="align-items:center; justify-content:space-between">
         <div>
           <h3 style="margin-bottom:2px">${esc(c.razon_social)}</h3>
-          <span class="sub mono">${esc(c.rut)} · mora máx ${c.mora_max_dias} d</span>
+          <span class="sub mono">${esc(c.rut)} · mora máx ${c.mora_max_dias} d${c.credito_autorizado !== null && c.credito_autorizado !== undefined ? ` · crédito ${fmt(c.credito_autorizado)}` : ''}</span>
+          ${c.credito_autorizado !== null && c.credito_autorizado !== undefined && Number(c.saldo) > Number(c.credito_autorizado) ? `<span class="chip anulado">Sobre su crédito (${fmt(Number(c.credito_autorizado) - Number(c.saldo))})</span>` : (c.credito_autorizado === null || c.credito_autorizado === undefined) && CRED ? '<span class="sub">sin ficha de crédito</span>' : ''}
         </div>
         <div style="text-align:right">
           <span class="chip ${NIVEL_CHIP[c.nivel]}">${c.nivel}</span>
