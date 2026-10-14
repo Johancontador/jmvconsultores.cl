@@ -551,6 +551,9 @@ const MENU = [
       { key: 'portal-ventas', label: 'Portal — Ventas y movimientos', permiso: null },
       { key: 'portal-cartera', label: 'Portal — Cartera de clientes', permiso: null },
       { key: 'portal-productos', label: 'Portal — Productos vendidos', permiso: null },
+      { key: 'portal-credito', label: 'Portal — Crédito autorizado', permiso: null },
+      { key: 'portal-costos', label: 'Portal — Hoja de costos', permiso: null },
+      { key: 'portal-cotizaciones', label: 'Portal — Cotizaciones y embudo', permiso: null },
       { key: 'portal-cobranza', label: 'Portal — Cobranza (solo lectura)', permiso: null },
       { key: 'portal-reportes', label: 'Portal — Reportes guardados', permiso: null },
     ]

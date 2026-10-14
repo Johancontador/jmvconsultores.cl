@@ -403,3 +403,224 @@ test('T3.4: duplicar nombre sobrescribe la config del mismo usuario (upsert)', a
 })
 
 
+// ===================== FASES C/D/E del portal (§7.1/§7.3/§7.5) =====================
+// Fuentes DIGITADAS de negocio (crédito autorizado, costos, cotizaciones) que el
+// SII no entrega. Principio rector: lo sin fuente NO se estima — se registra aquí,
+// con aislamiento estricto (§8) y escritura SOLO del dueño (admin_empresa).
+
+const portalCredito = require('../backend/core/portal-credito')
+const portalCostos = require('../backend/core/portal-costos')
+const portalCotizaciones = require('../backend/core/portal-cotizaciones')
+
+// Usuario CONTADOR de la empresa A: puede LEER los datos digitados pero NO
+// escribirlos (la ficha de negocio es del dueño). Sesión creada en su test.
+let sidC = null
+
+test('T6.0: setup usuario contador (sin permisos de escritura del portal)', () => {
+  const uC = db.prepare(`INSERT INTO users (username, password_hash, is_admin, activo) VALUES ('portal-contador-a', 'x', 0, 1)`).run()
+  const rolContador = db.prepare(`SELECT id FROM roles WHERE codigo = 'contador'`).get().id
+  db.prepare(`INSERT INTO usuario_empresa (usuario_id, empresa_id, rol_id, activo) VALUES (?, ?, ?, 1)`).run(Number(uC.lastInsertRowid), empresaA, rolContador)
+  sidC = sessionSvc.crearSesion(Number(uC.lastInsertRowid))
+})
+
+const headerC = () => ({ cookie: `sid=${sidC}` })
+
+// ===================== FASE C: crédito autorizado (§7.1) =====================
+
+test('T6.1: fijar crédito — upsert idempotente por RUT normalizado', () => {
+  let r = portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '12.345.678-5', razonSocial: 'Cliente Crédito', monto: 500000 })
+  assert.strictEqual(r.actualizado, false)
+  assert.strictEqual(r.rut_norm, '123456785')
+  // Mismo cliente con otro formato de RUT → ACTUALIZA (no duplica)
+  r = portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '123456785', monto: 450000 })
+  assert.strictEqual(r.actualizado, true)
+  const filas = portalCredito.listar(db, { empresaId: empresaA })
+  assert.strictEqual(filas.length, 1)
+  assert.strictEqual(filas[0].monto_autorizado, 450000)
+  assert.strictEqual(filas[0].razon_social, 'Cliente Crédito', 'la razón social persiste si no se re-envía')
+  // Ficha de un cliente al día (sin saldo en exposición)
+  portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '88111111-9', razonSocial: 'Al Día SpA', monto: 200000 })
+})
+
+test('T6.2: fijar crédito — validaciones de dominio', () => {
+  assert.throws(() => portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '12.345.678-5', monto: -1 }), /Monto/)
+  assert.throws(() => portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '12.345.678-5', monto: 1.5 }), /Monto/)
+  assert.throws(() => portalCredito.fijarAutorizado(db, { empresaId: empresaA, usuarioId: userA, rut: '', monto: 100 }), /Falta el RUT/)
+})
+
+test('T6.3: exposición — SOBREPASADO / DISPONIBLE / SIN_CREDITO, nunca creditos estimados', () => {
+  const saldosFalsos = {
+    total_pendiente: 700000,
+    clientes: [
+      { rut: '12.345.678-5', razon_social: 'Cliente Crédito', saldo: 600000, mora_max_dias: 40, nivel: 'rojo', documentos_abiertos: [] },
+      { rut: '99.777.777-2', razon_social: 'Sin Ficha Ltda', saldo: 100000, mora_max_dias: 2, nivel: 'verde', documentos_abiertos: [] },
+    ],
+  }
+  const r = portalCredito.exposicion(db, { empresaId: empresaA, saldosFn: () => saldosFalsos })
+  const sobrepasado = r.clientes.find((c) => c.rut_norm === '123456785')
+  assert.strictEqual(sobrepasado.estado, 'SOBREPASADO')
+  assert.strictEqual(sobrepasado.disponible, -150000, '450000 autorizado − 600000 saldo')
+  const sinFicha = r.clientes.find((c) => c.rut_norm === '997777772')
+  assert.strictEqual(sinFicha.estado, 'SIN_CREDITO')
+  assert.strictEqual(sinFicha.autorizado, null, 'sin ficha NO se estima el crédito')
+  assert.strictEqual(sinFicha.disponible, null)
+  const alDia = r.clientes.find((c) => c.rut_norm === '881111119')
+  assert.strictEqual(alDia.estado, 'DISPONIBLE')
+  assert.strictEqual(alDia.disponible, 200000, 'ficha de cliente sin saldo aparece con su crédito íntegro')
+  assert.strictEqual(r.resumen.sobrepasados, 1)
+  assert.strictEqual(r.resumen.sin_credito, 1)
+})
+
+test('T6.4: crédito HTTP — escritura SOLO del dueño; aislamiento de lectura', async () => {
+  // dueño de A escribe en A (201 nueva)
+  const ok = await fetch(`${baseUrl}/empresas/${empresaA}/credito`, {
+    method: 'PUT', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ rut: '77777777-1', razon_social: 'Cliente HTTP', monto_autorizado: 300000 }),
+  })
+  assert.strictEqual(ok.status, 201)
+  // El contador de A (asignado) PUEDE leer pero NO escribir
+  const lectura = await get(`${baseUrl}/empresas/${empresaA}/credito`, headerC())
+  assert.strictEqual(lectura.status, 200)
+  assert.ok(lectura.body.fichas.some((f) => f.rut_original === '77777777-1'))
+  const escrituraContador = await fetch(`${baseUrl}/empresas/${empresaA}/credito`, {
+    method: 'PUT', headers: { ...headerC(), 'content-type': 'application/json' },
+    body: JSON.stringify({ rut: '77777777-1', monto_autorizado: 1 }),
+  })
+  assert.strictEqual(escrituraContador.status, 403, 'solo el dueño registra datos de negocio')
+  // A NO escribe/lee la empresa de B
+  const putB = await fetch(`${baseUrl}/empresas/${empresaB}/credito`, {
+    method: 'PUT', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ rut: '77777777-1', monto_autorizado: 500 }),
+  })
+  assert.strictEqual(putB.status, 403)
+  const getB = await get(`${baseUrl}/empresas/${empresaB}/credito`, headerA())
+  assert.strictEqual(getB.status, 403)
+  // Datos inválidos → 400 (nunca media escritura)
+  const malo = await fetch(`${baseUrl}/empresas/${empresaA}/credito`, {
+    method: 'PUT', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ rut: '77777777-1', monto_autorizado: -5 }),
+  })
+  assert.strictEqual(malo.status, 400)
+  assert.strictEqual(portalCredito.listar(db, { empresaId: empresaA }).filter((f) => f.rut_norm === '777777771').length, 1, 'la ficha quedó con su valor original')
+})
+
+// ===================== FASE D: costos y margen (§7.3) =====================
+
+test('T7.1: margen — solo productos CON costo digitado; cobertura explícita', () => {
+  portalCostos.fijarCosto(db, { empresaId: empresaA, usuarioId: userA, producto: 'Mensualidad Contable', costoUnitario: 20000 })
+  const r = portalCostos.margen(db, { empresaId: empresaA, desde: '202609', hasta: '202609' })
+  const con = r.productos.find((p) => p.nombre === 'Mensualidad Contable')
+  assert.strictEqual(con.costo_unitario, 20000)
+  assert.strictEqual(con.costo_total, 40000, '20000 × cantidad agregada 2')
+  assert.strictEqual(con.margen, 40000, 'neto 80000 − costo 40000')
+  const sinCosto = r.productos.find((p) => p.nombre === 'Mensualidad Tributaria')
+  assert.strictEqual(sinCosto.margen, null, 'sin costo digitado NO se estima el margen')
+  assert.strictEqual(sinCosto.costo_total, null)
+  // Cobertura: venta positiva del rango = 80000 + 20000 = 100000; con costo 80000
+  assert.strictEqual(r.cobertura.venta_positiva_total, 100000)
+  assert.strictEqual(r.cobertura.venta_con_margen, 80000)
+  assert.strictEqual(r.cobertura.pct_venta_con_margen, 80)
+  assert.strictEqual(r.cobertura.productos_con_costo, 1)
+  assert.strictEqual(r.cobertura.productos_total, 2)
+  // Agosto (202608) fuera del rango
+  assert.ok(!r.productos.some((p) => p.nombre === 'Producto Agosto'))
+})
+
+test('T7.2: fijar costo — upsert y validaciones', () => {
+  let r = portalCostos.fijarCosto(db, { empresaId: empresaA, usuarioId: userA, producto: 'mensualidad contable', costoUnitario: 18000 })
+  assert.strictEqual(r.actualizado, true, 'normalizado case-insensitive = mismo producto')
+  let filas = portalCostos.listar(db, { empresaId: empresaA })
+  assert.strictEqual(filas.length, 1)
+  assert.strictEqual(filas[0].costo_unitario, 18000)
+  assert.throws(() => portalCostos.fijarCosto(db, { empresaId: empresaA, usuarioId: userA, producto: 'X', costoUnitario: -1 }), /Costo/)
+  assert.throws(() => portalCostos.fijarCosto(db, { empresaId: empresaA, usuarioId: userA, producto: '   ', costoUnitario: 10 }), /Falta el nombre/)
+})
+
+test('T7.3: costos/margen HTTP — aislamiento e igual regla de escritura', async () => {
+  const putB = await fetch(`${baseUrl}/empresas/${empresaB}/costos`, {
+    method: 'PUT', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ producto: 'Producto Solo De B', costo_unitario: 5 }),
+  })
+  assert.strictEqual(putB.status, 403)
+  const getB = await get(`${baseUrl}/empresas/${empresaB}/margen`, headerA())
+  assert.strictEqual(getB.status, 403)
+  const margenA = await get(`${baseUrl}/empresas/${empresaA}/margen?desde=202609&hasta=202609`, headerC())
+  assert.strictEqual(margenA.status, 200)
+  assert.ok(!JSON.stringify(margenA.body).includes('Producto Solo De B'), 'los costos/venta de B no se filtran')
+  assert.ok(margenA.body.productos.some((p) => p.nombre === 'Mensualidad Contable'))
+})
+
+// ===================== FASE E: cotizaciones y embudo (§7.5) =====================
+
+test('T8.1: cotizaciones — ciclo real y embudo con tasa honesta', () => {
+  const c1 = portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRut: '11111111-1', monto: 200000, estado: 'ENVIADA', descripcion: 'Licencia PRO anual' })
+  const c2 = portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRut: '22222222-2', monto: 100000 })
+  portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRazon: 'Prospecto Nuevo', monto: 50000 })
+
+  let r = portalCotizaciones.actualizar(db, { empresaId: empresaA, usuarioId: userA, id: c2.cotizacion.id, estado: 'ENVIADA' })
+  assert.strictEqual(r.cotizacion.estado, 'ENVIADA')
+  r = portalCotizaciones.actualizar(db, { empresaId: empresaA, usuarioId: userA, id: c1.cotizacion.id, estado: 'ACEPTADA' })
+  assert.strictEqual(r.cotizacion.estado, 'ACEPTADA')
+  assert.ok(r.cotizacion.fecha_cierre, 'la ACEPTADA lleva fecha de cierre')
+
+  const e = portalCotizaciones.embudo(db, { empresaId: empresaA })
+  assert.strictEqual(e.hay_datos, true)
+  const mapa = new Map(e.por_estado.map((x) => [x.estado, x]))
+  assert.strictEqual(mapa.get('ENVIADA').monto, 100000)
+  assert.strictEqual(mapa.get('ACEPTADA').monto, 200000)
+  assert.strictEqual(mapa.get('BORRADOR').monto, 50000)
+  assert.strictEqual(e.tasa_conversion.por_monto, 200, '200.000 aceptado / 100.000 enviado')
+  assert.strictEqual(e.monto_pendiente, 150000, 'borrador 50.000 + enviada 100.000')
+  const c1id = c1.cotizacion.id
+  // Sin enviadas en la empresa B → tasa null (no 0%)
+  const eB = portalCotizaciones.embudo(db, { empresaId: empresaB })
+  assert.strictEqual(eB.hay_datos, false)
+  // Cierre: una cerrada NO vuelve a open (la historia no se re-escribe)
+  assert.throws(() => portalCotizaciones.actualizar(db, { empresaId: empresaA, usuarioId: userA, id: c1id, estado: 'BORRADOR' }), /cerrada/)
+})
+
+test('T8.2: cotizaciones — validaciones de dominio', () => {
+  const candado = portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRut: '77777777-1', monto: 90000 })
+  assert.throws(() => portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, monto: 10 }), /RUT o la razón/)
+  assert.throws(() => portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRut: '77777777-1', monto: -3 }), /Monto/)
+  assert.throws(() => portalCotizaciones.crear(db, { empresaId: empresaA, usuarioId: userA, clienteRut: '77777777-1', monto: 10, estado: 'GANADA' }), /Estado inicial/)
+  assert.throws(() => portalCotizaciones.actualizar(db, { empresaId: empresaA, usuarioId: userA, id: candado.cotizacion.id, estado: 'GANADA' }), /Estado/)
+  // Eliminar (agendada) quede auditada
+  const del = portalCotizaciones.eliminar(db, { empresaId: empresaA, usuarioId: userA, id: candado.cotizacion.id })
+  assert.strictEqual(del.ok, true)
+  assert.throws(() => portalCotizaciones.eliminar(db, { empresaId: empresaA, usuarioId: userA, id: candado.cotizacion.id }), /no encontrada/)
+})
+
+test('T8.3: cotizaciones HTTP — aislamiento estricto y escritura del dueño', async () => {
+  const crearB = await fetch(`${baseUrl}/empresas/${empresaB}/cotizaciones`, {
+    method: 'POST', headers: { ...headerB(), 'content-type': 'application/json' },
+    body: JSON.stringify({ cliente_razon: 'Cliente de B', monto: 123000 }),
+  })
+  assert.strictEqual(crearB.status, 201)
+  // A intenta todo sobre B → 403
+  const getListB = await get(`${baseUrl}/empresas/${empresaB}/cotizaciones`, headerA())
+  assert.strictEqual(getListB.status, 403)
+  const idDeB = (await get(`${baseUrl}/empresas/${empresaB}/cotizaciones`, headerB())).body.cotizaciones[0].id
+  const putB = await fetch(`${baseUrl}/empresas/${empresaB}/cotizaciones/${idDeB}`, {
+    method: 'PUT', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ estado: 'ENVIADA' }),
+  })
+  assert.strictEqual(putB.status, 403)
+  const delB = await fetch(`${baseUrl}/empresas/${empresaB}/cotizaciones/${idDeB}`, { method: 'DELETE', headers: headerA() })
+  assert.strictEqual(delB.status, 403)
+  // Contador de A puede LEER pero no escribir
+  const listaA = await get(`${baseUrl}/empresas/${empresaA}/cotizaciones`, headerC())
+  assert.strictEqual(listaA.status, 200)
+  assert.ok(listaA.body.cotizaciones.some((c) => c.cliente_rut === '11111111-1'))
+  const crearCont = await fetch(`${baseUrl}/empresas/${empresaA}/cotizaciones`, {
+    method: 'POST', headers: { ...headerC(), 'content-type': 'application/json' },
+    body: JSON.stringify({ cliente_rut: '11111111-1', monto: 5 }),
+  })
+  assert.strictEqual(crearCont.status, 403)
+  // Datos inválidos del dueño → 400
+  const malo = await fetch(`${baseUrl}/empresas/${empresaA}/cotizaciones`, {
+    method: 'POST', headers: { ...headerA(), 'content-type': 'application/json' },
+    body: JSON.stringify({ monto: 5 }),
+  })
+  assert.strictEqual(malo.status, 400)
+})

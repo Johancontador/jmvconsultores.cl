@@ -1,6 +1,6 @@
 # PORTAL DE INTELIGENCIA COMERCIAL — auditoría, arquitectura, datos y plan
 
-> Estado actual (commit `9798b36` + fases A/B): **FASES 1-5, 7 + Dashboard interactivo + Productos + Cobranza, probadas (suite 401/401)**.
+> Estado actual (fases A–E): **FASES 1-5, 7 + Dashboard interactivo + Productos + Cobranza + Crédito autorizado + Costos/Margen + Cotizaciones, probadas (suite 412/412)**.
 > Deploy a producción ACTIVO: https://app.jmvconsultores.cl (VPS hook post-receive, `git push vps master`).
 > Este documento se actualiza con lo que EXISTE en el código, no con lo que se supone.
 
@@ -119,11 +119,12 @@ Abrir/Duplicar/Eliminar. Sin lienzo libre ni SQL.
 |---|---|---|---|
 | 1 | Vendedor | No existe; se necesita campo en ERP futuro o DTE (`FolioRef` no lo trae) | Nueva integración |
 | 2 | ~~SKU / cantidad / familia~~ **EQUISTO EN FASE A (§7.2)** | `dte_emitidos.items_json` del emisor propio | **IMPLEMENTADO** — `core/portal-productos.js` + `/api/portal/empresas/:id/productos` + vista `portal-productos` |
-| 3 | Costo y margen | Hoja de costos por SKU a definir | Nueva fuente; NO estimar |
-| 4 | ~~Deuda/banco §F~~ **HECHO en FASE B (§7.4)** | `cobranza.js` (saldosClientes, mora) — lectura sola | **IMPLEMENTADO** — `/api/portal/empresas/:id/cobranza` + vista `portal-cobranza` (solo lectura); crédito autorizado sigue pendiente |
-| 5 | Cotizaciones §G | Nuevo módulo con estados reales | Fuera de alcance declarado (no inventar) |
+| 3 | ~~Costo y margen~~ **HECHO en FASE D (§7.3)** | `portal_costos` — hoja de costos DIGITADA por la empresa (costo unitario entero por producto) | **IMPLEMENTADO** — `core/portal-costos.js` + `/api/portal/empresas/:id/{costos,margen}` + hoja de costos y columnas de margen en `portal-productos`; lo SIN costear NO se estima (margen null + cobertura declarada) |
+| 4 | ~~Deuda/banco §F~~ **HECHO en FASE B (§7.4)** | `cobranza.js` (saldosClientes, mora) — lectura sola | **IMPLEMENTADO** — `/api/portal/empresas/:id/cobranza` + vista `portal-cobranza` (solo lectura) |
+| — | ~~Crédito autorizado~~ **HECHO en FASE C (§7.1)** | `portal_credito` — ficha digitada por RUT (dato de negocio del dueño) | **IMPLEMENTADO** — `core/portal-credito.js` + `/api/portal/empresas/:id/credito` (GET lectura / PUT del dueño) + vista `portal-credito` con exposición de cartera (saldo vs autorizado: DISPONIBLE / SOBREPASADO / SIN_CREDITO, nunca estimado) |
+| 5 | ~~Cotizaciones §G~~ **HECHO en FASE E (§7.5)** | `portal_cotizaciones` — registro con estados reales BORRADOR/ENVIADA/ACEPTADA/PERDIDA | **IMPLEMENTADO** — `core/portal-cotizaciones.js` + `/api/portal/empresas/:id/cotizaciones` (GET/POST/PUT/DELETE) + vista `portal-cotizaciones` con embudo y tasa de conversión sobre lo ENVIADO del registro propio (no se infiere de facturas; una cerrada no vuelve a abierta) |
 
-### Dashboard interactivo (增量 sobre §A)
+### Dashboard interactivo (incremento sobre §A)
 
 `portal-inicio` reescrito como dashboard: serie móvil `/serie` (1-24 meses,
 anla configurable, toggle venta/compra), barras SVG CLIABLES con drill-down
@@ -139,7 +140,28 @@ que filtran la tabla local. Tests T4.* + T5.*(26 en portal.test.js).
 
 ## 9. Pendientes (FASE 6 restante)
 
-1. **Vendedor / margen / cotizaciones** (fuentes nuevas — NO existentes, no se dibujan).
-2. Crédito autorizado en cobranza (fuente nueva).
-3. QA visual en navegador con sesión real (bloqueado por entorno de cookies del dueño).
-4. Sincronizar a GitHub (repo de código — hoy solo deploy interno al VPS).
+1. **Vendedor** (única brecha sin fuente posible hoy: NO existe en el RCV ni en el DTE — no se dibuja).
+2. QA visual en navegador con sesión real (bloqueado por entorno de cookies del dueño).
+3. Validar las vistas nuevas (crédito/costos/cotizaciones) con datos reales en producción tras el deploy.
+
+## 10. FASES C/D/E — fuentes digitadas de negocio (2026-10-14)
+
+Las tres fases agregaron escrituras DIGITADAS al portal sin romper su principio: el
+portal sigue sin tocar datos contables — lo nuevo es dato de NEGOCIO que el SII no
+tiene y que el dueño (admin_empresa o super_admin) registra; los demás roles
+asignados solo leen. Regla transversal (§42): lo sin fuente NO se estima:
+
+| Fase | Tabla | API | Vista | Principio |
+|---|---|---|---|---|
+| C — Crédito autorizado | `portal_credito` (UNIQUE empresa + RUT normalizado) | `GET/PUT /empresas/:id/credito` | `portal-credito`: fichas + exposición de cartera | sin ficha → SIN_CREDITO; exposición = saldos reales de cobranza (saldosClientes) vs autorizado |
+| D — Costos y margen | `portal_costos` (UNIQUE empresa + producto normalizado) | `GET/PUT /empresas/:id/costos`, `GET /empresas/:id/margen` | `portal-costos` (hoja) + columnas de margen/cobertura en `portal-productos` | margen SOLO con costo digitado; cobertura declara el % de venta con margen |
+| E — Cotizaciones | `portal_cotizaciones` (estados con CHECK en la BD) | `GET/POST/PUT/DELETE /empresas/:id/cotizaciones` | `portal-cotizaciones`: embudo por estado + tasa ACEPTADA/ENVIADA | tasa null sin enviadas (no 0%); una ACEPTADA/PERDIDA no vuelve a abierta; todo auditado |
+
+**Tests (11 nuevos, portal.test.js T6/T7/T8):** upsert idempotente por RUT/producto
+normalizados, validaciones de dominio (monto/costo enteros ≥ 0 — un decimal tipo
+1.5 se rechaza ANTES de redondear), exposición con saldosFn inyectable
+(SOBREPASADO/DISPONIBLE/SIN_CREDITO), margen con cobertura y NC-descuentada-una-
+vez, ciclo y embudo de cotizaciones con fecha de cierre, aislamiento §8 en las
+6 rutas nuevas (403 en lectura y escritura cruzadas, datos de B jamás en el
+cuerpo para A) y escritura SOLO del dueño (contador de la misma empresa: lee
+200, escribe 403). Suite completa: 412/412.

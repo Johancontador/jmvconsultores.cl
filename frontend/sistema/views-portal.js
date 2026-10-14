@@ -11,7 +11,7 @@
  * catálogo REAL expuesto en /api/portal/metricas.
  */
 
-/* global VIEWS, esc, apiGet, apiPost, apiDelete, S, UIEstado, inputPeriodoHTML, leerPeriodo, periodoActual */
+/* global VIEWS, esc, apiGet, apiPost, apiPut, apiDelete, S, UIEstado, inputPeriodoHTML, leerPeriodo, periodoActual */
 
 /* Helpers compartidos del portal */
 
@@ -484,23 +484,32 @@ window.VIEWS['portal-productos'] = {
             'La sección de productos se construye SOLO con lo emitido por tu empresa en estos meses. Si facturas siempre fuera del sistema, aquí no hay datos que mostrar (no es cero: no hay fuente).')
           return
         }
+        // FASE D: margen SOLO con costo digitado (hoja de costos); lo sin costear no se estima.
+        let conMargen = null
+        try {
+          conMargen = await apiGet(`/api/portal/empresas/${eid}/margen?desde=${desde}&hasta=${hasta}&limit=200`)
+        } catch { /* el margen es incremento: si falla, la vista sigue mostrando productos */ }
+        const filas = conMargen ? conMargen.productos : r.productos
         zona.innerHTML = `
           <div class="card">
             <h3>Productos ordenados por venta neta (${perLabelPortal(desde)} a ${perLabelPortal(hasta)})</h3>
             <p class="hint">${r.dtes_analizados} DTE(s) analizados. Las notas de crédito (61) descuentan de cantidades y netos una vez.</p>
-            <table class="tbl">
-              <thead><tr><th>Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Venta neta</th><th style="text-align:right">Precio prom.</th></tr></thead>
+            ${conMargen && conMargen.cobertura ? `<p class="hint">Margen con costo digitado: ${conMargen.cobertura.pct_venta_con_margen === null ? 'aún sin costos en la hoja' : conMargen.cobertura.pct_venta_con_margen + '% de la venta neta con margen calculado'} (${conMargen.cobertura.productos_con_costo}/${conMargen.cobertura.productos_total} productos costeados). Lo sin costo NO se estima — dígitalo en Hoja de costos.</p>` : '<p class="hint mt">El costo y el margen NO se muestran aún: fija costos unitarios en la Hoja de costos — sin fuente digitada no se estima (§7.3).</p>'}
+            <table class="tbl mt">
+              <thead><tr><th>Producto</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Venta neta</th><th style="text-align:right">Precio prom.</th>${conMargen ? '<th style="text-align:right">Costo total</th><th style="text-align:right">Margen</th>' : ''}</tr></thead>
               <tbody>
-                ${r.productos.map((p) => `
+                ${filas.map((p) => `
                   <tr>
                     <td>${esc(p.nombre)}</td>
                     <td style="text-align:right">${p.cantidad}</td>
                     <td style="text-align:right">${fmtCLP(p.neto)}</td>
                     <td style="text-align:right">${p.precio_promedio === null ? '—' : fmtCLP(p.precio_promedio)}</td>
+                    ${conMargen ? `
+                    <td style="text-align:right">${p.costo_total === null ? UIEstado.chip('sin costo', 'neutral') : fmtCLP(p.costo_total)}</td>
+                    <td style="text-align:right">${p.margen === null ? '—' : fmtCLP(p.margen)}</td>` : ''}
                   </tr>`).join('')}
               </tbody>
             </table>
-            <p class="hint mt">El costo y el margen NO se muestran: no existe fuente de costos en el sistema (doc maestro §7.3) — no se estima.</p>
           </div>`
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)
@@ -717,5 +726,267 @@ window.VIEWS['portal-reportes'] = {
       await ejecutar()
       await listar()
     })()
+  },
+}
+
+/* ---------------- FASE C: CRÉDITO AUTORIZADO (§7.1) ---------------- */
+
+window.VIEWS['portal-credito'] = {
+  titulo: 'Portal — Crédito autorizado',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <h3>Ficha de crédito por cliente</h3>
+        <p class="hint">El crédito que tu empresa le autoriza a cada cliente NO llega del SII — es dato de negocio que se digita aquí. La exposición (saldo de cobranza vs autorizado) se calcula SIEMPRE con esa ficha; cliente sin ficha figura <b>SIN_CREDITO</b>: no se estima (§7.1).</p>
+        <div class="frm-row mt" style="align-items:end">
+          <div><span class="frm-label">RUT cliente</span><input id="pcr-rut" class="form-input" placeholder="12.345.678-5" style="width:auto"></div>
+          <div><span class="frm-label">Razón social (opcional)</span><input id="pcr-razon" class="form-input" style="width:auto"></div>
+          <div><span class="frm-label">Crédito autorizado <span class="hint">(entero)</span></span><input id="pcr-monto" type="number" min="0" step="1" class="form-input" style="width:auto"></div>
+          <button class="btn btn-primary" id="pcr-guardar">Fijar / actualizar</button>
+        </div>
+      </div>
+      <div id="pcr-result" class="mt">${UIEstado.cargando()}</div>`
+
+    async function guardar() {
+      try {
+        await apiPut(`/api/portal/empresas/${eid}/credito`, {
+          rut: document.getElementById('pcr-rut').value.trim(),
+          razon_social: document.getElementById('pcr-razon').value.trim() || null,
+          monto_autorizado: Number(document.getElementById('pcr-monto').value),
+        })
+        document.getElementById('pcr-monto').value = ''
+        await cargar()
+      } catch (err) { alert(err.message) }
+    }
+
+    async function cargar() {
+      const zona = document.getElementById('pcr-result')
+      zona.innerHTML = UIEstado.cargando('Calculando exposición de cartera…')
+      try {
+        const r = await apiGet(`/api/portal/empresas/${eid}/credito`)
+        const E = r.exposicion
+        const CHIPS = { SOBREPASADO: 'danger', SIN_CREDITO: 'advertencia', DISPONIBLE: 'success' }
+        zona.innerHTML = `
+          <div class="card">
+            <h3>Exposición de cartera</h3>
+            <div class="frm-row" style="gap:24px">
+              <div><span class="frm-label">Saldo pendiente total</span><div style="font-weight:600">${fmtCLP(E.resumen.total_saldo)}</div></div>
+              <div><span class="frm-label">Crédito autorizado total</span><div style="font-weight:600">${fmtCLP(E.resumen.total_autorizado)}</div></div>
+              <div><span class="frm-label">Sobrepasados</span><div style="font-weight:600">${E.resumen.sobrepasados}</div></div>
+              <div><span class="frm-label">Sin ficha</span><div style="font-weight:600">${E.resumen.sin_credito}</div></div>
+            </div>
+            <p class="hint mt">Uso = saldo de documentos de venta CONTABILIZADOS sin cobro completo (misma fuente de Cobranza). ${esc(E.regla || '')}</p>
+          </div>
+          <div class="card mt" style="overflow:auto">
+            <h3>Clientes</h3>
+            ${E.clientes.length ? `
+            <table class="tbl">
+              <thead><tr><th>Cliente</th><th>Exposición</th><th style="text-align:right">Saldo</th><th style="text-align:right">Autorizado</th><th style="text-align:right">Disponible</th><th>Mora</th></tr></thead>
+              <tbody>
+                ${E.clientes.map((c) => `
+                  <tr>
+                    <td>${esc(c.razon_social || c.rut)}<span class="hint"> ${esc(c.rut)}</span></td>
+                    <td>${UIEstado.chip(c.estado, CHIPS[c.estado] || 'neutral')}</td>
+                    <td style="text-align:right">${fmtCLP(c.saldo)}</td>
+                    <td style="text-align:right">${c.autorizado === null ? UIEstado.chip('sin ficha', 'neutral') : fmtCLP(c.autorizado)}</td>
+                    <td style="text-align:right">${c.disponible === null ? '—' : fmtCLP(c.disponible)}</td>
+                    <td style="text-align:right">${c.mora_max_dias}d</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>` : UIEstado.vacio('Sin clientes en exposición', 'Cuando haya ventas contabilizadas con saldo o fichas de crédito, aparecen aquí.')}
+          </div>
+          <div class="card mt">
+            <h3>Fichas digitadas (${r.fichas.length})</h3>
+            ${r.fichas.length ? `
+            <table class="tbl">
+              <thead><tr><th>RUT</th><th>Razón social</th><th style="text-align:right">Autorizado</th><th>Actualizado</th></tr></thead>
+              <tbody>${r.fichas.map((f) => `
+                <tr>
+                  <td class="mono">${esc(f.rut_original)}</td>
+                  <td>${esc(f.razon_social || '—')}</td>
+                  <td style="text-align:right">${fmtCLP(f.monto_autorizado)}</td>
+                  <td class="hint">${esc(f.actualizado_en || f.creado_en || '')}</td>
+                </tr>`).join('')}</tbody>
+            </table>` : UIEstado.vacio('Sin fichas de crédito', 'Digita el primer crédito con el formulario de arriba.')}
+          </div>`
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    document.getElementById('pcr-guardar').addEventListener('click', guardar)
+    await cargar()
+  },
+}
+
+/* ---------------- FASE D: HOJA DE COSTOS (§7.3) ---------------- */
+
+window.VIEWS['portal-costos'] = {
+  titulo: 'Portal — Hoja de costos',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <h3>Costo unitario por producto</h3>
+        <p class="hint">El costo NO existe en el SII ni en la bandeja: se digita acá (de tu ERP, proveedor o libro de compras) como costo <b>unitario</b> y entero. Solo los productos con costo llevan margen en Productos vendidos — lo sin costear NO se estima (§7.3). El margen calculado se ve en <b>Portal — Productos vendidos</b>.</p>
+        <div class="frm-row mt" style="align-items:end">
+          <div style="flex:1"><span class="frm-label">Producto</span><input id="pcs-prod" class="form-input" list="pcs-nombres" placeholder="Nombre exacto como se factura"><datalist id="pcs-nombres"></datalist></div>
+          <div><span class="frm-label">Costo unitario <span class="hint">(entero)</span></span><input id="pcs-costo" type="number" min="0" step="1" class="form-input" style="width:auto"></div>
+          <button class="btn btn-primary" id="pcs-guardar">Fijar / actualizar</button>
+        </div>
+      </div>
+      <div id="pcs-result" class="mt">${UIEstado.cargando()}</div>`
+
+    async function guardar() {
+      try {
+        await apiPut(`/api/portal/empresas/${eid}/costos`, {
+          producto: document.getElementById('pcs-prod').value,
+          costo_unitario: Number(document.getElementById('pcs-costo').value),
+        })
+        document.getElementById('pcs-costo').value = ''
+        await cargar()
+      } catch (err) { alert(err.message) }
+    }
+
+    async function cargar() {
+      const zona = document.getElementById('pcs-result')
+      zona.innerHTML = UIEstado.cargando()
+      try {
+        const r = await apiGet(`/api/portal/empresas/${eid}/costos`)
+        // Nombres vendidos (fuente real) para el datalist del formulario.
+        try {
+          const hoy = periodoActual()
+          const p = await apiGet(`/api/portal/empresas/${eid}/productos?desde=${hoy.slice(0, 4)}01&hasta=${hoy}&limit=200`)
+          document.getElementById('pcs-nombres').innerHTML =
+            p.productos.map((x) => `<option value="${esc(x.nombre)}">`).join('')
+        } catch { /* el datalist es comodidad, no requisito */ }
+        zona.innerHTML = `
+          <div class="card">
+            <h3>Costos digitados (${r.costos.length})</h3>
+            ${r.costos.length ? `
+            <table class="tbl">
+              <thead><tr><th>Producto</th><th style="text-align:right">Costo unitario</th><th>Actualizado</th></tr></thead>
+              <tbody>${r.costos.map((c) => `
+                <tr><td>${esc(c.producto_original)}</td>
+                  <td style="text-align:right">${fmtCLP(c.costo_unitario)}</td>
+                  <td class="hint">${esc(c.actualizado_en || c.creado_en || '')}</td></tr>`).join('')}</tbody>
+            </table>` : UIEstado.vacio('Hoja de costos vacía', 'Digita el costo unitario de tus productos vendidos; el margen aparece en Productos vendidos solo cuando el costo existe — sin estimaciones.')}
+          </div>`
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    document.getElementById('pcs-guardar').addEventListener('click', guardar)
+    await cargar()
+  },
+}
+
+/* ---------------- FASE E: COTIZACIONES / EMBUDO (§7.5) ---------------- */
+
+window.VIEWS['portal-cotizaciones'] = {
+  titulo: 'Portal — Cotizaciones y embudo',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <h3>Embudo comercial</h3>
+        <p class="hint">El RCV solo ve lo FACTURADO: las oportunidades previas se registran aquí con estados reales. La tasa de conversión se calcula sobre lo ENVIADO de tu registro — no se proyecta ni se infiere de las ventas facturadas (§7.5).</p>
+        <div id="pt-embudo">${UIEstado.cargando()}</div>
+      </div>
+      <div class="card mt">
+        <h3>Nueva cotización</h3>
+        <div class="frm-row" style="align-items:end">
+          <div><span class="frm-label">RUT cliente</span><input id="pt-rut" class="form-input" style="width:auto"></div>
+          <div><span class="frm-label">Razón social</span><input id="pt-razon" class="form-input" style="width:auto"></div>
+          <div style="flex:1"><span class="frm-label">Descripción (opcional)</span><input id="pt-desc" class="form-input"></div>
+          <div><span class="frm-label">Monto <span class="hint">(entero)</span></span><input id="pt-monto" type="number" min="0" step="1" class="form-input" style="width:auto"></div>
+          <button class="btn btn-primary" id="pt-crear">Registrar (BORRADOR)</button>
+        </div>
+      </div>
+      <div id="pt-result" class="mt">${UIEstado.cargando()}</div>`
+
+    async function crear() {
+      try {
+        await apiPost(`/api/portal/empresas/${eid}/cotizaciones`, {
+          cliente_rut: document.getElementById('pt-rut').value.trim() || null,
+          cliente_razon: document.getElementById('pt-razon').value.trim() || null,
+          descripcion: document.getElementById('pt-desc').value.trim() || null,
+          monto: Number(document.getElementById('pt-monto').value),
+        })
+        document.getElementById('pt-monto').value = ''
+        await cargar()
+      } catch (err) { alert(err.message) }
+    }
+
+    async function cargar() {
+      const embZona = document.getElementById('pt-embudo')
+      const zona = document.getElementById('pt-result')
+      embZona.innerHTML = UIEstado.cargando()
+      zona.innerHTML = UIEstado.cargando()
+      try {
+        const r = await apiGet(`/api/portal/empresas/${eid}/cotizaciones`)
+        const E = r.embudo
+        if (!E.hay_datos) {
+          embZona.innerHTML = UIEstado.vacio('Sin cotizaciones registradas', 'El embudo se arma con lo que registres — no se infiere de las facturas del RCV.')
+        } else {
+          const t = E.tasa_conversion
+          embZona.innerHTML = `
+            <div class="frm-row" style="gap:16px">
+              ${E.por_estado.map((c) => `
+                <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+                  <span class="frm-label">${esc(c.estado)}</span>
+                  <div style="font-weight:600">${fmtCLP(c.monto)}</div>
+                  <span class="hint">${c.count} cotización(es)</span>
+                </div>`).join('')}
+            </div>
+            <p class="hint mt">Tasa de conversión ACEPTADA/ENVIADA — por monto: ${t.por_monto === null ? '—' : t.por_monto + '%'}, por conteo: ${t.por_conteo === null ? '—' : t.por_conteo + '%'} · Monto pendiente (borrador+enviada): ${fmtCLP(E.monto_pendiente)}.</p>`
+        }
+
+        if (!r.cotizaciones.length) {
+          zona.innerHTML = UIEstado.vacio('No hay cotizaciones', 'Registra la primera con el formulario de arriba.')
+          return
+        }
+        zona.innerHTML = `
+          <div class="card" style="overflow:auto">
+            <table class="tbl">
+              <thead><tr><th>#</th><th>Cliente</th><th>Descripción</th><th style="text-align:right">Monto</th><th>Estado</th><th>Cierre</th><th></th></tr></thead>
+              <tbody>${r.cotizaciones.map((c) => `
+                <tr>
+                  <td class="mono">${c.id}</td>
+                  <td>${esc(c.cliente_razon || c.cliente_rut || '—')}</td>
+                  <td>${esc(c.descripcion || '')}</td>
+                  <td style="text-align:right">${fmtCLP(c.monto)}</td>
+                  <td>
+                    <select data-est="${c.id}" class="form-input" style="width:auto" ${['ACEPTADA', 'PERDIDA'].includes(c.estado) ? 'disabled title="Cerrada — crea una nueva si la oportunidad revive"' : ''}>
+                      ${r.estados.map((e) => `<option ${e === c.estado ? 'selected' : ''}>${e}</option>`).join('')}
+                    </select>
+                  </td>
+                  <td class="hint">${esc(c.fecha_cierre || '')}</td>
+                  <td><button class="btn btn-danger" data-del="${c.id}">Eliminar</button></td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>`
+        zona.querySelectorAll('[data-est]').forEach((sel) => sel.addEventListener('change', async () => {
+          try {
+            await apiPut(`/api/portal/empresas/${eid}/cotizaciones/${sel.dataset.est}`, { estado: sel.value })
+            await cargar()
+          } catch (err) { alert(err.message); await cargar() }
+        }))
+        zona.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+          if (!confirm('¿Eliminar esta cotización? (queda en la auditoría del sistema)')) return
+          try {
+            await apiDelete(`/api/portal/empresas/${eid}/cotizaciones/${b.dataset.del}`)
+            await cargar()
+          } catch (err) { alert(err.message) }
+        }))
+      } catch (err) {
+        zona.innerHTML = UIEstado.error(err.message)
+      }
+    }
+
+    document.getElementById('pt-crear').addEventListener('click', crear)
+    await cargar()
   },
 }

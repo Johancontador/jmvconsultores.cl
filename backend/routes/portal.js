@@ -20,9 +20,17 @@ const { rolEnEmpresa, esSuperAdmin } = require('../core/empresas')
 const portal = require('../core/portal-metricas')
 const portalProductos = require('../core/portal-productos')
 const cobranzaCore = require('../core/cobranza')
+const portalCredito = require('../core/portal-credito')
+const portalCostos = require('../core/portal-costos')
+const portalCotizaciones = require('../core/portal-cotizaciones')
 
 function construirRouter(db) {
   const router = express.Router()
+
+  // Tablas de fuentes digitadas del portal (FASES C/D/E): idempotente.
+  portalCredito.ensureTablas(db)
+  portalCostos.ensureTablas(db)
+  portalCotizaciones.ensureTablas(db)
 
   /** Guard por empresa: asignación activa (o super admin) → 403 server-side. */
   function accesoEmpresa(req, res, empresaId) {
@@ -33,6 +41,22 @@ function construirRouter(db) {
     }
     if (!rolEnEmpresa(db, req.user.id, id)) {
       res.status(403).json({ ok: false, error: 'No tienes acceso a esa empresa' })
+      return null
+    }
+    return id
+  }
+
+  /**
+   * Guard de ESCRITURA para las fuentes digitadas (Fases C/D/E): el dato de
+   * negocio de la empresa (crédito, costos, cotizaciones) lo fija su DUEÑO
+   * (admin_empresa o super_admin) — otros roles asignados solo leen.
+   */
+  function accesoEscritura(req, res, empresaId) {
+    const id = accesoEmpresa(req, res, empresaId)
+    if (!id) return null
+    const rol = rolEnEmpresa(db, req.user.id, id)
+    if (!['admin_empresa', 'super_admin'].includes(rol)) {
+      res.status(403).json({ ok: false, error: 'Solo el dueño de la empresa (admin) registra sus datos de negocio' })
       return null
     }
     return id
@@ -210,6 +234,137 @@ function construirRouter(db) {
       const r = cobranzaCore.saldosClientes(db, { empresaId: id, diasMoraAmarillo: amarillo, diasMoraRojo: rojo })
       res.json({ ok: true, cobranza: { clientes: r.clientes, total_pendiente: r.total_pendiente, generado: r.generado, umbrales: { amarillo, rojo } } })
     } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  /* ------------- CRÉDITO AUTORIZADO (FASE C, §7.1) — fuente digitada ------------- */
+  /**
+   * El crédito que la empresa le autoriza a CADA cliente no existe en el SII:
+   * es dato de negocio que el dueño digita. Lectura para cualquier asignado;
+   * escritura SOLO admin (el resto de roles es consulta).
+   */
+  router.get('/empresas/:empresaId/credito', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    const fichas = portalCredito.listar(db, { empresaId: id })
+    let exposicion = null
+    try {
+      const amarillo = Math.max(1, Number(req.query.dias_amarillo) || 15)
+      const rojo = Math.max(amarillo + 1, Number(req.query.dias_rojo) || 30)
+      exposicion = portalCredito.exposicion(db, { empresaId: id, diasMoraAmarillo: amarillo, diasMoraRojo: rojo })
+    } catch (err) {
+      return res.status(422).json({ ok: false, error: `Exposición: ${err.message}` })
+    }
+    res.json({ ok: true, fichas, exposicion })
+  })
+
+  router.put('/empresas/:empresaId/credito', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const { rut, razon_social, monto_autorizado, notas } = req.body || {}
+      const r = portalCredito.fijarAutorizado(db, {
+        empresaId: id, usuarioId: req.user.id, rut,
+        razonSocial: razon_social || null, monto: monto_autorizado, notas: notas || null, ip: req.ip,
+      })
+      res.status(r.actualizado ? 200 : 201).json(r)
+    } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+  })
+
+  /* ---------------- HOJA DE COSTOS Y MARGEN (FASE D, §7.3) ---------------- */
+  /** Fuente honesta: sin costo digitado NO se estima margen (margen null). */
+  router.get('/empresas/:empresaId/costos', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      res.json({ ok: true, costos: portalCostos.listar(db, { empresaId: id }) })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  router.put('/empresas/:empresaId/costos', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const { producto, costo_unitario, notas } = req.body || {}
+      const r = portalCostos.fijarCosto(db, {
+        empresaId: id, usuarioId: req.user.id, producto, costoUnitario: costo_unitario,
+        notas: notas || null, ip: req.ip,
+      })
+      res.status(r.actualizado ? 200 : 201).json(r)
+    } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+  })
+
+  router.get('/empresas/:empresaId/margen', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      res.json({
+        ok: true,
+        ...portalCostos.margen(db, {
+          empresaId: id,
+          desde: cleanPeriodo(req.query.desde),
+          hasta: cleanPeriodo(req.query.hasta),
+          limit: req.query.limit,
+        }),
+      })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  /* -------------- COTIZACIONES / EMBUDO (FASE E, §7.5) — dato digitado -------------- */
+  /** Las oportunidades previas a la factura no llegan del RCV: se registran aquí. */
+  router.get('/empresas/:empresaId/cotizaciones', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const estado = req.query.estado ? String(req.query.estado) : null
+      res.json({
+        ok: true,
+        cotizaciones: portalCotizaciones.listar(db, { empresaId: id, estado }),
+        embudo: portalCotizaciones.embudo(db, { empresaId: id }),
+        estados: portalCotizaciones.ESTADOS,
+      })
+    } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  router.post('/empresas/:empresaId/cotizaciones', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const { cliente_rut, cliente_razon, descripcion, monto, estado, notas } = req.body || {}
+      const r = portalCotizaciones.crear(db, {
+        empresaId: id, usuarioId: req.user.id, clienteRut: cliente_rut, clienteRazon: cliente_razon,
+        descripcion, monto, estado: estado && String(estado) || 'BORRADOR', notas, ip: req.ip,
+      })
+      res.status(201).json(r)
+    } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+  })
+
+  router.put('/empresas/:empresaId/cotizaciones/:id', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const { estado, monto, descripcion, notas, fecha_cierre } = req.body || {}
+      const r = portalCotizaciones.actualizar(db, {
+        empresaId: id, usuarioId: req.user.id, id: req.params.id,
+        estado: estado || null, monto: monto === undefined || monto === '' ? null : monto,
+        descripcion, notas, fechaCierre: fecha_cierre, ip: req.ip,
+      })
+      res.json(r)
+    } catch (err) {
+      const status = /no encontrada/.test(err.message) ? 404 : 400
+      res.status(status).json({ ok: false, error: err.message })
+    }
+  })
+
+  router.delete('/empresas/:empresaId/cotizaciones/:id', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const r = portalCotizaciones.eliminar(db, { empresaId: id, usuarioId: req.user.id, id: req.params.id, ip: req.ip })
+      res.json(r)
+    } catch (err) {
+      const status = /no encontrada/.test(err.message) ? 404 : 400
+      res.status(status).json({ ok: false, error: err.message })
+    }
   })
 
   /* -------------------------- CARTERA (§C) -------------------------- */
