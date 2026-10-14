@@ -85,6 +85,9 @@ test.before(() => {
   insertar.run(empresaA, 'venta', 33, '1004', '2026-09-26', '33333333-3', 'Cliente Tres', 7000, 1330, 8330, 'ANULADO', '202609', 'pa-4')
   // Compra: no aparece en métricas de venta
   insertar.run(empresaA, 'compra', 33, '2001', '2026-09-10', '44444444-4', 'Proveedor X', 30000, 5700, 35700, 'PENDIENTE', '202609', 'pa-5')
+  // NC de COMPRA (61): debe REBAJARlas compras netas una vez (dashboard duo:
+  // la rebaja de notas de crédito opera en venta Y compra por igual).
+  insertar.run(empresaA, 'compra', 61, '2002', '2026-09-18', '44444444-4', 'Proveedor X', 5000, 950, 5950, 'PENDIENTE', '202609', 'pa-8')
   // A — período previo 202608 (para variación y cartera)
   insertar.run(empresaA, 'venta', 33, '0901', '2026-08-05', '11111111-1', 'Cliente Uno', 200000, 38000, 238000, 'PENDIENTE', '202608', 'pa-6')
   // A — histórico viejo 202501 (cartera 'controlar')
@@ -229,10 +232,13 @@ test('T4.1: serie venta — 12 meses desde el ancla, null en meses sin datos', (
   assert.strictEqual(vacio.docs, 0)
 })
 
-test('T4.2: serie compra — el ANULADO no entra y el flujo es exclusivo', () => {
+test('T4.2: serie compra — el ANULADO no entra y la NC de compra REBAJA una vez', () => {
   const r = metricas.serie(db, { empresaId: empresaA, meses: 6, hasta: '202609', flujo: 'compra' })
   const sep = r.meses.find((m) => m.periodo === '202609')
-  assert.strictEqual(sep.neto, 30000, 'la compra de 30000; el ANULADO de venta no entra a compra')
+  assert.strictEqual(sep.neto, 25000, 'compra 30000 − NC de compra 5000 (rebaja UNA vez en compras)')
+  // El rango puede pedir hasta 36 meses = los 3 años que sincroniza el botón
+  const tres = metricas.serie(db, { empresaId: empresaA, meses: 36, flujo: 'venta' })
+  assert.strictEqual(tres.meses.length, 36)
 })
 
 test('T4.3: serie mes DEFAULT usa el último con datos del flujo', () => {
@@ -248,10 +254,10 @@ test('T4.4: serie HTTP — solo SU empresa, parámetros limpiados server-side', 
   // B con sesión de A → 403 (aislamiento igual que las otras rutas)
   const denegado = await get(`${baseUrl}/empresas/${empresaB}/serie`, headerA())
   assert.strictEqual(denegado.status, 403)
-  // meses fuera de rango y basura se normalizan (no explota)
+  // meses fuera de rango y basura se normalizan (no explota); el tope es 36
   const raro = await get(`${baseUrl}/empresas/${empresaA}/serie?meses=999&hasta=xyz`, headerA())
   assert.strictEqual(raro.status, 200)
-  assert.ok(raro.body.serie.meses.length >= 1 && raro.body.serie.meses.length <= 24)
+  assert.ok(raro.body.serie.meses.length >= 1 && raro.body.serie.meses.length <= 36, 'tope de serie extendido a 36 (3 años del sync)')
 })
 
 // ===================== FASE A: productos (§7.2) =====================
@@ -698,4 +704,57 @@ test('T6.5: enriquecerConCredito — sin ficha null (no estimado), sobrepasados 
   assert.strictEqual(r.credito.sobrepasados, 1)
   assert.strictEqual(r.credito.sin_ficha, 1)
   assert.ok(r.credito.regla.includes('no se estima'))
+})
+// ===================== Dashboard DUO + SINCRONIZACIÓN 3 años (§A 2026-10) =====================
+
+test('T9.1: resumenDuo — venta y compra con NC restadas UNA vez cada una; diferencia aritmética', () => {
+  const r = metricas.resumenDuo(db, { empresaId: empresaA, periodo: '202609' })
+  // Venta: 100000 + 50000 − NC 10000 = 140000; IVA 19000 + 9500 − 1900 = 26600
+  assert.strictEqual(r.venta.neto, 140000)
+  assert.strictEqual(r.venta.iva, 26600)
+  // Compra: 30000 − NC de compra 5000 = 25000; IVA 5700 − 950 = 4750
+  assert.strictEqual(r.compra.neto, 25000, 'la NC de compra REBAJA las compras netas')
+  assert.strictEqual(r.compra.iva, 4750)
+  // Variaciones con comparable real (202608: venta 200000; compra no tiene previo)
+  assert.strictEqual(r.venta.variacion_neta_pct, -30)
+  assert.strictEqual(r.compra.variacion_neta_pct, null, 'sin compras en 202608 → null (no 0%)')
+  // Diferencia bruta: aritmética sobre datos reales, etiquetada provisional
+  assert.strictEqual(r.diferencia_bruta.neto, 115000)
+  assert.strictEqual(r.diferencia_bruta.iva_det, 21850)
+  assert.ok(r.diferencia_bruta.etiqueta.includes('PPM'), 'la IVA determinado va labeling provisional')
+  assert.ok(r.regla.includes('venta'), 'la regla de NC viaja explícita')
+  // Sin compra (empresa B): diferencia null — NO cero
+  const b = metricas.resumenDuo(db, { empresaId: empresaB, periodo: '202609' })
+  assert.strictEqual(b.venta.neto, 999999)
+  assert.strictEqual(b.compra.neto, null)
+  assert.strictEqual(b.diferencia_bruta, null)
+})
+
+test('T9.2: resumen-duo HTTP — aislamiento igual que las otras rutas', async () => {
+  const cruzada = await get(`${baseUrl}/empresas/${empresaB}/resumen-duo`, headerA())
+  assert.strictEqual(cruzada.status, 403)
+  const propia = await get(`${baseUrl}/empresas/${empresaA}/resumen-duo?periodo=202609`, headerC())
+  assert.strictEqual(propia.status, 200)
+  assert.strictEqual(propia.body.venta.neto, 140000)
+  assert.ok(!JSON.stringify(propia.body).includes('999999'), 'los montos de B no se filtran a A')
+})
+
+test('T9.3: sincronizar 3 años — solo el dueño; sin clave SII → 422 honesto; estado por usuario', async () => {
+  // El contador de A NO lanza sincronización (escritura de datos vía SII)
+  const contador = await fetch(`${baseUrl}/empresas/${empresaA}/sincronizar`, { method: 'POST', headers: headerC() })
+  assert.strictEqual(contador.status, 403)
+  // A NO toca B
+  const cruzada = await fetch(`${baseUrl}/empresas/${empresaB}/sincronizar`, { method: 'POST', headers: headerA() })
+  assert.strictEqual(cruzada.status, 403)
+  // Dueño de A, sin clave SII en la BD de pruebas → 422 con el motivo exacto
+  const r = await fetch(`${baseUrl}/empresas/${empresaA}/sincronizar`, { method: 'POST', headers: headerA() })
+  assert.strictEqual(r.status, 422)
+  const cuerpo = JSON.parse(await r.text())
+  assert.ok(cuerpo.error.includes('clave SII'), 'el error nombra la causa real: falta clave SII')
+  // Estado sin job y con job ajeno → null (nunca datos de otro usuario)
+  const sinJob = await get(`${baseUrl}/empresas/${empresaA}/sincronizar/estado`, headerA())
+  assert.strictEqual(sinJob.status, 200)
+  assert.strictEqual(sinJob.body.estado, null)
+  const ajeno = await get(`${baseUrl}/empresas/${empresaA}/sincronizar/estado?job=inventado_123`, headerA())
+  assert.strictEqual(ajeno.body.estado, null, 'un job que no es del usuario responde null')
 })

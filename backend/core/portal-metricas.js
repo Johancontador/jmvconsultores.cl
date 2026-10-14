@@ -182,6 +182,60 @@ function resumen(db, { empresaId, periodo }) {
   }
 }
 
+/** Agregado de UN flujo (venta|compra) de UN período — NC con signo UNA vez. */
+function flujoDePeriodo(db, empresaId, periodo, flujo) {
+  return db.prepare(`
+    SELECT
+      COALESCE(SUM(${SIGNO_NC}(monto_neto)), 0) AS neto,
+      COALESCE(SUM(${SIGNO_NC}(monto_iva)), 0) AS iva,
+      COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total,
+      COUNT(*) AS docs,
+      COUNT(DISTINCT rut_contraparte) AS contrapartes
+    FROM documentos
+    WHERE empresa_id = ? AND periodo_ingesta = ? AND tipo_flujo = ? AND ${WHERE_VIVOS}
+  `).get(empresaId, periodo, flujo === 'compra' ? 'compra' : 'venta')
+}
+
+/**
+ * Resumen DUO del período: venta y compra lado a lado con IVA y variación del
+ * mes comparable, calculadas SIEMPRE server-side. La diferencia (bruto
+ * estimado) es ARITMÉTICA sobre datos REALES con NC restando UNA vez en ambos
+ * flujos (nunca inventa: si un flujo no tiene documentos, esa parte y su
+ * diferencia quedan null). Fuente del Inicio del portal (dashboard tipo panel).
+ */
+function resumenDuo(db, { empresaId, periodo }) {
+  const emp = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!emp) throw new Error('Empresa no encontrada')
+  const previo = periodoPrevio(periodo)
+  const v = flujoDePeriodo(db, empresaId, periodo, 'venta')
+  const v0 = flujoDePeriodo(db, empresaId, previo, 'venta')
+  const c = flujoDePeriodo(db, empresaId, periodo, 'compra')
+  const c0 = flujoDePeriodo(db, empresaId, previo, 'compra')
+
+  const empaque = (f, f0, esVenta) => ({
+    neto: f.docs > 0 ? f.neto : null,
+    iva: f.docs > 0 ? f.iva : null,
+    total: f.docs > 0 ? f.total : null,
+    docs: f.docs,
+    contrapartes: f.docs > 0 ? f.contrapartes : null,
+    variacion_neta_pct: (f.docs > 0 && f0.docs > 0 && f0.neto > 0)
+      ? Math.round(((f.neto - f0.neto) / f0.neto) * 1000) / 10
+      : null,
+    rol: esVenta ? 'venta' : 'compra',
+  })
+  const venta = empaque(v, v0, true)
+  const compra = empaque(c, c0, false)
+  const diferencia = (venta.neto !== null && compra.neto !== null)
+    ? { neto: venta.neto - compra.neto, iva_det: (venta.iva || 0) - (compra.iva || 0), etiqueta: 'Venta neta − Compras netas; IVA determinado provisional (NO incluye PPM ni retenciones)' }
+    : null
+  return {
+    empresa: { id: emp.id, rut: emp.rut, nombre: emp.nombre },
+    periodo, periodo_previo: previo,
+    venta, compra, diferencia_bruta: diferencia,
+    regla: 'Notas de crédito (60/61) restan UNA vez en venta y compra — misma convención CASE del motor y del SII. Sin documentos en un flujo → null, nunca 0.',
+  }
+}
+
 /**
  * Movimientos (página Ventas / §B): listado lectura-only con filtros de
  * empresa, rango de períodos, tipo de doc, RUT y texto (razón social / folio).
@@ -291,11 +345,12 @@ function catalogo() {
  * flujo, o el mes en curso si la empresa recién parte). Meses SIN documentos
  * quedan en `null` (nunca 0: sin datos ≠ cero, §7) — el front los pinta vacíos.
  * Difiere de serie_anual del resumen (que fija el año calendario): esta es la
- * que alimenta el rango móvil y el toggle venta/compra del dashboard.
+ * que alimenta el rango móvil y las DOS series del dashboard (hasta 36 meses
+ * = los 3 años que el botón SINCRONIZAR trae del SII).
  */
 function serie(db, { empresaId, meses = 12, hasta = null, flujo = 'venta' }) {
   const f = flujo === 'compra' ? 'compra' : 'venta'
-  const n = Math.min(Math.max(Number(meses) || 12, 1), 24)
+  const n = Math.min(Math.max(Number(meses) || 12, 1), 36)
 
   // Ancla: mes explícito > último con datos del flujo > mes en curso.
   let fin = String(hasta || '').replace(/\D/g, '').slice(0, 6)
@@ -340,4 +395,4 @@ function serie(db, { empresaId, meses = 12, hasta = null, flujo = 'venta' }) {
   }
 }
 
-module.exports = { CATALOGO, resumen, movimientos, cartera, catalogo, serie, periodoPrevio }
+module.exports = { CATALOGO, resumen, resumenDuo, movimientos, cartera, catalogo, serie, periodoPrevio }

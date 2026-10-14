@@ -23,6 +23,7 @@ const cobranzaCore = require('../core/cobranza')
 const portalCredito = require('../core/portal-credito')
 const portalCostos = require('../core/portal-costos')
 const portalCotizaciones = require('../core/portal-cotizaciones')
+const onboarding = require('../core/onboarding')
 
 function construirRouter(db) {
   const router = express.Router()
@@ -191,6 +192,19 @@ function construirRouter(db) {
         }),
       })
     } catch (err) { res.status(422).json({ ok: false, error: err.message }) }
+  })
+
+  /** KPIs DUO del Inicio: venta y compra del período con IVA y variación. */
+  router.get('/empresas/:empresaId/resumen-duo', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const periodo = periodoDe(req, id)
+      if (!periodo) return res.json({ ok: true, sin_datos: true, duo: null })
+      res.json({ ok: true, ...portal.resumenDuo(db, { empresaId: id, periodo }) })
+    } catch (err) {
+      res.status(422).json({ ok: false, error: err.message })
+    }
   })
 
   /* --------------------- PRODUCTOS (FASE A, §7.2) --------------------- */
@@ -382,6 +396,48 @@ function construirRouter(db) {
       const status = /no encontrada/.test(err.message) ? 404 : 400
       res.status(status).json({ ok: false, error: err.message })
     }
+  })
+
+  /* --------------- SINCRONIZACIÓN RCV (dashboard §A) --------------- */
+  /**
+   * Botón «Sincronizar» del dashboard del cliente: lanza la ingesta RCV de
+   * los ÚLTIMOS 36 MESES (3 años) de COMPRAS y VENTAS reutilizando EXACTO el
+   * pipeline FASE 3 (dedupe idempotente, job en background con polling y
+   * duración con checkpoint persistente). Las NC (60/61) entran con montos
+   * positivos y la métrica del portal las REBAJA una vez — en ambos flujos.
+   * Escritura de datos vía SII = SOLO el dueño (admin_empresa / super_admin).
+   */
+  router.post('/empresas/:empresaId/sincronizar', (req, res) => {
+    const id = accesoEscritura(req, res, req.params.empresaId)
+    if (!id) return
+    try {
+      const d = new Date()
+      let hasta = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      const pedido = String((req.body || {}).hasta || '').replace(/\D/g, '').slice(0, 6)
+      if (/^\d{6}$/.test(pedido) && pedido <= hasta) hasta = pedido
+      let y = Number(hasta.slice(0, 4)), m = Number(hasta.slice(4))
+      for (let i = 0; i < 35; i++) { m -= 1; if (m <= 0) { m += 12; y -= 1 } }
+      const desde = `${y}${String(m).padStart(2, '0')}`
+      const r = onboarding.ingestarHistorico(db, { empresaId: id, usuarioId: req.user.id, desde, hasta, ip: req.ip })
+      res.status(201).json({ ok: true, ...r, rango: { desde, hasta, meses: r.periodos.length } })
+    } catch (err) {
+      res.status(422).json({ ok: false, error: err.message })
+    }
+  })
+
+  /** Polling del job de sincronización: solo del PROPIO usuario (?job=<id>). */
+  router.get('/empresas/:empresaId/sincronizar/estado', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    const jobId = String(req.query.job || '')
+    if (jobId) {
+      const t = onboarding.estadoIngestaHistorica(jobId, req.user.id)
+      if (!t || t.empresa_id !== id) return res.json({ ok: true, estado: null })
+      return res.json({ ok: true, estado: t })
+    }
+    // Sin job en la query: lista los trabajos vivos del usuario en ESTA empresa
+    const lista = onboarding.listarIngestasDeUsuario(req.user.id).filter((t) => t && t.empresa_id === id)
+    res.json({ ok: true, estado: lista[0] || null, lista })
   })
 
   /* -------------------------- CARTERA (§C) -------------------------- */

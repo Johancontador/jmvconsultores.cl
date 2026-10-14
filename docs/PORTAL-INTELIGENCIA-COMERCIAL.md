@@ -1,6 +1,6 @@
 # PORTAL DE INTELIGENCIA COMERCIAL — auditoría, arquitectura, datos y plan
 
-> Estado actual (fases A–E): **FASES 1-5, 7 + Dashboard interactivo + Productos + Cobranza + Crédito autorizado + Costos/Margen + Cotizaciones, probadas (suite 412/412)**.
+> Estado actual (fases A–E + dashboard duo): **FASES 1-5, 7 + Dashboard tipo Power BI (venta y compra duo) con SINCRONIZAR 3 años + Productos + Cobranza + Crédito autorizado + Costos/Margen + Cotizaciones, probadas (suite 418/418)**.
 > Deploy a producción ACTIVO: https://app.jmvconsultores.cl (VPS hook post-receive, `git push vps master`).
 > Este documento se actualiza con lo que EXISTE en el código, no con lo que se supone.
 
@@ -137,6 +137,21 @@ que filtran la tabla local. Tests T4.* + T5.*(26 en portal.test.js).
   `backend/index.js` (2 líneas de montaje) · `frontend/sistema/views-portal.js` (nuevo) ·
   `frontend/sistema/app.js` (sección de menú) · `frontend/sistema/index.html` (script tag) ·
   `package.json` (suite) · `test/portal.test.js` (nuevo).
+
+## 9bis. DASHBOARD DUO del cliente (2026-10-14, pedido JMV)
+
+El Inicio del portal se reescribió como **dashboard tipo Power BI** con ambos
+flujos lado a lado:
+
+| Pieza | Qué entrega | Dónde |
+|---|---|---|
+| Botón **SINCRONIZAR 3 años** | `POST /empresas/:id/sincronizar` (dueño) → ingesta RCV de 36 meses de **compras Y ventas** reutilizando el pipeline FASE 3 con job en background; `GET .../sincronizar/estado` para el progreso en vivo (polling 3 s, re-attach al recargar). Sin clave SII → 422 con el motivo; nunca multimedia parcial | `routes/portal.js` → `onboarding.ingestarHistorico` (techo de 36 meses ya existente) |
+| KPIs a la Power BI | **`resumenDuo`** — venta y compra del período con IVA, docs, atributos y variación vs mes comparable, TODO server-side con el `CASE` NC de la casa: la diferencia (venta − compra) y el IVA determinado PROVISIONAL son aritmética sobre datos reales | `portal-metricas.resumenDuo` + `GET /empresas/:id/resumen-duo` |
+| NC en AMBOS flujos | Las notas de crédito (60/61) restan UNA vez en ventas **y** en compras (probado en serie T4.2 y resumenDuo T9.1); en el drill-down las filas NC se ven con montos negativos | `SIGNO_NC` donde siempre; nueva NC de compra en el setup de tests |
+| Gráfico multicolor | Barras DOBLES por mes (ventas azul / compras naranja), paleta Power BI, barra clicable = drill-down de ese mes+flujo, meses sin RCV como celda vacía (sin datos ≠ cero), meses de solo-NC dibujan barra hacia abajo del eje 0, tooltips y tabla con **montos completos** (nunca en miles) | `views-portal.js` §A reescrito (`barrasDuoHTML`, KPIs con acentos de color, tabla mensual, top clientes) |
+| Serie hasta 36 meses | `serie` acepta 1..36 (antes 24) para graficar los 3 años sincronizados | `portal-metricas.serie` |
+
+Tests 6 nuevos: T4.2 (NC de compra rebaja), T4.4 (tope 36), T9.1 (resumenDuo con NC en ambos flujos y diferencia), T9.2 (aislamiento HTTP del duo), T9.3 (sincronizar: 403 contador, 403 cruzada, 422 sin clave, estado por usuario null). Suite completa: **418/418**.
 
 ## 9. Pendientes (FASE 6 restante)
 
