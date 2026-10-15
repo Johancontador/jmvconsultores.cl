@@ -75,6 +75,9 @@ app.use('/api/contable', requireAuth, require('./routes/asientos-externos'))
 // pasarela es público (validado por firma + re-consulta a la API); las demás
 // rutas piden requireAuth + RBAC dentro de routes/pagos.js.
 app.use('/api/pagos', require('./routes/pagos'))
+// Contacto desde la landing pública (rediseño 2026-10): SIN requireAuth —
+// es la puerta comercial; rate limit + honeypot dentro de routes/contacto.js.
+app.use('/api/contacto', require('./routes/contacto'))
 // BLOQUE 2: emisión de DTE para las empresas cliente (config del emisor, CAFs
 // de folios, emisión 33/34/56/61, estado SII real, reintentos).
 app.use('/api/dte', requireAuth, require('./routes/dte'))

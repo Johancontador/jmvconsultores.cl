@@ -518,15 +518,15 @@ const MENU = [
     ]
   },
   {
-    seccion: 'Empresas y clientes', items: [
+    seccion: 'Gestión comercial', items: [
+      { key: 'crm', label: 'Pipeline y Salud', permiso: 'empresas:ver' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
-      { key: 'crm', label: 'Pipeline y Salud', permiso: 'empresas:ver' },
     ]
   },
   {
-    seccion: 'Operación SII', items: [
+    seccion: 'Compras y ventas (SII)', items: [
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
@@ -557,7 +557,7 @@ const MENU = [
     ]
   },
   {
-    seccion: 'Reportes', items: [
+    seccion: 'Informes y control', items: [
       { key: 'reportes', label: 'Centro de Reportes', permiso: 'reportes:ver' },
       { key: 'comprobacion', label: 'Balance de Comprobación', permiso: 'reportes:ver' },
       { key: 'balance8', label: 'Balance de 8 Columnas', permiso: 'reportes:ver' },
@@ -585,7 +585,7 @@ const MENU = [
     ]
   },
   {
-    seccion: 'Configuración', items: [
+    seccion: 'Administración', items: [
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
       { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
       { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },

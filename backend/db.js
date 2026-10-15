@@ -98,6 +98,23 @@ if (!adminId) {
 }
 db.prepare(`UPDATE clientes SET user_id = ? WHERE user_id IS NULL`).run(adminId)
 
+// Contactos desde la landing pública (rediseño 2026-10): leads del form
+// «Agendar consulta». Público (sin sesión) → se guarda solo lo enviado y la
+// IP de origen (auditoría/abuso). Sin PII adicional. Longitud acotada:
+// es un lead, no una carta.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contactos_web (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    nombre    TEXT NOT NULL,
+    empresa   TEXT NOT NULL,
+    contacto  TEXT NOT NULL,
+    mensaje   TEXT NOT NULL,
+    ip        TEXT,
+    atendido  INTEGER NOT NULL DEFAULT 0
+  )
+`)
+
 // Versionado del formato del caché RCV: cuando el shape de los documentos
 // cacheados cambia (ej. se agregan columnas nuevas), hay que invalidar lo ya
 // guardado o quedaría incompleto sin que nadie lo note — los períodos
