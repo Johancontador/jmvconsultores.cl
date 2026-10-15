@@ -13,6 +13,7 @@
  */
 
 const ORDEN_MESES = ['01','02','03','04','05','06','07','08','09','10','11','12']
+const { SIGNO_NC } = require('./sii-convenios')
 
 /** Validación de dígito verificador chileno (M11). Acepta cuerpo string numérico + dv. */
 function dvM11(cuerpo) {
@@ -48,6 +49,7 @@ function alertasCalidad(db, empresaId, desde, hasta) {
            GROUP_CONCAT(razon_social, ' / ') AS razones
     FROM documentos
     WHERE ${vivos} AND folio IS NOT NULL AND folio != ''
+      AND rut_contraparte != ''  -- boletas sin contraparte no son duplicado
     GROUP BY rut_contraparte, tipo_doc, folio
     HAVING COUNT(*) > 1
     ORDER BY n DESC, folio
@@ -57,7 +59,7 @@ function alertasCalidad(db, empresaId, desde, hasta) {
   const rutsFilas = db.prepare(`
     SELECT DISTINCT rut_contraparte, MAX(razon_social) AS razon_social
     FROM documentos
-    WHERE ${vivos}
+    WHERE ${vivos} AND rut_contraparte != ''  -- '' es boleta de consumidor final
     GROUP BY rut_contraparte
   `).all(empresaId, desde, hasta)
 
@@ -101,9 +103,9 @@ function analitica(db, { empresaId, periodo = null }) {
   const filas = db.prepare(`
     SELECT periodo_ingesta AS p, tipo_flujo AS f,
            COUNT(*) AS docs,
-           COALESCE(SUM(monto_neto), 0) AS neto,
-           COALESCE(SUM(monto_iva), 0) AS iva,
-           COALESCE(SUM(monto_total), 0) AS total
+           COALESCE(SUM(${SIGNO_NC}(monto_neto)), 0) AS neto,
+           COALESCE(SUM(${SIGNO_NC}(monto_iva)), 0) AS iva,
+           COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total
     FROM documentos
     WHERE ${vivos}
     GROUP BY 1, 2
@@ -130,10 +132,11 @@ function analitica(db, { empresaId, periodo = null }) {
   function top(flujos, limite = 20) {
     const filasTop = db.prepare(`
       SELECT rut_contraparte AS rut, MAX(razon_social) AS razon_social,
-             COUNT(*) AS docs, COALESCE(SUM(monto_total), 0) AS total,
-             COALESCE(SUM(monto_neto), 0) AS neto
+             COUNT(*) AS docs, COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total,
+             COALESCE(SUM(${SIGNO_NC}(monto_neto)), 0) AS neto
       FROM documentos
       WHERE ${vivos} AND tipo_flujo IN (${flujos.map(() => '?').join(',')})
+        AND rut_contraparte != ''  -- top de CONTRAPARTES REALES; las boletas sin RUT ya cuentan en las sumas globales
       GROUP BY rut_contraparte
       ORDER BY total DESC
       LIMIT ?
@@ -146,10 +149,10 @@ function analitica(db, { empresaId, periodo = null }) {
   // ---------- comparativo con el año anterior (variaciones) ----------
   const prev = db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN monto_total ELSE 0 END), 0) AS ventas,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN monto_total ELSE 0 END), 0) AS compras,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN monto_iva ELSE 0 END), 0) AS iva_ventas,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN monto_iva ELSE 0 END), 0) AS iva_compras
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN ${SIGNO_NC}(monto_total) ELSE 0 END), 0) AS ventas,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN ${SIGNO_NC}(monto_total) ELSE 0 END), 0) AS compras,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN ${SIGNO_NC}(monto_iva) ELSE 0 END), 0) AS iva_ventas,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN ${SIGNO_NC}(monto_iva) ELSE 0 END), 0) AS iva_compras
     FROM documentos
     WHERE ${vivos}
   `).get(empresaId, `${Number(anio) - 1}01`, `${Number(anio) - 1}12`)

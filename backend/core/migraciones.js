@@ -260,7 +260,7 @@ function migracionesFase3(db) {
       tipo_flujo TEXT NOT NULL,            -- compra | venta
       tipo_doc INTEGER NOT NULL,
       folio TEXT NOT NULL,
-      rut_contraparte TEXT NOT NULL,
+      rut_contraparte TEXT NOT NULL,      -- '' = boleta sin contraparte (consumidor final, medios de pago electrónico)
       razon_social TEXT,
       fecha_docto TEXT,
       fecha_reclamo TEXT,

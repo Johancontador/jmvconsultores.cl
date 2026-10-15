@@ -88,11 +88,13 @@ const CATALOGO = [
 ]
 
 /**
- * CASE de signo para NC (60/61) — úsalo siempre como `SUM(${SIGNO_NC}(monto_*))`.
+ * CASE de signo para NC (60/61) — vive en sii-convenios.js (fuente única).
+ * Se usa siempre como `SUM(${SIGNO_NC}(monto_*))`.
  * Doc fuente de la regla: routes/sii.js (signo -1 para notas de crédito) y
- * conciliacion.js (esNC 60/61). El portal comparte esa MISMA convención.
+ * conciliacion.js (esNC 60/61). Dashboard, analitica y portal comparten esa
+ * MISMA convención importada.
  */
-const SIGNO_NC = `CASE WHEN tipo_doc IN (60, 61) THEN -1 ELSE 1 END *`
+const { SIGNO_NC } = require('./sii-convenios')
 
 /** Agregado de ventas de UN período (con NC descontando una vez; null-ish si no hay docs). */
 function ventaDePeriodo(db, empresaId, periodo) {
@@ -101,7 +103,7 @@ function ventaDePeriodo(db, empresaId, periodo) {
       COALESCE(SUM(${SIGNO_NC}(monto_neto)), 0) AS neto,
       COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total,
       COUNT(*) AS docs,
-      COUNT(DISTINCT rut_contraparte) AS clientes
+      COUNT(DISTINCT NULLIF(rut_contraparte, '')) AS clientes  -- '' = consumidor final, no es cliente
     FROM documentos
     WHERE empresa_id = ? AND periodo_ingesta = ? AND tipo_flujo = 'venta' AND ${WHERE_VIVOS}
   `).get(empresaId, periodo)
@@ -131,6 +133,7 @@ function resumen(db, { empresaId, periodo }) {
            COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total
     FROM documentos
     WHERE empresa_id = ? AND periodo_ingesta = ? AND tipo_flujo = 'venta' AND ${WHERE_VIVOS}
+      AND rut_contraparte != ''  -- top de clientes REALES; boletas sin RUT están en las sumas
     GROUP BY rut_contraparte
     ORDER BY neto DESC
     LIMIT 5
@@ -190,7 +193,7 @@ function flujoDePeriodo(db, empresaId, periodo, flujo) {
       COALESCE(SUM(${SIGNO_NC}(monto_iva)), 0) AS iva,
       COALESCE(SUM(${SIGNO_NC}(monto_total)), 0) AS total,
       COUNT(*) AS docs,
-      COUNT(DISTINCT rut_contraparte) AS contrapartes
+      COUNT(DISTINCT NULLIF(rut_contraparte, '')) AS contrapartes  -- '' = consumidor final
     FROM documentos
     WHERE empresa_id = ? AND periodo_ingesta = ? AND tipo_flujo = ? AND ${WHERE_VIVOS}
   `).get(empresaId, periodo, flujo === 'compra' ? 'compra' : 'venta')
@@ -297,6 +300,7 @@ function cartera(db, { empresaId, periodo, ventana = 12 }) {
            MAX(CASE WHEN periodo_ingesta >= ? THEN 1 ELSE 0 END) AS historico
     FROM documentos
     WHERE empresa_id = ? AND tipo_flujo = 'venta' AND ${WHERE_VIVOS}
+      AND rut_contraparte != ''  -- cartera de clientes REALES (una boleta anónima no es cliente)
       AND periodo_ingesta >= ?
     GROUP BY rut_contraparte
   `).all(periodo, previo, periodo, previo, desdeHist, empresaId, desdeHist)

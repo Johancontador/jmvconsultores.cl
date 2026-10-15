@@ -20,6 +20,7 @@ const { registrarAccion } = require('./auditoria')
 const cuentas = require('./cuentas')
 const centrosCosto = require('./centros-costo')
 const periodos = require('./periodos')
+const { SIGNO_NC } = require('./sii-convenios')
 
 const ESTADOS = {
   RECIBIDO: 'RECIBIDO',
@@ -45,6 +46,14 @@ const TRANSICIONES = {
 
 const TRATAMIENTOS_IVA = ['credito', 'sin_credito', 'uso_comun', 'no_recuperable']
 const TIPOS_FLUJO = ['compra', 'venta']
+
+/**
+ * Documentos SIN contraparte obligatoria (39 boleta, 41 boleta exenta —
+ * con sus versiones del RCV, incluidas las ventas por medios de pago
+ * electrónico). Sus montos son venta real: se ingresan con
+ * rut_contraparte '' y entran a TODAS las sumas de resúmenes.
+ */
+const BOLETAS_TIPOS = [39, 41]
 
 /** Estados que admiten clasificación (manual o por regla). */
 const ADMITEN_CLASIFICACION = ['PENDIENTE', 'CLASIFICADO', 'REVISION']
@@ -142,7 +151,15 @@ function ingestarBatch(db, { empresaId, usuarioId, tipoFlujo, periodo, documento
       const m = mapearDocumentoRCV(doc, tipoFlujo)
       if (!m.folio) throw new Error('documento sin folio')
       if (!m.tipo_doc) throw new Error('documento sin tipo de documento')
-      if (!m.rut_contraparte) throw new Error('documento sin RUT de contraparte')
+      // Las MC (60/61) y las boletas (39/41, incluida la venta por medios de
+      // pago electrónico) NO requieren RUT de contraparte: el RCV las entrega
+      // con rutDoc vacío y su monto es venta real. Otros tipos SÍ exige RUT.
+      if (!m.rut_contraparte && !BOLETAS_TIPOS.includes(m.tipo_doc)) {
+        throw new Error('documento sin RUT de contraparte')
+      }
+      // Boleta sin contraparte: rotulamos el destinatario (consumidor final)
+      // para que la bandeja revista algo legible.
+      if (!m.rut_contraparte && !m.razon_social) m.razon_social = 'Consumidor final'
       validos.push(m)
     } catch (err) {
       errores.push({ folio: doc && doc.folio != null ? String(doc.folio) : null, error: err.message })
@@ -189,7 +206,8 @@ function ingestarBatch(db, { empresaId, usuarioId, tipoFlujo, periodo, documento
       } else {
         duplicados++
       }
-      upsertContraparte.run(empresaId, m.rut_contraparte, m.razon_social, clasificacionContraparte)
+      // Las boletas sin contraparte NO crean fila en `contrapartes` (no hay RUT).
+      if (m.rut_contraparte) upsertContraparte.run(empresaId, m.rut_contraparte, m.razon_social, clasificacionContraparte)
     }
 
     registrarAccion(db, {
@@ -246,8 +264,8 @@ function listar(db, { empresaId, periodo = null, tipoFlujo = null, estado = null
   const whereSql = where.join(' AND ')
 
   const sumas = db.prepare(`
-    SELECT COUNT(*) AS n, COALESCE(SUM(d.monto_neto), 0) AS neto,
-           COALESCE(SUM(d.monto_iva), 0) AS iva, COALESCE(SUM(d.monto_total), 0) AS total
+    SELECT COUNT(*) AS n, COALESCE(SUM(${SIGNO_NC}(d.monto_neto)), 0) AS neto,
+           COALESCE(SUM(${SIGNO_NC}(d.monto_iva)), 0) AS iva, COALESCE(SUM(${SIGNO_NC}(d.monto_total)), 0) AS total
     FROM documentos d WHERE ${whereSql}
   `).get(...params)
 
@@ -379,10 +397,7 @@ function anular(db, { empresaId, usuarioId, documentoId, motivo, ip = null }) {
   tx()
 
   return obtener(db, empresaId, documentoId)
-}
-
-module.exports = {
-  ESTADOS, TRANSICIONES, TRATAMIENTOS_IVA, TIPOS_FLUJO, ADMITEN_CLASIFICACION,
+}module.exports = { ESTADOS, TRANSICIONES, TRATAMIENTOS_IVA, TIPOS_FLUJO, BOLETAS_TIPOS, ADMITEN_CLASIFICACION,
   puedeTransicionar, claveDedupe, mapearDocumentoRCV, ingestarBatch, normalizarFechaSII,
   listar, obtener, clasificar, anular, marcarRevision,
 }

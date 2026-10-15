@@ -21,6 +21,7 @@ const reportes = require('./reportes')
 const conciliacion = require('./conciliacion')
 const automatizacion = require('./automatizacion')
 const onboarding = require('./onboarding')
+const { SIGNO_NC } = require('./sii-convenios')
 
 /** Estados que aún requieren trabajo humano antes de ser asiento (§5). */
 const ESTADOS_PENDIENTES = ['PENDIENTE', 'CLASIFICADO', 'PROPUESTO', 'REVISION']
@@ -212,12 +213,15 @@ function dashboard(db, { empresaId, periodo = null }) {
   const docsSinContabilizar = ESTADOS_PENDIENTES.reduce((s, e) => s + get(e), 0)
 
   // Totales del RCV del período, excluyendo lo anulado/error (evidencia real).
+  // Convención SII compartida (sii-convenios.SIGNO_NC): las NC (60/61) ALCANZAN
+  // la bandeja con montos positivos — restan UNA vez aquí, igual que en portal,
+  // reportes y libro del sii.js.
   const tot = db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN monto_total ELSE 0 END), 0) AS ventas,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN monto_total ELSE 0 END), 0) AS compras,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN monto_iva ELSE 0 END), 0) AS iva_ventas,
-      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN monto_iva ELSE 0 END), 0) AS iva_compras
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN ${SIGNO_NC}(monto_total) ELSE 0 END), 0) AS ventas,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN ${SIGNO_NC}(monto_total) ELSE 0 END), 0) AS compras,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'venta' THEN ${SIGNO_NC}(monto_iva) ELSE 0 END), 0) AS iva_ventas,
+      COALESCE(SUM(CASE WHEN tipo_flujo = 'compra' THEN ${SIGNO_NC}(monto_iva) ELSE 0 END), 0) AS iva_compras
     FROM documentos
     WHERE empresa_id = ? AND periodo_ingesta = ? AND estado NOT IN ('ANULADO', 'ERROR')
   `).get(empresaId, per)
@@ -272,7 +276,7 @@ function dashboard(db, { empresaId, periodo = null }) {
   // ---------- serie de los últimos 6 meses (un fetch para la barra) ----------
   const desde = ultimosPeriodos(6, per)[0]
   const filasSerie = db.prepare(`
-    SELECT periodo_ingesta AS p, tipo_flujo AS f, SUM(monto_total) AS t
+    SELECT periodo_ingesta AS p, tipo_flujo AS f, SUM(${SIGNO_NC}(monto_total)) AS t
     FROM documentos
     WHERE empresa_id = ? AND periodo_ingesta BETWEEN ? AND ? AND estado NOT IN ('ANULADO', 'ERROR')
     GROUP BY 1, 2
