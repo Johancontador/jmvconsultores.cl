@@ -335,6 +335,22 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ ok: true, user: { ...req.user, acceso_contable: accesoContable } })
 })
 
+// ---- Centro de Aplicaciones (entrada post-login) ----
+// Catálogo de apps VISIBLES para este usuario en la empresa pedida: nace de
+// usuario_empresa + roles + capacidades RBAC + licencia (§2 del módulo). Es
+// PRESENTACIÓN; el Backend igual revalida cada solicitud data con
+// requirePermiso + gate de licencia. Con ?empresa=<id> cambia la empresa de
+// cálculo (misma sesión); con otra empresa del usuario, nada cambia de sesión.
+router.get('/centro', requireAuth, (req, res) => {
+  try {
+    const { centroParaUsuario } = require('../core/centro-apps')
+    const r = centroParaUsuario(db, req.user.id, req.query.empresa ? Number(req.query.empresa) : null)
+    res.json({ ok: true, ...r })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 router.get('/usuarios', requireAuth, requireAdmin, (req, res) => {
   const usuarios = db
     .prepare(`SELECT id, username, is_admin, activo, creado_en FROM users ORDER BY creado_en`)

@@ -106,16 +106,19 @@ function leerPeriodo(id) {
 window.appBoot = boot
 
 /**
- * Aterrizaje por rol: el dueño de UNA empresa cliente (rol admin_empresa,
- * no super admin) aterriza en el PORTAL de cliente — su panel comercial —
- * no en el sistema operativo interno, que es la herramienta de JMV.
+ * Aterrizaje post-login (Centro de Aplicaciones): quien inicia sesión entra a
+ * elegir módulo, no a una pantalla sobrecargada.
+ *   - Dueño de UNA empresa cliente (admin_empresa, no super admin): su Portal
+ *     es la superficie comercial — entra directo ahí (el Portal es una de las
+ *     apps del Centro y del menú para volver cuando quiera).
+ *   - El resto: Centro de Aplicaciones (#centro).
  * El dueño conserva el acceso al sistema por el menú si lo necesita.
  */
 function hashInicial() {
   if (!S.superAdmin && S.empresas.length === 1 && S.empresa?.rol === 'admin_empresa') {
     return '#portal-inicio'
   }
-  return '#inicio'
+  return '#centro'
 }
 
 async function boot() {
@@ -513,6 +516,7 @@ function menuVisible() {
 const MENU = [
   {
     seccion: 'Inicio', items: [
+      { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
       { key: 'inicio', label: 'Panel del período', permiso: null },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
     ]
@@ -788,6 +792,17 @@ function renderRoute() {
   const view = VIEWS[key] || VIEWS.inicio
   const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
 
+  // Recientes del Centro (por usuario): la última vista con entrada de menú.
+  // No graba el propio Centro ni vistas extra (excluir efectos como filtros).
+  if (S.user && route && route.key && route.key !== 'centro') {
+    const clave = `jmv.centro.recientes.${S.user.id}`
+    let rec = []
+    try { rec = JSON.parse(localStorage.getItem(clave) || '[]') } catch { rec = [] }
+    rec = rec.filter((r) => r.ruta !== route.key)
+    rec.unshift({ ruta: route.key, label: route.label })
+    localStorage.setItem(clave, JSON.stringify(rec.slice(0, 8)))
+  }
+
   const activos = new Set([route.key])
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
 
@@ -795,9 +810,13 @@ function renderRoute() {
   const bc = document.getElementById('sys-breadcrumb')
   if (bc) bc.innerHTML = breadcrumbHTML(route)
 
+  // IMPENETRABILIDAD: ruta conocida por URL pero no autorizada para el rol
+  // actual NUNCA renderiza la vista (el Backend igual devuelve 401/403/402 en
+  // cada fetch data — esto es cortesía de UX, no el control de acceso).
   if (route.permiso && !tiene(route.permiso)) {
     document.getElementById('sys-view').innerHTML =
-      `<div class="empty">Tu rol en ${esc(S.empresa.nombre)} no tiene permiso para esta sección.</div>`
+      `<div class="empty">Tu rol en ${esc(S.empresa.nombre)} no tiene permiso para esta sección.</div>
+       <div class="empty"><a class="btn btn-secondary" href="#centro">Volver al Centro de Aplicaciones</a></div>`
     return
   }
 
