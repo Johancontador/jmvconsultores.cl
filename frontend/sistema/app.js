@@ -482,15 +482,27 @@ function pintarResultados(drop, q, grupos) {
 
 /* ---------- shell ---------- */
 
-/*
- * MENÚ SUPERIOR HORIZONTAL — secciones con desplegable. Sin iconos: la
- * jerarquía la da la tipografía. Cada sección se despliega al posarse encima.
+/**
+ * Menú visible por ROL, en el orden del trabajo de ese rol: el flujo contable
+ * interno sigue el orden del MENU; para el dueño de UNA empresa cliente su
+ * PORTAL es la superficie principal y va primero, después Inicio y el resto.
+ * Solo afecta el orden de PRESENTACIÓN — los keys/rutas quedan intactos.
  */
+function menuVisible() {
+  const visible = MENU.filter((sec) => sec.items.some((i) => !i.permiso || tiene(i.permiso)))
+  if (!S.superAdmin && S.empresa?.rol === 'admin_empresa') {
+    const PRIORIDAD = { 'Portal de cliente': 0, Inicio: 1 }
+    return visible.slice().sort((a, b) => (PRIORIDAD[a.seccion] ?? 9) - (PRIORIDAD[b.seccion] ?? 9))
+  }
+  return visible
+}
+
 /*
- * MENU — organizado según el flujo real del trabajo contable (HANDOFF §2-§20):
- * EMPRESA → PERÍODO → OPERACIÓN → SII/TRIBUTACIÓN → FACTURACIÓN →
- * CONTABILIDAD → TESORERÍA → CENTRALIZACIONES → ACTIVOS → REPORTES →
- * CIERRE → AUDITORÍA.
+ * MENU — organizado según el flujo real del trabajo contable (HANDOFF §2-§20),
+ * de mayor a menor frecuencia de uso:
+ * BANDEJA/LIBROS (diario) → TRIBUTACIÓN → FACTURACIÓN → CONTABILIDAD →
+ * TESORERÍA → CLIENTES/PROVEEDORES → REPORTES + CIERRE → PORTAL (cliente) →
+ * CONFIGURACIÓN. La calculadora de IVA vive en Operación SII (es IVA, es SII).
  *
  * Regla de compatibilidad (HANDOFF §36): TODOS los anchors históricos se
  * conservan; los que cambiaron de grupo siguen funcionando tal cual.
@@ -511,14 +523,15 @@ const MENU = [
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
       { key: 'crm', label: 'Pipeline y Salud', permiso: 'empresas:ver' },
-      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
     ]
   },
   {
     seccion: 'Operación SII', items: [
+      { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
       { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
+      { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
     ]
   },
   {
@@ -552,11 +565,7 @@ const MENU = [
       { key: 'situacion', label: 'Situación Financiera', permiso: 'reportes:ver' },
       { key: 'resultados', label: 'Estado de Resultados', permiso: 'reportes:ver' },
       { key: 'niif', label: 'NIIF — Estados por Rubros', permiso: 'reportes:ver' },
-    ]
-  },
-  {
-    seccion: 'Herramientas', items: [
-      { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
+      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
     ]
   },
   {
@@ -564,21 +573,20 @@ const MENU = [
     // SIEMPRE se resuelven server-side contra /api/portal (aislamiento §8) —
     // esta sección solo consume, jamás clasifica ni contabiliza.
     seccion: 'Portal de cliente', items: [
-      { key: 'portal-inicio', label: 'Portal — Dashboard interactivo', permiso: null },
-      { key: 'portal-ventas', label: 'Portal — Ventas y movimientos', permiso: null },
-      { key: 'portal-cartera', label: 'Portal — Cartera de clientes', permiso: null },
-      { key: 'portal-productos', label: 'Portal — Productos vendidos', permiso: null },
-      { key: 'portal-credito', label: 'Portal — Crédito autorizado', permiso: null },
-      { key: 'portal-costos', label: 'Portal — Hoja de costos', permiso: null },
-      { key: 'portal-cotizaciones', label: 'Portal — Cotizaciones y embudo', permiso: null },
-      { key: 'portal-cobranza', label: 'Portal — Cobranza (solo lectura)', permiso: null },
-      { key: 'portal-reportes', label: 'Portal — Reportes guardados', permiso: null },
+      { key: 'portal-inicio', label: 'Dashboard interactivo', permiso: null },
+      { key: 'portal-ventas', label: 'Ventas y movimientos', permiso: null },
+      { key: 'portal-cartera', label: 'Cartera de clientes', permiso: null },
+      { key: 'portal-productos', label: 'Productos vendidos', permiso: null },
+      { key: 'portal-credito', label: 'Crédito autorizado', permiso: null },
+      { key: 'portal-costos', label: 'Hoja de costos', permiso: null },
+      { key: 'portal-cotizaciones', label: 'Cotizaciones y embudo', permiso: null },
+      { key: 'portal-cobranza', label: 'Cobranza (solo lectura)', permiso: null },
+      { key: 'portal-reportes', label: 'Reportes guardados', permiso: null },
     ]
   },
   {
     seccion: 'Configuración', items: [
       { key: 'admin', label: 'Administración', permiso: 'periodos:ver' },
-      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
       { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
       { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
       { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },
@@ -622,7 +630,6 @@ function renderShell() {
     banner = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">${esc(lic.mensaje || `Licencia ${lic.estado}: puedes consultar, pero no registrar movimientos`)}</div>`
   }
 
-  const seccionVisible = (sec) => sec.items.some((i) => !i.permiso || tiene(i.permiso))
   const itemHTML = (i) => (!i.permiso || tiene(i.permiso)
     ? `<a href="#${i.key}" data-route="${i.key}">${esc(i.label)}<span class="pill" data-pill="${i.pill || i.key}"></span></a>`
     : '')
@@ -641,7 +648,7 @@ function renderShell() {
          <div class="nav-search" style="margin-bottom:var(--space-2)">
            <input id="nav-buscar" type="search" placeholder="Buscar sección…" aria-label="Buscar sección del menú">
          </div>
-          ${MENU.filter(seccionVisible).map((sec) => `
+          ${menuVisible().map((sec) => `
            <div class="nav-seccion">${esc(sec.seccion)}</div>
             ${sec.items.map(itemHTML).join('')}`).join('')}
        </nav>
