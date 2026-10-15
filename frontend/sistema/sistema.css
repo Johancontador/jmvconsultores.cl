@@ -137,6 +137,47 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
 .kpi.bad strong { color: var(--danger); }
 .kpi .sub { display: block; margin-top: var(--space-1); font-size: var(--fs-xs); color: var(--fg-muted); }
 
+/* ---------- Dashboard del Portal (panel tipo Power BI, calm) ----------
+   KPIs sin bordes de color laterales: la serie se nombra con un PUNTO de
+   color en la etiqueta (con el texto, no color solo) y el valor grande con
+   cifras tabulares. Rejilla y ticks del gráfico viven en el SVG de la vista. */
+.pd-head { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: baseline; justify-content: space-between; }
+.pd-head-txt { min-width: 220px; flex: 1; }
+.pd-title { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.01em; margin-top: var(--space-1); }
+.pd-head-actions { text-align: right; }
+.pd-head-actions .hint { margin-top: var(--space-1); }
+
+.pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-4); }
+.pd-kpi {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
+}
+.pd-kpi-top { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); }
+.pd-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.pd-kpi strong {
+  display: block; margin-top: var(--space-2);
+  font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: var(--lh-tight);
+}
+.pd-kpi .sub { display: block; margin-top: var(--space-1); font-size: var(--fs-xs); color: var(--fg-muted); }
+
+.pd-card-head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: baseline; justify-content: space-between; margin-bottom: var(--space-3); }
+.pd-card-head h3 { margin-bottom: 0; }
+.pd-mini { display: flex; align-items: center; gap: var(--space-2); }
+
+.lg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* Números tabulares en tablas de datos del portal (columnas alineadas a la coma). */
+table.pd-tbl td { font-variant-numeric: tabular-nums; }
+table.pd-tbl tbody tr { transition: background var(--dur-fast); }
+table.pd-tbl tbody tr:hover { background: var(--bg-hover); }
+table.pd-tbl tbody tr[style*="cursor:pointer"] { cursor: pointer; }
+
+@media (max-width: 640px) {
+  .pd-head-actions { text-align: left; }
+  .pd-kpi { padding: var(--space-3) var(--space-4); }
+}
+
 .card {
   background: var(--bg-surface); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl); padding: var(--space-5);

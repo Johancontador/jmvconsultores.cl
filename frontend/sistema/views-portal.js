@@ -82,6 +82,11 @@ function fmtCero(v) {
   return (v === null || v === undefined) ? '—' : fmtCLP(v)
 }
 
+/** Montos abreviados para el EJE del gráfico (ole completa vive en tooltips/tabla). */
+function fmtEscala(n) {
+  return new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
+}
+
 function chipVariacion(pct) {
   if (pct === null || pct === undefined) return '<span class="hint">sin comparable</span>'
   const sube = pct >= 0
@@ -105,18 +110,27 @@ function barrasDuoHTML(serieVenta, serieCompra, alClic) {
   if (!datos.some((d) => d.v !== null || d.c !== null)) {
     return UIEstado.vacio('Sin RCV sincronizado en el rango', 'Usa SINCRONIZAR para traer los últimos 3 años de compras y ventas del SII; hasta entonces no hay datos que graficar (no es cero: es ausencia).')
   }
-  const W = 760, H = 260, padTop = 16, padBottom = 44
+  const W = 760, H = 260, padLeft = 54, padTop = 16, padBottom = 44
   const alturaUtiles = H - padTop - padBottom
   const cero = padTop + alturaUtiles / 2
   const max = Math.max(...datos.flatMap((d) => [d.v, d.c]).map((x) => Math.abs(x || 0)), 1)
-  const bw = W / datos.length
+  const bw = (W - padLeft) / datos.length
   const barw = (bw * 0.32)
   const altoValor = (x) => Math.max(2, Math.round((Math.abs(x) / max) * (alturaUtiles / 2)) - 1)
 
-  let svg = `<line x1="0" y1="${cero}" x2="${W}" y2="${cero}" stroke="${PD_PALETA.grid}" stroke-width="1"/>`
+  // Escala visual: rejilla horizontal con ticks del EJE (montos abreviados),
+  // línea CERO sólida — el gráfico se lee sin leer los montos de abajo.
+  let rejilla = ''
+  for (let k = 1; k <= 4; k++) {
+    const yy = Math.round(cero - (k / 4) * (alturaUtiles / 2))
+    rejilla += `<line x1="${padLeft}" y1="${yy}" x2="${W}" y2="${yy}" stroke="${PD_PALETA.grid}" stroke-dasharray="3 4"/>`
+    rejilla += `<text x="${padLeft - 7}" y="${yy + 3}" font-size="10" text-anchor="end" fill="var(--fg-muted)">${fmtEscala(Math.round((max * k) / 4))}</text>`
+  }
+  rejilla += `<text x="${padLeft - 7}" y="${Math.round(cero + alturaUtiles / 2) + 3}" font-size="10" text-anchor="end" fill="var(--fg-muted)">−${fmtEscala(Math.round(max))}</text>`
+  let svg = rejilla + `<line x1="${padLeft}" y1="${cero}" x2="${W}" y2="${cero}" stroke="${PD_PALETA.grid}" stroke-width="1"/>`
   let etiquetas = ''
   datos.forEach((d, i) => {
-    const x = i * bw + bw / 2
+    const x = padLeft + i * bw + bw / 2
     for (const [key, color, suave] of [['v', PD_PALETA.venta, PD_PALETA.ventaSuave], ['c', PD_PALETA.compra, PD_PALETA.compraSuave]]) {
       const val = d[key]
       if (val === null || val === undefined) {
@@ -132,9 +146,9 @@ function barrasDuoHTML(serieVenta, serieCompra, alClic) {
   })
   const leyenda = `
     <div class="frm-row" style="gap:18px;margin-top:6px">
-      <span class="hint"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${PD_PALETA.venta};margin-right:5px"></span>Ventas netas</span>
-      <span class="hint"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${PD_PALETA.compra};margin-right:5px"></span>Compras netas</span>
-      <span class="hint">— sin datos del mes en el SII (no es cero)</span>
+      <span class="hint"><i class="lg-dot" style="background:${PD_PALETA.venta}"></i>Ventas netas</span>
+      <span class="hint"><i class="lg-dot" style="background:${PD_PALETA.compra}"></i>Compras netas</span>
+      <span class="hint">Barra vacía = sin datos del mes en el SII (no es cero)</span>
     </div>`
   return {
     svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas y compras mensuales" style="width:100%;height:auto">${svg}${etiquetas}</svg>`,
@@ -151,32 +165,32 @@ window.VIEWS['portal-inicio'] = {
 
     cont.innerHTML = `
       <div class="card">
-        <div class="frm-row" style="align-items:center;justify-content:space-between">
-          <div>
-            <h3 style="margin-bottom:2px">Panel comercial de ${esc(S.empresa.nombre || '')}</h3>
-            <p class="hint">Ventas y compras con lo informado al SII (RCV). Notas de crédito (60/61) restan UNA vez en AMBOS flujos. Montos completos, nunca en miles.</p>
+        <div class="pd-head">
+          <div class="pd-head-txt">
+            <span class="kicker">Ventas y compras · RCV SII</span>
+            <div class="pd-title">${esc(S.empresa.nombre || '')}</div>
           </div>
-          <div style="text-align:right">
+          <div class="pd-head-actions">
             <button class="btn btn-primary" id="pd-sync">⇄ Sincronizar 3 años</button>
-            <p class="hint">Trae los últimos 36 meses de compras y ventas del SII (idempotente).</p>
+            <p class="hint">36 meses de compras y ventas del SII (idempotente)</p>
           </div>
         </div>
-        <div id="pd-sync-zona" class="mt"></div>
+        <div id="pd-sync-zona"></div>
       </div>
 
       <div id="pd-kpis">${UIEstado.cargando('Calculando indicadores…')}</div>
 
       <div class="card mt">
-        <div class="frm-row" style="align-items:baseline;justify-content:space-between">
-          <h3 id="pd-titulo-grafico">Ventas y compras mensuales</h3>
-          <div class="frm-row" style="align-items:end">
+        <div class="pd-card-head">
+          <h3 id="pd-titulo-grafico">Ventas vs Compras</h3>
+          <div class="pd-mini">
+            <label class="hint" for="pd-meses">Rango</label>
             <select id="pd-meses" class="form-input" style="width:auto">
               <option value="6">6 meses</option>
               <option value="12" selected>12 meses</option>
               <option value="24">24 meses</option>
-              <option value="36">36 meses (3 años)</option>
+              <option value="36">36 meses</option>
             </select>
-            <button class="btn btn-secondary" id="pd-recargar">Aplicar</button>
           </div>
         </div>
         <div id="pd-grafico">${UIEstado.cargando()}</div>
@@ -273,15 +287,21 @@ window.VIEWS['portal-inicio'] = {
             'Tu empresa no tiene documentos de venta ni de compra vivos en este mes ancla. SINCRONIZA los últimos 3 años (botón arriba) para alimentar el panel — el vacío del SII NO es cero.')
           return
         }
-        const colorDif = D && D.neto >= 0 ? PD_PALETA.positivo : (D ? PD_PALETA.negativo : 'var(--muted)')
+        const colorDif = D && D.neto >= 0 ? PD_PALETA.positivo : (D ? PD_PALETA.negativo : '')
+        const dotDif = D ? (D.neto >= 0 ? PD_PALETA.positivo : PD_PALETA.negativo) : 'var(--fg-muted)'
+        const kpi = (dot, label, valor, sub, colorValor = '') => `
+          <div class="pd-kpi">
+            <div class="pd-kpi-top"><i class="pd-dot" style="background:${dot}"></i><span>${esc(label)}</span></div>
+            <strong ${colorValor ? `style="color:${colorValor}"` : ''}>${valor}</strong>
+            <span class="sub">${sub}</span>
+          </div>`
         zona.innerHTML = `
-          <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-            <div class="kpi" style="border-left:4px solid ${PD_PALETA.venta}"><small>Ventas netas · ${perLabelPortal(r.periodo)}</small><strong style="color:${PD_PALETA.venta}">${fmtCero(V.neto)}</strong><span class="sub">IVA ${fmtCero(V.iva)} · ${fmtCero(V.docs)} doc(s) · ${chipVariacion(V.variacion_neta_pct)}</span></div>
-            <div class="kpi" style="border-left:4px solid ${PD_PALETA.compra}"><small>Compras netas · ${perLabelPortal(r.periodo)}</small><strong style="color:${PD_PALETA.compra}">${fmtCero(C.neto)}</strong><span class="sub">IVA ${fmtCero(C.iva)} · ${fmtCero(C.docs)} doc(s) · ${chipVariacion(C.variacion_neta_pct)}</span></div>
-            <div class="kpi" style="border-left:4px solid ${D && D.neto >= 0 ? PD_PALETA.positivo : PD_PALETA.negativo}"><small>Diferencia bruta (venta − compra)</small><strong style="color:${colorDif}">${D ? fmtCLP(D.neto) : '—'}</strong><span class="sub">IVA determinado provisional ${D ? fmtCLP(D.iva_det) : '—'} · NO incluye PPM ni retenciones</span></div>
-            <div class="kpi" style="border-left:4px solid ${PD_PALETA.iva}"><small>IVA potencial · ${perLabelPortal(r.periodo)}</small><strong style="color:${PD_PALETA.iva}">${fmtCero(V.iva)} débito / ${fmtCero(C.iva)} crédito</strong><span class="sub">Según RCV del SII; las NC restan una vez en ambos flujos</span></div>
-          </div>
-          <p class="hint">${esc(r.regla || '')}</p>`
+          <div class="pd-kpis">
+            ${kpi(PD_PALETA.venta, `Ventas netas · ${perLabelPortal(r.periodo)}`, fmtCero(V.neto), `IVA ${fmtCero(V.iva)} · ${fmtCero(V.docs)} doctos · ${chipVariacion(V.variacion_neta_pct)}`, PD_PALETA.venta)}
+            ${kpi(PD_PALETA.compra, `Compras netas · ${perLabelPortal(r.periodo)}`, fmtCero(C.neto), `IVA ${fmtCero(C.iva)} · ${fmtCero(C.docs)} doctos · ${chipVariacion(C.variacion_neta_pct)}`, PD_PALETA.compra)}
+            ${kpi(dotDif, 'Diferencia bruta (venta − compra)', D ? fmtCLP(D.neto) : '—', `IVA determinado provisional ${D ? fmtCLP(D.iva_det) : '—'} · NO incluye PPM ni retenciones`, colorDif)}
+            ${kpi(PD_PALETA.iva, `IVA potencial · ${perLabelPortal(r.periodo)}`, `débito ${fmtCero(V.iva)} / crédito ${fmtCero(C.iva)}`, 'Las NC restan una vez en ambos flujos', PD_PALETA.iva)}
+          </div>`
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)
       }
@@ -299,8 +319,9 @@ window.VIEWS['portal-inicio'] = {
           apiGet(`/api/portal/empresas/${eid}/serie?meses=${estado.meses}&flujo=compra&hasta=${anclaVenta}`),
         ])
         const g = barrasDuoHTML(rv.serie.meses, rc.serie.meses, (periodo, flujo) => abrirDetalle(periodo, flujo))
-        zona.innerHTML = `<div>${g.svg}</div>${g.leyenda}
-          <p class="hint mt">Escala máx: ${fmtCLP(Math.max(...rv.serie.meses.concat(rc.serie.meses).map((m) => Math.abs(m.neto || 0)), 1))} · barras negativas = mes con más NC que facturas</p>`
+        zona.innerHTML = `${g.svg}
+          ${g.leyenda}
+          <p class="hint mt">Eje del gráfico abreviado (M = millones); el monto COMPLETO se muestra al pasar el mouse sobre cada barra. Barra hacia abajo = mes con más notas de crédito que facturas.</p>`
         const titulo = document.getElementById('pd-titulo-grafico')
         if (titulo) titulo.textContent = `Ventas vs Compras — ${perLabelPortal(rv.serie.desde)} a ${perLabelPortal(rv.serie.hasta)}`
         zona.querySelectorAll('.pb-duo-bar').forEach((r) =>
@@ -321,7 +342,7 @@ window.VIEWS['portal-inicio'] = {
         return { periodo: m.periodo, v: v.neto, vd: v.docs, c: c.neto, cd: c.docs }
       }).reverse()
       zona.innerHTML = `
-        <table class="tbl">
+        <table class="tbl pd-tbl">
           <thead><tr><th>Mes</th><th style="text-align:right;color:${PD_PALETA.venta}">Ventas netas</th><th style="text-align:right">Docs</th><th style="text-align:right;color:${PD_PALETA.compra}">Compras netas</th><th style="text-align:right">Docs</th><th style="text-align:right">Diferencia bruta</th></tr></thead>
           <tbody>${filas.map((f) => {
             const dif = (f.v !== null && f.c !== null) ? f.v - f.c : null
@@ -336,7 +357,7 @@ window.VIEWS['portal-inicio'] = {
             </tr>`
           }).join('')}</tbody>
         </table>
-        <p class="hint mt">Clic en una fila para la notaISON del mes (ambos flujos). Las NC restan una vez en las dos columnas.</p>`
+        <p class="hint mt">Clic en una fila para el detalle del mes (ambos flujos). Las NC restan una vez en las dos columnas.</p>`
       zona.querySelectorAll('[data-ver]').forEach((tr) => tr.addEventListener('click', () => abrirDetalle(tr.dataset.ver, 'venta')))
     }
 
@@ -425,8 +446,6 @@ window.VIEWS['portal-inicio'] = {
     /* ------------------------------- ORQUESTACIÓN ------------------------------- */
 
     async function pintarDashboard() {
-      const btn = document.getElementById('pd-recargar')
-      if (btn) btn.disabled = true
       try {
         // Mes ancla: el último con RCV de venta (misma decisión que /serie server-side).
         const rv = await apiGet(`/api/portal/empresas/${eid}/serie?meses=1&flujo=venta`)
@@ -444,13 +463,12 @@ window.VIEWS['portal-inicio'] = {
           }
         } catch { /* estado opcional */ }
       } finally {
-        if (btn) btn.disabled = false
+        // (antes aquí se habilitaba el botón «Aplicar»; el rango aplica al cambiar el select)
       }
     }
 
     document.getElementById('pd-sync').addEventListener('click', iniciarSync)
     document.getElementById('pd-meses').addEventListener('change', (e) => { estado.meses = Number(e.target.value); pintarDashboard() })
-    document.getElementById('pd-recargar').addEventListener('click', pintarDashboard)
     await pintarDashboard()
     window._pd_timerSync = timerSync
   },
