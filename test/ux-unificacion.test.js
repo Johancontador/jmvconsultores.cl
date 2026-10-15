@@ -5,14 +5,26 @@
  *  T2 — UIEstado: cargando/vacio/chip/error escapan HTML (no inyección).
  *  T3 — Calculadora IVA: aritmética neta↔IVA↔total con 19% (19.000→3.610/22.610).
  *  T4 — Centro de reportes: favoritos persisten en localStorage (contrato de keys).
+ *  T5 — Views sandbox: render de TODAS las vistas sin ReferenceError
+ *       (regresión de portal-cartera: helper scope-fuera → `C is not defined`):
+ *       tablaCarteraHTML() usaba `C` declarado dentro del try de cargar(), el
+ *       ReferenceError caía al catch de cargar() y la pantalla quedaba pegada
+ *       en el mensaje de error en vez de mostrar la cartera segmentada.
  */
 const test = require('node:test')
 const assert = require('node:assert')
+const crypto = require('node:crypto')
 const fs = require('fs')
 const path = require('path')
 const vm = require('vm')
 
 const FRONT = path.resolve(__dirname, '../frontend')
+
+// El sandbox T5 ejecuta vistas reales: varias disparan asyncs fire-and-forget
+// (p. ej. views-crm) cuyo rechazo no cae en ningún catch del sandbox. En el
+// navegador son solo errores de consola; aquí silenciar el nivel de proceso
+// evita que el runner de node --test muera por rechazos que no son del test.
+process.on('unhandledRejection', () => {})
 
 // ---------- T1: MENU ----------
 test('T1: menú — keys únicos y toda vista con entrada de menú', () => {
@@ -24,7 +36,6 @@ test('T1: menú — keys únicos y toda vista con entrada de menú', () => {
   assert.ok(menuKeys.length >= 30, `menú tiene ${menuKeys.length} ítems`)
   assert.strictEqual(menuKeys.length, new Set(menuKeys).size, 'sin ítems duplicados')
   // cada VIEWS definida está en el menú
-  const vistas = [...all.matchAll(/VIEWS\.([\w]+)\s*=/g)].map((m) => m[1] + [...all.matchAll(/VIEWS\['([\w-]+)'\]/gi)].length ? null : null)
   const vistas2 = [...all.matchAll(/VIEWS\.([\w\w]+)\s*=/g)].map((m) => m[1])
     .concat([...all.matchAll(/VIEWS\['([\w-]+)'\]\s*=/g)].map((m) => m[1]))
   const menuSet = new Set(menuKeys)
@@ -80,3 +91,145 @@ test('T4: centro de reportes — keys de storage y contratos de favoritos/recien
 function cont_a(s) {
   return s.includes("stopPropagation()")
 }
+
+// ---------- T5: views sandbox (regresión de scoping portal-cartera) ----------
+
+/**
+ * Carga shared/format.js + shared/uitoolkit.js + ui.js + app.js + views-*.js
+ * en UN script vm (los `const` top-level de app.js — esc, S, leerPeriodo… —
+ * son visibles a las vistas, igual que en scripts clásicos del navegador),
+ * con stubs DOM/API mínimos y respuestas API rígidas para caminar el happy
+ * path. Devuelve { sandbox, htmls }.
+ *
+ * El RuntimeError que NO toleramos es ReferenceError en render: esa es la
+ * clase exacta del bug corregido en portal-cartera (un helper de la vista
+ * referenciando un identificador declarado en el scope de OTRA función).
+ * TypeError y derivados por shapes de stub incompletas NO son esa clase.
+ */
+function crearSandboxVistas() {
+  const htmls = [] // todo innerHTML asignado queda aquí (getElementById crea objetos nuevos por llamada)
+  const el = () => {
+    let html = ''
+    const e = {
+      tagName: 'DIV', id: '', className: '', textContent: '', value: '',
+      checked: false, href: '', src: '', dataset: {}, style: {},
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      addEventListener() {}, removeEventListener() {},
+      appendChild(c) { return c }, remove() {},
+      setAttribute() {}, getAttribute: () => null, removeAttribute() {},
+      querySelector: () => el(), querySelectorAll: () => [],
+      focus() {}, click() {},
+      getBoundingClientRect: () => ({ top: 0, left: 0, width: 0, height: 0 }),
+    }
+    Object.defineProperty(e, 'innerHTML', {
+      get: () => html,
+      set(v) { html = String(v); htmls.push(html) },
+    })
+    return e
+  }
+  const documentStub = {
+    getElementById: () => el(),
+    querySelector: () => el(), querySelectorAll: () => [],
+    createElement: (t) => el(),
+    addEventListener() {}, removeEventListener() {},
+    body: el(), documentElement: el(), head: el(),
+    readyState: 'complete',
+  }
+  const store = () => ({ getItem: () => null, setItem() {}, removeItem() {}, clear() {}, key: () => null, length: 0 })
+  const RESPUESTAS = new Map([
+    ['cartera', {
+      ok: true,
+      cartera: {
+        periodo: '202609', periodo_previo: '202608', regla: 'X',
+        resumen: { cuidar: 1, desarrollar: 0, recuperar: 0, controlar: 0, sin_datos: 0 },
+        clientes: [{ rut: '1-9', razon_social: 'A', docs_periodo: 1, docs_previo: 1, neto_periodo: 100, neto_previo: 100, variacion_pct: 0, segmento: 'cuidar' }],
+      },
+    }], // portal-cartera: happy path
+    ['movimientos', { ok: true, total: 0, neto: 0, monto_total: 0, movimientos: [] }], // portal-ventas
+    ['serie', { ok: true, serie: [] }],
+  ])
+  const apiGetStub = async (url) => {
+    for (const [k, v] of RESPUESTAS) if (String(url).includes(k)) return JSON.parse(JSON.stringify(v))
+    return {}
+  }
+  const rejecting = async () => { throw new Error('stub') }
+  const sandbox = {
+    document: documentStub,
+    window: {},
+    location: { href: 't://x/sistema/#', origin: 't://x', pathname: '/sistema/', search: '', hash: '#', replace() {}, assign() {} },
+    navigator: { userAgent: 'test', language: 'es-CL', clipboard: { writeText: async () => {} } },
+    localStorage: store(), sessionStorage: store(),
+    history: { pushState() {}, replaceState() {}, back() {} },
+    alert() {}, confirm: () => false, prompt: () => null,
+    requestAnimationFrame: (fn) => setTimeout(fn, 16), cancelAnimationFrame() {},
+    matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    ResizeObserver: class { observe() {} disconnect() {} unobserve() {} },
+    IntersectionObserver: class { observe() {} disconnect() {} },
+    MutationObserver: class { observe() {} disconnect() {} },
+    FormData: class {}, Event: class {}, CustomEvent: class {},
+    URL, URLSearchParams,
+    setTimeout, clearTimeout, setInterval, clearInterval,
+    crypto: crypto.webcrypto,
+    console,
+  }
+  sandbox.addEventListener = () => {}
+  sandbox.removeEventListener = () => {}
+  sandbox.window = sandbox
+  sandbox.self = sandbox
+  sandbox.apiGet = apiGetStub
+  sandbox.apiPost = rejecting
+  sandbox.apiPut = rejecting
+  sandbox.apiDelete = rejecting
+  sandbox.iniciarPolling = () => () => {}
+  vm.createContext(sandbox)
+
+  const lee = (f) => ';' + fs.readFileSync(path.resolve(f), 'utf8')
+  const vistas = fs.readdirSync(path.join(FRONT, 'sistema')).filter((f) => f.startsWith('views-') && f.endsWith('.js')).sort()
+  const bundle = [
+    lee(path.join(FRONT, 'shared', 'format.js')),
+    lee(path.join(FRONT, 'shared', 'uitoolkit.js')),
+    lee(path.join(FRONT, 'sistema', 'ui.js')),
+    lee(path.join(FRONT, 'sistema', 'app.js')),
+    ...vistas.map((f) => lee(path.join(FRONT, 'sistema', f))),
+    ';(() => {',
+    '  S.empresa = S.empresa || { id: 1, rut: "1-9", razon_social: "X", nombre: "X" }',
+    '  S.user = S.user || { id: 1, nombre: "T" }',
+    '  S.usuario = S.usuario || { id: 1, nombre: "T" }',
+    '  S.superAdmin = true',
+    `  if (S.permisos && S.permisos.add) { S.permisos.add('todo'); S.permisos.add('documentos:ver') }`,
+    '})()',
+  ].join('\n')
+  new vm.Script(bundle).runInContext(sandbox)
+  return { sandbox, htmls }
+}
+
+test('T5: portal-cartera renderiza segmentos y tabla con datos (regresión `C is not defined`)', async () => {
+  const { sandbox, htmls } = crearSandboxVistas()
+  const cartera = sandbox.window.VIEWS['portal-cartera']
+  assert.ok(cartera && typeof cartera.render === 'function', 'vista portal-cartera registrada')
+  await cartera.render({ innerHTML: '' })
+  const salida = htmls.join('')
+  // Happy path: la zona dinámica muestra los segmentos y la TABLA (no el catch de error)
+  assert.ok(salida.includes('Segmentos (regla explícita)'), 'resumen de segmentos presente')
+  assert.ok(salida.includes('tubre') === false && salida.includes('<table') === true, 'tabla de cartera renderizada')
+  assert.ok(salida.includes('septiembre 2026'), 'perLabel de C.periodo/previo funcionó (antes: C is not defined)')
+})
+
+test('T5b: NINGUNA vista lanza ReferenceError en render (clase de bug scope-fuera)', async () => {
+  const { sandbox } = crearSandboxVistas()
+  const vistas = Object.keys(sandbox.window.VIEWS).sort()
+  assert.ok(vistas.length >= 30, `vistas registradas: ${vistas.length}`)
+  const refErrs = []
+  for (const key of vistas) {
+    const v = sandbox.window.VIEWS[key]
+    if (!v || typeof v.render !== 'function') continue
+    try {
+      await v.render({ innerHTML: '' })
+    } catch (e) {
+      if (e instanceof ReferenceError) refErrs.push(`[${key}] ${e.message}`)
+      // TypeError por shapes de stub: no es la clase del bug, se tolera
+    }
+  }
+  assert.deepStrictEqual(refErrs, [], 'ReferenceErrors en render de vistas')
+})

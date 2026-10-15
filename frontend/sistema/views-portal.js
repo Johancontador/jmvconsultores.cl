@@ -707,6 +707,7 @@ window.VIEWS['portal-cartera'] = {
     // memoria; el backend no se vuelve a llamar).
     let segmentoActivo = null
     let clientesCache = []
+    let cartera = null
 
     function tablaCarteraHTML() {
       const fila = clientesCache.filter((c) => !segmentoActivo || c.segmento === segmentoActivo)
@@ -728,7 +729,7 @@ window.VIEWS['portal-cartera'] = {
               </tr>`).join('')}
           </tbody>
         </table>
-        <p class="hint mt">Mostrando ${fila.length} de ${clientesCache.length} cliente(s). Un cliente «sin_datos» NO significa que se haya perdido: significa que la ventana consultada no registra compras suyas. Umbrales: período = ${perLabelPortal(C.periodo)}, previo = ${perLabelPortal(C.periodo_previo)}, ventana = 12 meses.</p>`
+        <p class="hint mt">Mostrando ${fila.length} de ${clientesCache.length} cliente(s). Un cliente «sin_datos» NO significa que se haya perdido: significa que la ventana consultada no registra compras suyas. Umbrales: período = ${cartera ? perLabelPortal(cartera.periodo) : ''}, previo = ${cartera ? perLabelPortal(cartera.periodo_previo) : ''}, ventana = 12 meses.</p>`
     }
 
     function conectarFiltroSegmentos() {
@@ -757,6 +758,7 @@ window.VIEWS['portal-cartera'] = {
           return
         }
         const C = r.cartera
+        cartera = C
         segmentoActivo = null
         clientesCache = C.clientes
         zona.innerHTML = `
