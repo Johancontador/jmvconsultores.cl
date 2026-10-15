@@ -135,7 +135,11 @@ async function boot() {
       return
     }
     renderShell()
-    navigate(location.hash || hashInicial())
+    // El aterrizaje por rol SIEMPRE aplica en boot(): el navegador puede
+    // restaurar el hash de la sesión anterior (reabrir pestaña/historial) y
+    // eso no debe mandar al dueño al sistema operativo en vez de su Portal.
+    const aterrizaje = !S.superAdmin && S.empresas.length === 1 && S.empresa?.rol === 'admin_empresa'
+    navigate((location.hash && !aterrizaje) ? location.hash : hashInicial())
   } catch {
     renderLogin()
   }

@@ -6,6 +6,13 @@ better-sqlite3 (WAL); frontend vanilla JS en `frontend/sistema/` (SPA con
 `window.VIEWS`). Tests: `npm test` (archivos explícitos en package.json —
 NUNCA `node --test test/`).
 
+**Anti-caché del frontend (OBLIGATORIO):** el nginx del VPS fija
+`max-age=14400` a los `.js`/`.css`. Antes de commitear cualquier cambio en
+`frontend/` correr `npm run seed:v` — versiona las referencias de
+`frontend/sistema/index.html` con sha1 del contenido de cada archivo (NUNCA
+usar el SHA de HEAD como semilla: esa URL ya fue cacheada por el navegador
+con el código anterior).
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
