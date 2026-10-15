@@ -593,3 +593,24 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   transition: width var(--dur-base);
 }
 @media (max-width: 640px) { .pd-sync { flex-wrap: wrap; } }
+
+/* ---------- Toque Power BI: barras con vida y números tipo planilla ----------
+
+   El hover levanta la barra (CSS gana sobre el atributo opacity del SVG sin
+   tocar el markup); las cifras tabulares alinean todas las columnas de
+   números del shell a la coma, como una planilla Excel. */
+.pb-duo-bar { transition: opacity var(--dur-fast); }
+.pb-duo-bar:hover { opacity: 1; }
+
+.sys table.tbl td { font-variant-numeric: tabular-nums; }
+
+/* Entrada suave del contenido de cada vista */
+.sys-view > * { animation: sys-vista-entra 0.18s ease-out both; }
+@keyframes sys-vista-entra {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sys-view > * { animation: none; }
+  .pb-duo-bar { transition: none; }
+}

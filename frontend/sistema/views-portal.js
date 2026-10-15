@@ -216,6 +216,19 @@ function barrasDuoHTML(serieVenta, serieCompra, alClic) {
   }
   rejilla += `<text x="${padLeft - 7}" y="${Math.round(cero + alturaUtiles / 2) + 3}" font-size="10" text-anchor="end" fill="var(--fg-muted)">−${fmtEscala(Math.round(max))}</text>`
   let svg = rejilla + `<line x1="${padLeft}" y1="${cero}" x2="${W}" y2="${cero}" stroke="${PD_PALETA.grid}" stroke-width="1"/>`
+  // Toque Power BI: relleno con degradado por serie (cabecera más plena, base
+  // difusa) — el gradiente es por rect (objectBoundingBox), así que las barras
+  // negativas lo heredan bien.
+  const defs = `<defs>
+    <linearGradient id="pdg-venta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${PD_PALETA.venta}" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="${PD_PALETA.venta}" stop-opacity="0.45"/>
+    </linearGradient>
+    <linearGradient id="pdg-compra" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${PD_PALETA.compra}" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="${PD_PALETA.compra}" stop-opacity="0.45"/>
+    </linearGradient>
+  </defs>`
   let etiquetas = ''
   datos.forEach((d, i) => {
     const x = padLeft + i * bw + bw / 2
@@ -228,7 +241,7 @@ function barrasDuoHTML(serieVenta, serieCompra, alClic) {
       const h = altoValor(val)
       const y = val >= 0 ? cero - h : cero
       const xBar = key === 'v' ? x - barw - 1 : x + 1
-      svg += `<rect data-flujo="${key === 'v' ? 'venta' : 'compra'}" data-periodo="${d.periodo}" class="pb-duo-bar" x="${xBar}" y="${y}" width="${barw}" height="${h}" rx="2" fill="${color}" opacity="${val >= 0 ? '0.88' : '0.55'}" style="cursor:pointer"><title>${perLabelPortal(d.periodo)} · ${key === 'v' ? 'Ventas' : 'Compras'}: ${fmtCLP(val)} — clic para detalle</title></rect>`
+      svg += `<rect data-flujo="${key === 'v' ? 'venta' : 'compra'}" data-periodo="${d.periodo}" class="pb-duo-bar" x="${xBar}" y="${y}" width="${barw}" height="${h}" rx="3" fill="${key === 'v' ? 'url(#pdg-venta)' : 'url(#pdg-compra)'}" opacity="${val >= 0 ? '0.9' : '0.6'}" style="cursor:pointer"><title>${perLabelPortal(d.periodo)} · ${key === 'v' ? 'Ventas' : 'Compras'}: ${fmtCLP(val)} — clic para detalle</title></rect>`
     }
     etiquetas += `<text x="${x}" y="${H - 26}" font-size="10" text-anchor="middle" fill="var(--muted)">${d.periodo.slice(4)}/${d.periodo.slice(2, 4)}</text>`
   })
@@ -239,7 +252,7 @@ function barrasDuoHTML(serieVenta, serieCompra, alClic) {
       <span class="hint">Barra vacía = sin datos del mes en el SII (no es cero)</span>
     </div>`
   return {
-    svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas y compras mensuales" style="width:100%;height:auto">${svg}${etiquetas}</svg>`,
+    svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ventas y compras mensuales" style="width:100%;height:auto">${defs}${svg}${etiquetas}</svg>`,
     leyenda,
     clickable: datos.some((d) => d.v !== null || d.c !== null),
   }
@@ -385,10 +398,10 @@ window.VIEWS['portal-inicio'] = {
           </div>`
         zona.innerHTML = `
           <div class="pd-kpis">
-            ${kpi(PD_PALETA.venta, `Ventas netas · ${perLabelPortal(r.periodo)}`, fmtCero(V.neto), `IVA ${fmtCero(V.iva)} · ${fmtCero(V.docs)} doctos · ${chipVariacion(V.variacion_neta_pct)}`, PD_PALETA.venta)}
-            ${kpi(PD_PALETA.compra, `Compras netas · ${perLabelPortal(r.periodo)}`, fmtCero(C.neto), `IVA ${fmtCero(C.iva)} · ${fmtCero(C.docs)} doctos · ${chipVariacion(C.variacion_neta_pct)}`, PD_PALETA.compra)}
+            ${kpi(PD_PALETA.venta, `Ventas netas · ${perLabelPortal(r.periodo)}`, fmtCero(V.neto), `IVA ${fmtCero(V.iva)} · ${fmtCero(V.docs)} doctos · ${chipVariacion(V.variacion_neta_pct)}`)}
+            ${kpi(PD_PALETA.compra, `Compras netas · ${perLabelPortal(r.periodo)}`, fmtCero(C.neto), `IVA ${fmtCero(C.iva)} · ${fmtCero(C.docs)} doctos · ${chipVariacion(C.variacion_neta_pct)}`)}
             ${kpi(dotDif, 'Diferencia bruta (venta − compra)', D ? fmtCLP(D.neto) : '—', `IVA determinado provisional ${D ? fmtCLP(D.iva_det) : '—'} · NO incluye PPM ni retenciones`, colorDif)}
-            ${kpi(PD_PALETA.iva, `IVA potencial · ${perLabelPortal(r.periodo)}`, `débito ${fmtCero(V.iva)} / crédito ${fmtCero(C.iva)}`, 'Las NC restan una vez en ambos flujos', PD_PALETA.iva)}
+            ${kpi(PD_PALETA.iva, `IVA potencial · ${perLabelPortal(r.periodo)}`, `débito ${fmtCero(V.iva)} / crédito ${fmtCero(C.iva)}`, 'Las NC restan una vez en ambos flujos')}
           </div>`
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)
@@ -429,6 +442,11 @@ window.VIEWS['portal-inicio'] = {
         const v = porP(mesesVenta, m.periodo)
         return { periodo: m.periodo, v: v.neto, vd: v.docs, c: c.neto, cd: c.docs }
       }).reverse()
+      // Fila de TOTALES del rango visible (estilo Excel/Power BI): los meses con
+      // datos NULL del SII son ausencia, así que solamente suman los valores.
+      const sum = (col) => filas.reduce((acc, f) => (f[col] === null ? acc : acc + f[col]), 0)
+      const tV = sum('v'), tC = sum('c')
+      const hayTotales = tV !== 0 || tC !== 0
       zona.innerHTML = `
         <table class="tbl pd-tbl">
           <thead><tr><th>Mes</th><th style="text-align:right;color:${PD_PALETA.venta}">Ventas netas</th><th style="text-align:right">Docs</th><th style="text-align:right;color:${PD_PALETA.compra}">Compras netas</th><th style="text-align:right">Docs</th><th style="text-align:right">Diferencia bruta</th></tr></thead>
@@ -444,6 +462,14 @@ window.VIEWS['portal-inicio'] = {
               <td style="text-align:right;font-weight:700;color:${color}">${fmtCero(dif)}</td>
             </tr>`
           }).join('')}</tbody>
+          ${hayTotales ? `<tfoot><tr>
+            <td><b>Total del rango</b></td>
+            <td style="text-align:right"><b>${fmtCero(tV)}</b></td>
+            <td style="text-align:right" class="sub">${filas.reduce((a, f) => a + (f.vd || 0), 0)} docs</td>
+            <td style="text-align:right"><b>${fmtCero(tC)}</b></td>
+            <td style="text-align:right" class="sub">${filas.reduce((a, f) => a + (f.cd || 0), 0)} docs</td>
+            <td style="text-align:right"><b style="color:${tV - tC >= 0 ? PD_PALETA.positivo : PD_PALETA.negativo}">${fmtCero(tV - tC)}</b></td>
+          </tr></tfoot>` : ''}
         </table>
         <p class="hint mt">Clic en una fila para el detalle del mes (ambos flujos). Las NC restan una vez en las dos columnas.</p>`
       zona.querySelectorAll('[data-ver]').forEach((tr) => tr.addEventListener('click', () => abrirDetalle(tr.dataset.ver, 'venta')))
