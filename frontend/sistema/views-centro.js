@@ -21,6 +21,7 @@ const ICONOS = {
   banco: '<path d="M3 9.5 12 4l9 5.5M5 10v8m4-8v8m6-8v8m4-8v8M3 20h18"/>',
   portal: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c-2.6 2.4-2.6 13.6 0 16M12 4c2.6 2.4 2.6 13.6 0 16"/>',
   escudo: '<path d="M12 3.5 19 6v6c0 4.4-3 7.4-7 8.5-4-1.1-7-4.1-7-8.5V6z"/>',
+  pipeline: '<path d="M4 5.5v3.5M4 12v3.5M9 5.5v3.5"/><rect x="3" y="15" width="4" height="4" rx="1"/><rect x="10" y="15" width="4" height="4" rx="1"/><rect x="17" y="15" width="4" height="4" rx="1"/><path d="M5 9.5v0c0 2 1.6 3.3 4 3.5h5"/><path d="m12 10.5 2.3 2.5L12 15.5"/>',
 }
 
 function iconoHTML(nombre) {

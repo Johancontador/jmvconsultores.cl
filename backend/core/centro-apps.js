@@ -60,14 +60,28 @@ const CATALOGO_APPS = [
       { grupo: 'Informes y control', ruta: 'reportes', capacidad: 'reportes:ver' },
     ],
   },
+  // CRM COMERCIAL (rediseño 2026-10-15): módulo completo del despacho con el
+  // MISMO gate que su API real (guardCrm en routes/crm.js): solo contador y
+  // super admin — el dueño cliente JAMÁS ve esta tarjeta (y ni con URL entra:
+  // el backend devuelve 403).
+  {
+    key: 'crm-comercial',
+    titulo: 'CRM Comercial',
+    descripcion: 'Oportunidades con embudo kanban, fichas comerciales, contactos, prospectos, actividades y proyección comercial ponderada del portafolio.',
+    icono: 'pipeline',
+    orden: 3,
+    roles: ['contador'], // + super admin (is_admin) — igual que guardCrm
+    secciones: [
+      { grupo: 'Gestión comercial', ruta: 'crm', capacidad: 'empresas:ver' },
+    ],
+  },
   {
     key: 'gestion-comercial',
     titulo: 'Gestión Comercial',
-    descripcion: 'Pipeline CRM, cuenta corriente de clientes y proveedores, y cobranza con seguimiento de mora.',
+    descripcion: 'Cuenta corriente de clientes y proveedores, y cobranza con seguimiento de mora.',
     icono: 'usuarios',
-    orden: 3,
+    orden: 4,
     secciones: [
-      { grupo: 'Gestión comercial', ruta: 'crm', capacidad: 'empresas:ver' },
       { grupo: 'Gestión comercial', ruta: 'cclientes', capacidad: 'reportes:ver' },
       { grupo: 'Gestión comercial', ruta: 'cobranza', capacidad: 'tesoreria:ver' },
     ],
@@ -77,7 +91,7 @@ const CATALOGO_APPS = [
     titulo: 'Finanzas (Tesorería)',
     descripcion: 'Bancos, libro banco, cartolas y conciliación bancaria contra el libro contable. Fuentes reales: cuentas bancarias registradas e importes de cartola.',
     icono: 'banco',
-    orden: 4,
+    orden: 5,
     secciones: [
       { grupo: 'Tesorería', ruta: 'tesoreria', capacidad: 'tesoreria:ver' },
     ],
@@ -87,7 +101,7 @@ const CATALOGO_APPS = [
     titulo: 'Portal de cliente',
     descripcion: 'Superficie comercial de solo lectura para el dueño de la empresa: dashboard, ventas, cartera y productos. La experiencia externa usa este módulo y no el sistema operativo.',
     icono: 'portal',
-    orden: 5,
+    orden: 6,
     modoExterno: true, // experiencia externa ≠ interna: otro menú, otros permisos
     secciones: [
       { grupo: 'Portal de cliente', ruta: 'portal-inicio', capacidad: 'empresas:ver' },
@@ -98,7 +112,7 @@ const CATALOGO_APPS = [
     titulo: 'Administración',
     descripcion: 'Área restringida: usuarios, auditoría, integraciones, suscripción y configuración de la empresa. Visible solo para roles autorizados.',
     icono: 'escudo',
-    orden: 6,
+    orden: 7,
     restringida: true,
     secciones: [
       { grupo: 'Administración', ruta: 'admin', capacidad: 'periodos:ver' },
@@ -175,9 +189,14 @@ function centroParaUsuario(db, usuarioId, empresaId = null) {
   } catch { licencia = null } // sin licencia registrada aún: ninguna app pierde visibilidad (la gate real vive en cada ruta)
 
   const permisos = capacidadesDe(activa.empresa_id)
+  const esSuperAdmin = !!(usuario && usuario.is_admin)
 
   const apps = []
   for (const app of CATALOGO_APPS) {
+    // RESTRICCIÓN POR ROL (gate del guard real, no inventado): una app puede
+    // limitarse a roles concretos en la empresa activa (p. ej. CRM solo
+    // contador/super admin). El super admin pasa siempre.
+    if (app.roles && !esSuperAdmin && !app.roles.includes(activa.rol)) continue
     const secciones = app.secciones
       .filter((s) => permisos.has(s.capacidad))
       .map((s) => ({ grupo: s.grupo, ruta: s.ruta, capacidad: s.capacidad }))

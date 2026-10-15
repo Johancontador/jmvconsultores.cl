@@ -144,6 +144,24 @@ test('T2c: el centro respeta las capacidades EXACTAS del rol (auditor: ve bandej
   assert.deepEqual(c2.apps, [], 'sin capacidades no existe app que mostrar')
 })
 
+test('T2d: CRM Comercial visible SOLO para el despacho (contador/super admin); el dueño NO la ve ni por URL (gate = guardCrm real)', () => {
+  const CONTADOR_C = usuarioConRol('contador', EMP_A)
+  const cCont = centroParaUsuario(db, CONTADOR_C, EMP_A)
+  const crmCont = cCont.apps.find((a) => a.key === 'crm-comercial')
+  assert.ok(crmCont, 'el contador ve la tarjeta CRM Comercial')
+  assert.deepEqual(crmCont.secciones.map((s) => s.ruta), ['crm'])
+
+  // Dueño (admin_empresa, ya sembrado arriba como OWNER): NO ve la card CRM;
+  // sí sigue viendo su Portal (experiencia externa).
+  const cOwn = centroParaUsuario(db, OWNER, EMP_A)
+  assert.ok(!cOwn.apps.some((a) => a.key === 'crm-comercial'), 'la tarjeta CRM NO aparece para el dueño')
+  assert.ok(cOwn.apps.some((a) => a.key === 'portal-cliente'))
+
+  // Super admin la ve (rol interno del despacho)
+  const SA2 = usuarioConRol('contador', EMP_A, true)
+  assert.ok(centroParaUsuario(db, SA2, EMP_A).apps.some((a) => a.key === 'crm-comercial'))
+})
+
 // ---------- T3: aislamiento de empresas ----------
 test('T3: pedir centro de una empresa AJENA da error; el propio siempre vuelve su asignación', async () => {
   // EXTERNO tiene asignación solo a B: pedir A → error estricto (sin fuga)

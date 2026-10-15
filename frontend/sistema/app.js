@@ -106,18 +106,12 @@ function leerPeriodo(id) {
 window.appBoot = boot
 
 /**
- * Aterrizaje post-login (Centro de Aplicaciones): quien inicia sesión entra a
- * elegir módulo, no a una pantalla sobrecargada.
- *   - Dueño de UNA empresa cliente (admin_empresa, no super admin): su Portal
- *     es la superficie comercial — entra directo ahí (el Portal es una de las
- *     apps del Centro y del menú para volver cuando quiera).
- *   - El resto: Centro de Aplicaciones (#centro).
- * El dueño conserva el acceso al sistema por el menú si lo necesita.
+ * Aterrizaje post-login (Centro de Aplicaciones): TODO usuario —interno o
+ * cliente— aterriza en la página principal de módulos con recuadros grandes
+ * (icono + descripción + ingreso). El dueño de empresa cliente ve su Portal
+ * como tarjeta destacada del Centro (sigue accesible directo por #portal-inicio).
  */
 function hashInicial() {
-  if (!S.superAdmin && S.empresas.length === 1 && S.empresa?.rol === 'admin_empresa') {
-    return '#portal-inicio'
-  }
   return '#centro'
 }
 
@@ -141,8 +135,11 @@ async function boot() {
     // El aterrizaje por rol SIEMPRE aplica en boot(): el navegador puede
     // restaurar el hash de la sesión anterior (reabrir pestaña/historial) y
     // eso no debe mandar al dueño al sistema operativo en vez de su Portal.
-    const aterrizaje = !S.superAdmin && S.empresas.length === 1 && S.empresa?.rol === 'admin_empresa'
-    navigate((location.hash && !aterrizaje) ? location.hash : hashInicial())
+    // Centro de Aplicaciones para TODOS: si el navegador restauró un hash de
+    // la sesión anterior (pestaña abierta/historial) se respeta; si no, el
+    // destino es la página principal de módulos. Rutas no autorizadas ya las
+    // bloquea el router + el backend en cada fetch.
+    navigate(location.hash || hashInicial())
   } catch {
     renderLogin()
   }
@@ -523,7 +520,7 @@ const MENU = [
   },
   {
     seccion: 'Gestión comercial', items: [
-      { key: 'crm', label: 'Pipeline y Salud', permiso: 'empresas:ver' },
+      { key: 'crm', label: 'CRM Comercial', permiso: 'empresas:ver' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
