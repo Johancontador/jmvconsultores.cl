@@ -96,6 +96,94 @@ function chipVariacion(pct) {
 }
 
 /**
+ * Banda reutilizable de SINCRONIZACIÓN (RCV 3 años) para CUALQUIER pestaña del
+ * portal alimentada por la BANDEJA (movimientos, cartera, cobranza, crédito,
+ * reportes) — mismo contrato que el dashboard: POST /api/portal/empresas/:eid/
+ * sincronizar (solo el dueño; el resto ve el porqué del rechazo server-side)
+ * → job en background con polling de 3 s y re-attach al montar si ya hay un
+ * job en curso. `recargar` es el loader de la vista: al terminar, esa pestaña
+ * se repinta con los datos nuevos con un clic.
+ */
+function montarSyncPortal(eid, mount, { etiqueta = '⇄ Sincronizar 3 años', recargar = null } = {}) {
+  if (!mount) return
+  const uid = Math.random().toString(36).slice(2, 7)
+  mount.innerHTML = `
+    <div class="pd-sync">
+      <div class="pd-sync-zona"></div>
+      <button class="btn btn-primary">${esc(etiqueta)}</button>
+    </div>`
+  const zona = mount.querySelector('.pd-sync-zona')
+  const btn = mount.querySelector('button')
+  let timer = null
+  const terminados = ['completado', 'completado_con_errores']
+  const activo = (E) => E && E.estado && !terminados.includes(E.estado) && E.estado !== 'error'
+  window.addEventListener('hashchange', () => clearInterval(timer), { once: true })
+
+  function pintar(E) {
+    if (!E) { zona.innerHTML = ''; return }
+    if (E.estado === 'error') {
+      zona.innerHTML = UIEstado.error(`Sincronización interrumpida: ${esc(E.error || '')} <button class="btn btn-secondary mt" data-reintentar>Reintentar</button>`)
+      const r = zona.querySelector('[data-reintentar]')
+      if (r) r.addEventListener('click', iniciar)
+      btn.disabled = false
+      return
+    }
+    if (terminados.includes(E.estado)) {
+      clearInterval(timer)
+      btn.disabled = false
+      const R = E.resultado || {}
+      zona.innerHTML = `<p class="hint">Sincronización ${E.estado === 'completado' ? 'completa' : 'con errores'}: ${fmtCero(R.insertados_total)} documento(s) nuevo(s), ${fmtCero(R.duplicados_total)} ya existentes (idempotencia), ${fmtCero(R.errores_totales)} con error del SII.${recargar ? ` <button class="btn btn-secondary btn-sm" data-repintar>Repintar con los datos nuevos</button>` : ''}</p>`
+      const b = zona.querySelector('[data-repintar]')
+      if (b && recargar) b.addEventListener('click', recargar)
+      return
+    }
+    const t = E.total || 0, p = E.procesados || 0
+    const pct = t > 0 ? Math.round((p / t) * 100) : 0
+    const periodo = E.periodo_actual ? ` — descargando ${perLabelPortal(E.periodo_actual)} (compras y ventas)` : ''
+    zona.innerHTML = `
+      <p class="hint">Sincronizando RCV ${perLabelPortal(E.desde || '')} → ${perLabelPortal(E.hasta || '')}: ${p}/${t} meses${esc(periodo)}</p>
+      <div class="pd-sync-bar"><div style="width:${pct}%"></div></div>`
+  }
+
+  function poll(jobId) {
+    clearInterval(timer)
+    timer = setInterval(async () => {
+      try {
+        const r = await apiGet(`/api/portal/empresas/${eid}/sincronizar/estado?job=${encodeURIComponent(jobId)}`)
+        pintar(r.estado)
+        if (!activo(r.estado)) clearInterval(timer)
+      } catch { /* un poll perdido no aborta el ciclo; el siguiente reintenta */ }
+    }, 3000)
+  }
+
+  async function iniciar() {
+    try {
+      btn.disabled = true
+      zona.innerHTML = UIEstado.cargando('Abriendo sesión del SII y pidiendo RCV de compras y ventas de 36 meses…')
+      const r = await apiPost(`/api/portal/empresas/${eid}/sincronizar`, {})
+      pintar({ jobId: r.jobId, desde: r.rango.desde, hasta: r.rango.hasta, total: r.periodos.length, procesados: 0, estado: 'procesando' })
+      poll(r.jobId)
+    } catch (err) {
+      btn.disabled = false
+      zona.innerHTML = UIEstado.error(err.message)
+    }
+  }
+
+  btn.addEventListener('click', iniciar)
+  // Re-attach: si llegamos a la pestaña con un job ya en curso, vemos su progreso.
+  ;(async () => {
+    try {
+      const s = await apiGet(`/api/portal/empresas/${eid}/sincronizar/estado`)
+      if (activo(s.estado) && s.estado.jobId) {
+        btn.disabled = true
+        pintar(s.estado)
+        poll(s.estado.jobId)
+      }
+    } catch { /* estado opcional */ }
+  })()
+}
+
+/**
  * Barras dobles mensuales tipo Power BI (SVG con sol rezelé CSS puro):
  * dos series por período con paleta propia, barra TOCABLE por clic
  * (drill-down al detalle de ese mes+flujo), meses sin datos como celda
@@ -501,6 +589,7 @@ window.VIEWS['portal-ventas'] = {
         </div>
         <p class="hint mt">Los filtros se aplican en el SERVIDOR al exportar también. Los montos de las notas de crédito se muestran con signo negativo (descuentan una vez).</p>
       </div>
+      <div id="pv-sync" class="mt"></div>
       <div id="pv-result">${UIEstado.cargando()}</div>`
 
     const paramsDe = () => ({
@@ -558,6 +647,7 @@ window.VIEWS['portal-ventas'] = {
 
     document.getElementById('pv-buscar').addEventListener('click', cargar)
     ;['pv-desde', 'pv-hasta'].forEach((id) => document.getElementById(id).addEventListener('change', cargar))
+    montarSyncPortal(eid, document.getElementById('pv-sync'), { recargar: cargar })
     await cargar()
   },
 }
@@ -576,6 +666,7 @@ window.VIEWS['portal-cartera'] = {
           <button class="btn btn-secondary" id="pc-cargar">Ver cartera</button>
         </div>
       </div>
+      <div id="pc-sync" class="mt"></div>
       <div id="pc-result">${UIEstado.cargando()}</div>`
 
     const SEGMENTOS = {
@@ -664,6 +755,7 @@ window.VIEWS['portal-cartera'] = {
 
     document.getElementById('pc-cargar').addEventListener('click', cargar)
     document.getElementById('pc-periodo').addEventListener('change', cargar)
+    montarSyncPortal(eid, document.getElementById('pc-sync'), { recargar: cargar })
     await cargar()
   },
 }
@@ -750,6 +842,7 @@ window.VIEWS['portal-cobranza'] = {
         </div>
         <p class="hint mt">Vista de SALDOS de documentos de venta CONTABILIZADOS sin cobro completo (misma fuente de cuenta corriente del sistema). Para cobrar/pagar usa el sistema interno — el portal es solo lectura.</p>
       </div>
+      <div id="pcb-sync" class="mt"></div>
       <div id="pcb-result">${UIEstado.cargando()}</div>`
 
     const cargar = async () => {
@@ -795,6 +888,7 @@ window.VIEWS['portal-cobranza'] = {
     }
 
     document.getElementById('pcb-cargar').addEventListener('click', cargar)
+    montarSyncPortal(eid, document.getElementById('pcb-sync'), { recargar: cargar })
     await cargar()
   },
 }
@@ -826,6 +920,7 @@ window.VIEWS['portal-reportes'] = {
           <button class="btn btn-secondary" id="pr-guardar">Guardar reporte</button>
         </div>
       </div>
+      <div id="pr-sync" class="mt"></div>
       <div id="pr-result" class="mt"></div>
       <div class="card mt">
         <h3>Mis reportes guardados</h3>
@@ -929,6 +1024,7 @@ window.VIEWS['portal-reportes'] = {
 
     document.getElementById('pr-ejecutar').addEventListener('click', ejecutar)
     document.getElementById('pr-guardar').addEventListener('click', guardar)
+    montarSyncPortal(eid, document.getElementById('pr-sync'), { recargar: ejecutar })
     await (async () => {
       // Catálogo REAL del backend (no hardcodeado en el front).
       try {
@@ -959,6 +1055,7 @@ window.VIEWS['portal-credito'] = {
           <button class="btn btn-primary" id="pcr-guardar">Fijar / actualizar</button>
         </div>
       </div>
+      <div id="pcr-sync" class="mt"></div>
       <div id="pcr-result" class="mt">${UIEstado.cargando()}</div>`
 
     async function guardar() {
@@ -1029,6 +1126,7 @@ window.VIEWS['portal-credito'] = {
     }
 
     document.getElementById('pcr-guardar').addEventListener('click', guardar)
+    montarSyncPortal(eid, document.getElementById('pcr-sync'), { recargar: cargar })
     await cargar()
   },
 }

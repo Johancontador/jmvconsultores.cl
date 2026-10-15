@@ -578,3 +578,18 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 @media (max-width: 960px) {
   .sys { grid-template-columns: 1fr; }
 }
+
+/* Banda de sincronización reutilizable en las pestañas del portal:
+   botón a la derecha, zona de estado/progreso ocupando el ancho restante */
+.pd-sync { display: flex; align-items: flex-start; justify-content: flex-end; gap: var(--space-3); }
+.pd-sync-zona { flex: 1; min-width: 0; }
+.pd-sync .btn { flex: none; }
+.pd-sync-bar {
+  height: 8px; margin-top: var(--space-1);
+  background: var(--border); border-radius: 4px; overflow: hidden;
+}
+.pd-sync-bar > div {
+  height: 100%; background: var(--accent); border-radius: 4px;
+  transition: width var(--dur-base);
+}
+@media (max-width: 640px) { .pd-sync { flex-wrap: wrap; } }
