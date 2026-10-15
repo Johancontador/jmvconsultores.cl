@@ -105,6 +105,19 @@ function leerPeriodo(id) {
 
 window.appBoot = boot
 
+/**
+ * Aterrizaje por rol: el dueño de UNA empresa cliente (rol admin_empresa,
+ * no super admin) aterriza en el PORTAL de cliente — su panel comercial —
+ * no en el sistema operativo interno, que es la herramienta de JMV.
+ * El dueño conserva el acceso al sistema por el menú si lo necesita.
+ */
+function hashInicial() {
+  if (!S.superAdmin && S.empresas.length === 1 && S.empresa?.rol === 'admin_empresa') {
+    return '#portal-inicio'
+  }
+  return '#inicio'
+}
+
 async function boot() {
   try {
     // Sondeo barato (siempre 200): sin sesión renderiza el login sin ensuciar
@@ -122,7 +135,7 @@ async function boot() {
       return
     }
     renderShell()
-    navigate(location.hash || '#inicio')
+    navigate(location.hash || hashInicial())
   } catch {
     renderLogin()
   }
@@ -149,7 +162,7 @@ function setEmpresa(id) {
   S.cache = {}
   localStorage.removeItem('iva_periodo_activo') // cada empresa retoma su período
   renderShell()
-  navigate(location.hash || '#inicio')
+  navigate(location.hash || hashInicial())
 }
 
 /* ---------- login embebido (mismo template que la landing) ---------- */
