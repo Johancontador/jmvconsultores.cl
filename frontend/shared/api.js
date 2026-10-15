@@ -21,6 +21,17 @@ async function apiPost(url, body) {
   return data
 }
 
+async function apiPatch(url, body) {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) throw new Error(data.error || `Error ${res.status}`)
+  return data
+}
+
 async function apiPut(url, body) {
   const res = await fetch(url, {
     method: 'PUT',

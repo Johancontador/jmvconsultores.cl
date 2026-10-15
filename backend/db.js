@@ -375,6 +375,9 @@ require('./core/migraciones').migracionesDte2(db)
 require('./core/migraciones').migracionesUsuarioTemporal(db)
 // CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
 require('./core/migraciones').migracionesCrm(db)
+// CRM comercial (rediseño 2026-10-15): fichas, contactos, prospectos,
+// oportunidades con embudo configurable, actividades e informes.
+require('./core/migraciones').migracionesCrmComercial(db)
 // BLOQUE 2 (masterplan): persistencia de jobs largos en SQLite (recuperación
 // tras restart). Al arrancar, libera locks vencidos y deja re-landizables los
 // trabajos colgados.

@@ -730,3 +730,62 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sys .centro-card { transition: none; }
   .sys .centro-card:hover { transform: none; }
 }
+
+/* ============================================================
+   CRM COMERCIAL — pestañas, kanban, fichas (2026-10-15)
+   Tokens del design system; sin azules dominantes; ok móvil.
+   ============================================================ */
+.sys .crm-tabs {
+  display: flex; flex-wrap: wrap; gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.sys .crm-tab {
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  color: var(--fg-muted); cursor: pointer;
+  padding: 6px var(--space-3); font-size: var(--fs-sm);
+}
+.sys .crm-tab:hover { color: var(--fg); background: var(--accent-soft); }
+.sys .crm-tab.activa {
+  color: var(--accent); background: var(--accent-soft);
+  border-color: var(--accent); font-weight: var(--fw-medium);
+}
+
+.sys .crm-kanban {
+  display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  padding: var(--space-3) var(--space-4) var(--space-6);
+  align-items: start; overflow-x: auto;
+}
+.sys .crm-kcol {
+  background: var(--surface-alt, rgba(127,127,127,.04));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 10px);
+  padding: var(--space-2);
+  min-height: 120px;
+}
+.sys .crm-kcol-h { display: flex; gap: var(--space-2); align-items: center; padding: 0 var(--space-1) var(--space-1); }
+.sys .crm-kcards { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.sys .crm-kcard {
+  background: var(--surface, var(--card, #fff));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-2) var(--space-3);
+  display: flex; flex-direction: column; gap: 4px;
+  cursor: pointer;
+}
+.sys .crm-kcard:hover { border-color: var(--accent); }
+.sys .crm-kcard.terminal { opacity: .85; }
+.sys .crm-kcard .form-input { height: 24px; font-size: var(--fs-xs); }
+
+@media (max-width: 768px) {
+  .sys .crm-kanban { grid-template-columns: 1fr 1fr; }
+  .sys .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
+}
+@media (max-width: 480px) {
+  .sys .crm-kanban { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sys .crm-tab, .sys .crm-kcard { transition: none; }
+}

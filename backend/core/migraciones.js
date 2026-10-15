@@ -949,4 +949,15 @@ function migracionesCrm(db) {
   require('./crm').migracionesCrm(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, migracionesTesoreriaAplicaciones, seedPlanCuentas }
+// ============================================================
+// CRM comercial (rediseño 2026-10-15): fichas, contactos,
+// prospectos, oportunidades (embudo configurable), actividades.
+// Tablas idempotentes (CREATE IF NOT EXISTS + índices parciales).
+// Sin migración destructiva: reversión = DROP de las tablas NUEVAS (ver docs).
+// ============================================================
+function migracionesCrmComercial(db) {
+  require('./crm-comercial').crearTablasCrmComercial(db)
+  require('./crm-comercial').migracionesCrmComercial(db)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }
