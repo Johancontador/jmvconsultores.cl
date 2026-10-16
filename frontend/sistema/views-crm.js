@@ -209,6 +209,7 @@ async function renderOportunidades(cuerpo, base) {
           </div>
           <input id="crm-opo-q" class="form-input crm-buscar" placeholder="Buscar nombre o cliente…" value="${esc(f.q || '')}" aria-label="Buscar oportunidades">
           <span class="spacer"></span>
+          <button id="crm-opo-embudo" class="btn btn-secondary btn-sm" title="Configurar etapas del embudo">⚙ Embudo</button>
           <button id="crm-opo-export" class="btn btn-secondary btn-sm">Exportar CSV</button>
           <button id="crm-opo-nueva" class="btn btn-primary btn-sm">+ Oportunidad</button>
         </div>
@@ -248,6 +249,7 @@ async function renderOportunidades(cuerpo, base) {
   })
   document.getElementById('crm-opo-export')?.addEventListener('click', () => exportarCsv('oportunidades', data.oportunidades))
   document.getElementById('crm-opo-nueva')?.addEventListener('click', () => modalNuevaOportunidad(data.etapas))
+  document.getElementById('crm-opo-embudo')?.addEventListener('click', () => modalEmbudo())
 
   const cuerpoOpo = document.getElementById('crm-opo-cuerpo')
   if (vista === 'kanban') pintarKanban(cuerpoOpo, data)
@@ -1056,3 +1058,85 @@ function exportarCsv(nombre, filas) {
   a.click()
   URL.revokeObjectURL(a.href)
 }
+
+/* ==================== CONFIGURACIÓN DEL EMBUDO (§E) ==================== */
+/* Modal CRUD de etapas: crea/edita/elimina con las reglas del core (terminales
+   GANADA/PERDIDA protegidas, no se elimina una etapa en uso). Sin drag:
+   el orden se edita como número — consistente con cero-dependencias. */
+
+async function modalEmbudo() {
+  let etapas
+  try { etapas = (await apiGet('/api/crm/etapas')).etapas } catch (e) { return showToast(e.message, 'error') }
+
+  const maxNoTerm = Math.max(...etapas.filter((e) => !e.terminal).map((e) => e.orden), 0)
+  const fila = (e) => `
+    <tr data-nombre="${esc(e.nombre)}">
+      <td class="mono">${e.orden}</td>
+      <td><input class="form-input em-nombre" value="${esc(e.nombre)}" ${e.terminal ? 'readonly' : ''} aria-label="Nombre de etapa"></td>
+      <td><input class="form-input em-prob" type="number" min="0" max="100" value="${e.prob_default}" aria-label="Probabilidad default (%)"></td>
+      <td>${e.terminal ? '<span class="chip anulado">terminal</span>' : `<button class="btn btn-danger btn-sm em-eliminar" data-eliminar="${esc(e.nombre)}" title="Eliminar etapa">✕</button>`}</td>
+    </tr>`
+
+  openModal(`
+    <div class="modal-header"><h2 class="modal-title">Etapas del embudo comercial</h2>
+      <button type="button" class="btn-icon" onclick="cerrarModal()" aria-label="Cerrar">✕</button></div>
+    <div class="modal-body">
+      <p class="hint mb">El orden define el Kanban de izquierda a derecha; la probabilidad default se aplica al cambiar de etapa (editable caso a caso). GANADA y PERDIDA son terminales y no se renombran ni eliminan.</p>
+      <table class="tbl mb" id="embudo-tbl">
+        <thead><tr><th style="width:44px"></th><th>Etapa</th><th style="width:120px">Prob. def.</th><th style="width:70px"></th></tr></thead>
+        <tbody>${etapas.map(fila).join('')}</tbody>
+      </table>
+      <div class="frm-row">
+        <input id="em-nueva-nombre" class="form-input" placeholder="Nueva etapa (2..40)" style="flex:1">
+        <input id="em-nueva-prob" class="form-input" type="number" min="0" max="100" value="30" style="width:90px" title="Probabilidad default">
+        <input id="em-nueva-orden" class="form-input" type="number" min="1" max="${maxNoTerm + 1}" value="${maxNoTerm + 1}" style="width:80px" title="Posición (1 = primera)">
+        <button class="btn btn-secondary btn-sm" id="em-crear">+ Agregar</button>
+      </div>
+      <div id="em-error" class="field-bad mt" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="em-guardar">Guardar cambios</button>
+    </div>`)
+
+  const errBox = document.getElementById('em-error')
+  const mostrarErr = (msg) => { errBox.textContent = msg; errBox.style.display = 'block' }
+  const limpiarErr = () => { errBox.textContent = ''; errBox.style.display = 'none' }
+
+  const guardar = async () => {
+    limpiarErr()
+    const trs = [...document.querySelectorAll('#embudo-tbl tbody tr')]
+    for (const tr of trs) {
+      const nombre = tr.dataset.nombre
+      const inputNombre = tr.querySelector('.em-nombre')
+      const prob = Number(tr.querySelector('.em-prob').value)
+      if (!inputNombre.readOnly && inputNombre.value.trim().toUpperCase() !== nombre) {
+        try { await apiPatch(`/api/crm/etapas/${encodeURIComponent(nombre)}`, { nombre: inputNombre.value.trim(), prob_default: prob }) }
+        catch (e) { return mostrarErr(e.message) }
+      } else {
+        try { await apiPatch(`/api/crm/etapas/${encodeURIComponent(nombre)}`, { prob_default: prob }) }
+        catch (e) { return mostrarErr(e.message) }
+      }
+    }
+    cerrarModal(); showToast('Embudo actualizado', 'success'); renderCrm()
+  }
+  document.getElementById('em-guardar')?.addEventListener('click', guardar)
+
+  document.querySelectorAll('.em-eliminar').forEach((b) => b.addEventListener('click', async () => {
+    limpiarErr()
+    try { await apiDelete(`/api/crm/etapas/${encodeURIComponent(b.dataset.eliminar)}`); b.closest('tr').remove(); showToast('Etapa eliminada', 'success') }
+    catch (e) { mostrarErr(e.message) }
+  }))
+
+  document.getElementById('em-crear')?.addEventListener('click', async () => {
+    limpiarErr()
+    const nombre = document.getElementById('em-nueva-nombre').value.trim()
+    const prob_default = Number(document.getElementById('em-nueva-prob').value)
+    const orden = Number(document.getElementById('em-nueva-orden').value)
+    try {
+      await apiPost('/api/crm/etapas', { nombre, prob_default, orden })
+      showToast(`Etapa ${nombre.toUpperCase()} creada`, 'success'); cerrarModal(); renderCrm()
+    } catch (e) { mostrarErr(e.message) }
+  })
+}
+

@@ -334,3 +334,62 @@ test('REGRESIÓN: el módulo de fidelización sigue funcionando (pipeline/engage
   assert.ok(eng.resumen && typeof eng.resumen.promedio === 'number')
   assert.equal(Object.keys(co.etapasDe(db)).length, 6, 'embudo configurable sembrado completo')
 })
+
+/* ---------------- T8: configuración del embudo (§E, nuevo) ---------------- */
+
+test('T8a: crear etapa — ok, duplicada rechaza, orden fuera de rango rechaza, terminales nacen solo en la semilla', () => {
+  const r = co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'cotizacion', prob_default: 40, orden: 3 } })
+  assert.equal(r.nombre, 'COTIZACION', 'normaliza a mayúsculas / NOCASE')
+  const etapas = co.listarEtapas(db)
+  assert.equal(etapas.find((e) => e.nombre === 'COTIZACION').orden, 3)
+  // desplazó PROPUESTA/NEGOCIACION (no terminales) una posición a la derecha
+  assert.equal(etapas.find((e) => e.nombre === 'PROPUESTA').orden, 4)
+  assert.equal(etapas.find((e) => e.nombre === 'NEGOCIACION').orden, 5)
+  // terminales intactas al final
+  assert.equal(etapas.find((e) => e.nombre === 'GANADA').orden, 6)
+  assert.equal(etapas.find((e) => e.nombre === 'PERDIDA').orden, 7)
+  assert.throws(() => co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'cotizacion', prob_default: 10 } }), /duplicada/i, 'NOCASE: mismas letras en otra mayúscula es duplicado')
+  assert.throws(() => co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'X', prob_default: 10 } }), /2\.\.40/)
+  assert.throws(() => co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'VALIDA', prob_default: 10, orden: 99 } }), /orden/)
+  assert.throws(() => co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'VALIDA2', prob_default: 140 } }), /prob_default/)
+})
+
+test('T8b: editar — renombrar nueva etapas ok; GANADA/PERDIDA protegidas; prob default de transición heredada', () => {
+  co.editarEtapa(db, { usuarioId: adminId, nombre: 'COTIZACION', etapa: { nombre: 'QUOTING', prob_default: 45 } })
+  assert.equal(co.etapaDe(db, 'QUOTING').prob_default, 45)
+  assert.throws(() => co.editarEtapa(db, { usuarioId: adminId, nombre: 'GANADA', etapa: { nombre: 'WON' } }), /renombra GANADA\/PERDIDA/)
+  assert.throws(() => co.editarEtapa(db, { usuarioId: adminId, nombre: 'PERDIDA', etapa: { orden: 1 } }), /reordena una etapa terminal/)
+  assert.throws(() => co.editarEtapa(db, { usuarioId: adminId, nombre: 'NEGOCIO_INEXISTENTE', etapa: { prob_default: 10 } }), /inexistente/)
+  // cambio default: una oportunidad en QUOTING hereda prob 45 sin prob explícita
+  const opo = co.crearOportunidad(db, { usuarioId: adminId, oportunidad: { empresaId: A, nombre: 'Opo embudo', monto: 1000, etapa: 'DETALLE' } })
+  co.cambiarEtapaOportunidad(db, { usuarioId: adminId, oportunidadId: opo.id, etapa: 'QUOTING' })
+  assert.equal(co.obtenerOportunidad(db, opo.id).probabilidad, 45, 'prob hereda el default de la etapa destino')
+})
+
+test('T8c: eliminar — etapa en uso rechaza; terminales rechazan; libre se elimina y compacta orden', () => {
+  // QUOTING tiene la oportunidad de T8b → imposible
+  assert.throws(() => co.eliminarEtapa(db, { usuarioId: adminId, nombre: 'QUOTING' }), /usan la etapa/)
+  assert.throws(() => co.eliminarEtapa(db, { usuarioId: adminId, nombre: 'GANADA' }), /terminales/)
+  assert.throws(() => co.eliminarEtapa(db, { usuarioId: adminId, nombre: 'PERDIDA' }), /terminales/)
+  // crear una etapa libre y eliminarla
+  co.crearEtapa(db, { usuarioId: adminId, etapa: { nombre: 'TEMPORAL', prob_default: 15 } })
+  assert.deepEqual(co.eliminarEtapa(db, { usuarioId: adminId, nombre: 'TEMPORAL' }), { ok: true })
+  const ordenes = co.listarEtapas(db).map((e) => e.orden)
+  assert.deepEqual(ordenes, [...ordenes].sort((a, b) => a - b), 'el orden queda compacto sin huecos')
+})
+
+test('T8d: multitenant HTTP sobre el embudo — contador 403/200 según guard, y el router responde las 4 rutas', async () => {
+  const ses = crearSesion(CONTADOR)
+  const r1 = await fetch(`http://127.0.0.1:${port}/api/crm/etapas`, { headers: { Cookie: `sid=${ses}` } })
+  assert.equal(r1.status, 200, 'el contador del despacho lee el embudo')
+  const crear = await fetch(`http://127.0.0.1:${port}/api/crm/etapas`, {
+    method: 'POST', headers: { Cookie: `sid=${ses}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: 'VIA_HTTP', prob_default: 10 }),
+  })
+  assert.equal(crear.status, 201, 'el contador del despacho crea etapas (config del módulo, no por empresa)')
+  const borrar = await fetch(`http://127.0.0.1:${port}/api/crm/etapas/VIA_HTTP`, { method: 'DELETE', headers: { Cookie: `sid=${ses}` } })
+  assert.equal(borrar.status, 200)
+  // sin sesión → 401
+  const anon = await fetch(`http://127.0.0.1:${port}/api/crm/etapas`)
+  assert.equal(anon.status, 401)
+})

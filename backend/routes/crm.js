@@ -331,6 +331,31 @@ router.post('/oportunidades/:id/etapa', guardCrm, (req, res) => {
   } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
 })
 
+/* ---------------------- CONFIGURACIÓN DEL EMBUDO (§E) ---------------------- */
+/* Etapas del embudo: CRUD real (antes solo SQL/admin). guardCrm SOLO despacho;
+   es configuración global del módulo (no por empresa) — igual que la semilla.
+   Escrituras quedan auditadas en core (crm.etapa_*). */
+
+router.get('/etapas', guardCrm, (req, res) => {
+  try { res.json({ ok: true, etapas: comercial.listarEtapas(db) }) }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+})
+
+router.post('/etapas', guardCrm, (req, res) => {
+  try { res.status(201).json(comercial.crearEtapa(db, { usuarioId: req.user.id, etapa: req.body, ip: req.ip })) }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+})
+
+router.patch('/etapas/:nombre', guardCrm, (req, res) => {
+  try { res.json(comercial.editarEtapa(db, { usuarioId: req.user.id, nombre: req.params.nombre, etapa: req.body, ip: req.ip })) }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+})
+
+router.delete('/etapas/:nombre', guardCrm, (req, res) => {
+  try { res.json(comercial.eliminarEtapa(db, { usuarioId: req.user.id, nombre: req.params.nombre, ip: req.ip })) }
+  catch (err) { res.status(400).json({ ok: false, error: err.message }) }
+})
+
 /* ---------------------------- ACTIVIDADES --------------------------- */
 
 router.get('/actividades', guardCrm, (req, res) => {

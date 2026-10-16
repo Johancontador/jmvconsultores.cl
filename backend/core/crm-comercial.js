@@ -209,6 +209,129 @@ function migracionesCrmComercial(db) {
 
 /* ========================= VALIDADORES BASE ========================== */
 
+/**
+ * CONFIGURACIÓN DEL EMBUDO (§E — "stages" de Twenty/Espo, patrón sin copia):
+ * CRUD de etapas con reglas de negocio conservadoras:
+ *  - crear: nombre único (NOCASE), orden disincto de la semillada, prob 0..100
+ *  - editar: prob/orden cambiables; GANADA/PERDIDA NO cambian de nombre, de
+ *    terminal ni de significado (el historial y los informes dependen de ello)
+ *  - eliminar: solo si NO hay oportunidades referenciándola ni es terminal
+ *  - re-ordenar: de una vez, con la lista completa (fase UI drag-less)
+ *
+ * Todo auditado (auditoría) — el embudo es configuración comercial del despacho.
+ */
+const MIN_ETAPAS = 2
+
+/**
+ * Renumeración atómica de las etapas: el `orden UNIQUE` de la tabla prohíbe
+ * corrimientos parciales (colisión de valores). Técnica en dos pasadas DENTRO
+ * de la transacción: (1) mapea TODO orden actual a un valor único alto
+ * (inyectivo: nunca colisiona), (2) asigna el orden final secuencial.
+ */
+const OFFSET_ORDEN = 1000
+function renumerarEtapas(db, nombresEnOrden) {
+  // Pasada 1: valor antiguo + 200000 por fila — mapeo inyectivo, sin colisiones
+  db.prepare(`UPDATE crm_oportunidad_etapas SET orden = 200000 + orden`).run()
+  nombresEnOrden.forEach((nombre, i) =>
+    db.prepare(`UPDATE crm_oportunidad_etapas SET orden = ? WHERE nombre = ? COLLATE NOCASE`).run(i + 1, nombre))
+  const terminales = db.prepare(`SELECT nombre FROM crm_oportunidad_etapas WHERE terminal = 1 ORDER BY orden`).all().map((r) => r.nombre)
+  terminales.forEach((nombre, j) =>
+    db.prepare(`UPDATE crm_oportunidad_etapas SET orden = ? WHERE nombre = ? COLLATE NOCASE`).run(nombresEnOrden.length + 1 + j, nombre))
+}
+
+function validarNombreEtapa(nombre) {
+  const n = String(nombre || '').trim().toUpperCase()
+  if (!n || n.length < 2 || n.length > 40) throw new Error('Nombre de etapa: 2..40 caracteres')
+  return n
+}
+
+function listarEtapas(db) { return etapasDe(db) }
+
+/** Crea una etapa NO terminal (las terminales solo nacen en la semilla). */
+function crearEtapa(db, { usuarioId, etapa, ip = null }) {
+  const nombre = validarNombreEtapa(etapa && etapa.nombre)
+  if (!etapaDe(db, nombre)) {
+    // continúa: el nombre NO existe — es el caso válido
+  } else {
+    throw new Error(`Etapa duplicada: ${nombre}`)
+  }
+  if (!validarProb(etapa.prob_default ?? 0)) throw new Error('prob_default inválida (entero 0..100)')
+  const existentes = etapasDe(db)
+  const maxOrden = Math.max(...existentes.filter((e) => !e.terminal).map((e) => e.orden), 0)
+  const orden = Number.isInteger(Number(etapa.orden)) ? Math.round(Number(etapa.orden)) : maxOrden + 1
+  // el orden debe quedar ENTRE etapas no terminales (ANTES de GANADA/PERDIDA)
+  if (orden < 1 || orden > maxOrden + 1) throw new Error(`orden debe estar entre 1 y ${maxOrden + 1} (antes de las terminales)`)
+  const noticia = existentes.filter((e) => !e.terminal && e.nombre.toUpperCase() !== nombre).map((e) => e.nombre)
+  noticia.splice(Math.min(orden - 1, noticia.length), 0, nombre)
+  const tx = db.transaction(() => {
+    // insert con orden transitorio en un rango disjunto (300000+): la
+    // renumeración final REUBICA a la nueva junto con las existentes
+    db.prepare(`
+      INSERT INTO crm_oportunidad_etapas (nombre, orden, prob_default, terminal, ganada)
+      VALUES (?, ?, ?, 0, 0)
+    `).run(nombre, 300000 + orden, Math.round(Number(etapa.prob_default ?? 0)))
+    renumerarEtapas(db, noticia)
+    registrarAccion(db, {
+      usuarioId, accion: 'crm.etapa_crear', entidad: 'crm_oportunidad_etapas', entidadId: nombre,
+      despues: { nombre, orden, prob_default: Math.round(Number(etapa.prob_default ?? 0)) }, ip,
+    })
+  })
+  tx()
+  return { ok: true, nombre, orden }
+}
+
+/** Edita prob_default y/o orden de una etapa existente. Terminal: prob libre, resto NO. */
+function editarEtapa(db, { usuarioId, nombre, etapa, ip = null }) {
+  const fila = etapaDe(db, nombre)
+  if (!fila) throw new Error(`Etapa inexistente: ${nombre}`)
+  const nuevoNombre = etapa && etapa.nombre != null ? validarNombreEtapa(etapa.nombre) : fila.nombre
+  const esTerminal = fila.terminal === 1
+  if (esTerminal && (nuevoNombre !== fila.nombre)) throw new Error('No se renombra GANADA/PERDIDA (terminales del embudo)')
+  if (!esTerminal && etapaDe(db, nuevoNombre) && nuevoNombre.toUpperCase() !== fila.nombre.toUpperCase()) throw new Error(`Etapa duplicada: ${nuevoNombre}`)
+  const prob = etapa != null && etapa.prob_default != null ? Number(etapa.prob_default) : fila.prob_default
+  if (!validarProb(prob)) throw new Error('prob_default inválida (entero 0..100)')
+  if (esTerminal && etapa.orden != null && Number(etapa.orden) !== fila.orden) throw new Error('No se reordena una etapa terminal (siempre al final del embudo)')
+  const nuevoOrden = etapa && etapa.orden != null ? Math.round(Number(etapa.orden)) : fila.orden
+  if (!Number.isInteger(nuevoOrden) || nuevoOrden < 1) throw new Error('orden inválido (entero ≥ 1)')
+  const tx = db.transaction(() => {
+    if (nuevoOrden !== fila.orden) {
+      // mover: renumeración completa de las no terminales con la etapa en su posición
+      const otras = etapasDe(db).filter((e) => !e.terminal && e.nombre.toUpperCase() !== fila.nombre.toUpperCase()).map((e) => e.nombre)
+      otras.splice(Math.min(nuevoOrden - 1, otras.length), 0, fila.nombre)
+      renumerarEtapas(db, otras)
+    }
+    db.prepare(`UPDATE crm_oportunidad_etapas SET nombre = ?, prob_default = ? WHERE nombre = ?`).run(nuevoNombre, prob, fila.nombre)
+    registrarAccion(db, {
+      usuarioId, accion: 'crm.etapa_editar', entidad: 'crm_oportunidad_etapas', entidadId: fila.nombre,
+      antes: { nombre: fila.nombre, orden: fila.orden, prob_default: fila.prob_default },
+      despues: { nombre: nuevoNombre, orden: nuevoOrden, prob_default: prob }, ip,
+    })
+  })
+  tx()
+  return { ok: true, nombre: nuevoNombre, orden: nuevoOrden, prob_default: prob }
+}
+
+/** Elimina una etapa SOLO si no es terminal y no hay oportunidades en ella. */
+function eliminarEtapa(db, { usuarioId, nombre, ip = null }) {
+  const fila = etapaDe(db, nombre)
+  if (!fila) throw new Error(`Etapa inexistente: ${nombre}`)
+  if (fila.terminal === 1) throw new Error('No se elimina GANADA/PERDIDA (terminales del embudo)')
+  const enUso = db.prepare(`SELECT COUNT(*) AS n FROM crm_oportunidades WHERE etapa = ? COLLATE NOCASE`).get(nombre)
+  if (enUso.n > 0) throw new Error(`Imposible eliminar: ${enUso.n} oportunidad(es) usan la etapa ${nombre}`)
+  if (etapasDe(db).filter((e) => e.terminal === 0).length <= MIN_ETAPAS) throw new Error(`El embudo conserva al menos ${MIN_ETAPAS} etapas no terminales`)
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM crm_oportunidad_etapas WHERE nombre = ?`).run(nombre)
+    // compactar orden de las restantes no terminales (renumeración sin huecos)
+    renumerarEtapas(db, etapasDe(db).filter((e) => e.terminal === 0).map((e) => e.nombre))
+    registrarAccion(db, {
+      usuarioId, accion: 'crm.etapa_eliminar', entidad: 'crm_oportunidad_etapas', entidadId: nombre,
+      antes: { nombre, orden: fila.orden, prob_default: fila.prob_default }, ip,
+    })
+  })
+  tx()
+  return { ok: true }
+}
+
 function empresaExiste(db, empresaId) {
   return db.prepare(`SELECT id, rut, nombre FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
 }
@@ -1254,6 +1377,7 @@ function duplicados(db, { q = '', tipo = 'empresas', empresaIds = null } = {}) {
 module.exports = {
   MONTO_PESADO, FUENTES, PRIORIDADES, PROSPECTO_ESTADOS, ACTIVIDAD_TIPOS, ACTIVIDAD_ESTADOS, ETAPAS_SEMILLA,
   crearTablasCrmComercial, migracionesCrmComercial,
+  listarEtapas, crearEtapa, editarEtapa, eliminarEtapa,
   obtenerFicha, guardarFicha,
   listarContactos, crearContacto, editarContacto, eliminarContacto,
   listarProspectos, crearProspecto, editarProspecto, convertirProspecto, importarProspectos, empresaPorRut,
