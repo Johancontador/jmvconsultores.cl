@@ -47,15 +47,26 @@ function parseJson(texto, defecto = null) {
 /* ============================ 1. PIPELINE ============================ */
 
 /** Etapa actual de cada empresa (crea fila CRM si no existe, PENDIENTE aumenta). */
-function listarPipeline(db, { usuarioId, ip = null }) {
+/** Helper multitenant: WHERE por asignaciones cuando `empresaIds` es un array
+ * de ids permitidos (NULL/undefined = sin restricción, super admin). Los
+ * filtros SIEMPRE parametrizados — nadie concatena ids a SQL. */
+function filtroTenant(empresaIds, alias = 'e') {
+  if (!Array.isArray(empresaIds)) return { sql: '', params: [] }
+  if (!empresaIds.length) return { sql: ` AND ${alias}.id = -1`, params: [] } // sin asignaciones: ve nada
+  return { sql: ` AND ${alias}.id IN (${empresaIds.map(() => '?').join(',')})`, params: empresaIds }
+}
+
+function listarPipeline(db, { usuarioId, empresaIds = null, ip = null }) {
+  const ten = filtroTenant(empresaIds)
   const filas = db.prepare(`
     SELECT e.id AS empresa_id, e.rut, e.nombre, e.activo,
            c.etapa, c.notas, c.proximo_contacto, c.ultima_interaccion,
            c.actualizado_en
     FROM empresas e
     LEFT JOIN crm_pipeline c ON c.empresa_id = e.id
+    WHERE 1=1${ten.sql}
     ORDER BY e.nombre
-  `).all()
+  `).all(...ten.params)
   return filas.map((f) => ({
     empresa_id: f.empresa_id, rut: f.rut, nombre: f.nombre, activo: !!f.activo,
     etapa: f.etapa || 'PROSPECTO', notas: f.notas || null,
@@ -110,15 +121,16 @@ function registrarInteraccion(db, { usuarioId, empresaId, notas = null, ip = nul
 
 /* ========================== 2. RECORDATORIOS ========================== */
 
-function listarRecordatorios(db, { usuarioId, soloPendientes = true, ip = null }) {
-  const lim = soloPendientes ? 'WHERE r.done = 0' : ''
+function listarRecordatorios(db, { usuarioId, soloPendientes = true, empresaIds = null, ip = null }) {
+  const ten = filtroTenant(empresaIds)
+  const lim = soloPendientes ? 'r.done = 0' : '1=1' // original: solo pendientes excluye done=1
   return db.prepare(`
     SELECT r.id, r.empresa_id, e.nombre AS empresa_nombre, r.tipo, r.titulo,
            r.fecha, r.done, r.completado_en, r.notas, r.creado_en
     FROM crm_recordatorios r JOIN empresas e ON e.id = r.empresa_id
-    ${lim}
+    WHERE ${lim}${ten.sql}
     ORDER BY r.fecha ASC, r.id ASC
-  `).all()
+  `).all(...ten.params)
 }
 
 function crearRecordatorio(db, { usuarioId, empresaId, tipo, titulo, fecha, notas = null, ip = null }) {
@@ -160,13 +172,15 @@ function completarRecordatorio(db, { usuarioId, recordatorioId, ip = null }) {
 
 /* ============================= 3. CAMPAÑAS ============================= */
 
-function listarCampanas(db) {
+function listarCampanas(db, { empresaIds = null } = {}) {
+  const ten = filtroTenant(empresaIds)
   return db.prepare(`
     SELECT c.id, c.empresa_id, e.nombre AS empresa_nombre, c.plantilla,
            c.periodo, c.mensaje, c.enviado, c.enviado_en, c.creado_en
     FROM crm_campanas c JOIN empresas e ON e.id = c.empresa_id
+    WHERE 1=1${ten.sql}
     ORDER BY c.creado_en DESC, c.id DESC
-  `).all()
+  `).all(...ten.params)
 }
 
 /**
@@ -240,8 +254,9 @@ function diasUltimaSincronizacion(db, empresaId) {
  *  +20 si período actual está CERRADO o hay cierre; ONBOARDING cuenta medio
  *  +20 si contacto del pipeline ≤ 30 días; +10 ≤ 60; 0 si más
  */
-function engagement(db, { usuarioId, ip = null }) {
-  const out = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1 ORDER BY nombre`).all().map((e) => {
+function engagement(db, { usuarioId, empresaIds = null, ip = null }) {
+  const ten = filtroTenant(empresaIds)
+  const out = db.prepare(`SELECT id, rut, nombre FROM empresas e WHERE e.activo = 1 AND 1=1${ten.sql} ORDER BY e.nombre`).all(...ten.params).map((e) => {
     const dias = diasUltimaSincronizacion(db, e.id)
     const pendientes = db.prepare(`SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ? AND estado = 'PENDIENTE'`).get(e.id)?.n || 0
     const etapaRow = db.prepare(`SELECT etapa, ultima_interaccion FROM crm_pipeline WHERE empresa_id = ?`).get(e.id)
@@ -304,9 +319,10 @@ function engagement(db, { usuarioId, ip = null }) {
  * motivo(s): sincronización rezagada/atrasada, documentos acumulados,
  * contacto lejano, último período aún ABIERTO de un mes ya vencido.
  */
-function alertasRetencion(db) {
+function alertasRetencion(db, { empresaIds = null } = {}) {
   const per = periodoActual()
-  const salida = db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1 ORDER BY nombre`).all().flatMap((e) => {
+  const ten = filtroTenant(empresaIds)
+  const salida = db.prepare(`SELECT id, rut, nombre FROM empresas e WHERE e.activo = 1 AND 1=1${ten.sql} ORDER BY e.nombre`).all(...ten.params).flatMap((e) => {
     const dias = diasUltimaSincronizacion(db, e.id)
     const pendientes = db.prepare(`SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ? AND estado = 'PENDIENTE'`).get(e.id)?.n || 0
     const etapaRow = db.prepare(`SELECT etapa, ultima_interaccion FROM crm_pipeline WHERE empresa_id = ?`).get(e.id)

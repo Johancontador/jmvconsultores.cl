@@ -48,7 +48,7 @@ function accesoEmpresa(req, res, empresaId) {
 /* --------------------------- PIPELINE --------------------------- */
 
 router.get('/pipeline', guardCrm, (req, res) => {
-  res.json({ ok: true, etapas: crm.ETAPAS, pipeline: crm.listarPipeline(db, { usuarioId: req.user.id }) })
+  res.json({ ok: true, etapas: crm.ETAPAS, pipeline: crm.listarPipeline(db, { usuarioId: req.user.id, empresaIds: req.crmEmpresaIds }) })
 })
 
 router.post('/pipeline/:empresaId', guardCrm, (req, res) => {
@@ -79,7 +79,7 @@ router.post('/pipeline/:empresaId/interaccion', guardCrm, (req, res) => {
 router.get('/recordatorios', guardCrm, (req, res) => {
   res.json({
     ok: true,
-    recordatorios: crm.listarRecordatorios(db, { soloPendientes: req.query.todos !== '1' }),
+    recordatorios: crm.listarRecordatorios(db, { soloPendientes: req.query.todos !== '1', empresaIds: req.crmEmpresaIds }),
     tipos: crm.TIPOS_RECORDATORIO,
   })
 })
@@ -107,7 +107,7 @@ router.post('/recordatorios/:id/completar', guardCrm, (req, res) => {
 /* ---------------------------- CAMPAÑAS ---------------------------- */
 
 router.get('/campanas', guardCrm, (req, res) => {
-  res.json({ ok: true, campanas: crm.listarCampanas(db), plantillas: Object.keys(crm.PLANTILLAS_CAMPANA) })
+  res.json({ ok: true, campanas: crm.listarCampanas(db, { empresaIds: req.crmEmpresaIds }), plantillas: Object.keys(crm.PLANTILLAS_CAMPANA) })
 })
 
 router.post('/campanas', guardCrm, (req, res) => {
@@ -131,13 +131,13 @@ router.post('/campanas/:id/enviar', guardCrm, (req, res) => {
 /* --------------------------- ENGAGEMENT --------------------------- */
 
 router.get('/engagement', guardCrm, (req, res) => {
-  res.json(crm.engagement(db, { usuarioId: req.user.id }))
+  res.json(crm.engagement(db, { usuarioId: req.user.id, empresaIds: req.crmEmpresaIds }))
 })
 
 /* -------------------- RETENCIÓN PROACTIVA (Fase C) -------------------- */
 
 router.get('/alertas', guardCrm, (req, res) => {
-  res.json(crm.alertasRetencion(db))
+  res.json(crm.alertasRetencion(db, { empresaIds: req.crmEmpresaIds }))
 })
 
 router.post('/campanas/lote', guardCrm, (req, res) => {
@@ -185,7 +185,7 @@ router.get('/contactos', guardCrm, (req, res) => {
     const empresaId = req.query.empresa_id != null ? accesoEmpresa(req, res, req.query.empresa_id) : null
     if (req.query.empresa_id != null && !empresaId) return
     res.json({ ok: true, contactos: comercial.listarContactos(db, {
-      empresaId, texto: req.query.q || null,
+      empresaId, texto: req.query.q || null, empresaIds: req.crmEmpresaIds,
       limit: req.query.limit || 100, offset: req.query.offset || 0,
     }) })
   } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
@@ -228,7 +228,7 @@ router.delete('/contactos/:id', guardCrm, (req, res) => {
 router.get('/prospectos', guardCrm, (req, res) => {
   try {
     res.json({ ok: true, ...comercial.listarProspectos(db, {
-      estado: req.query.estado || null, texto: req.query.q || null,
+      estado: req.query.estado || null, texto: req.query.q || null, empresaIds: req.crmEmpresaIds,
       limit: req.query.limit || 100, offset: req.query.offset || 0,
     }) })
   } catch (err) { res.status(400).json({ ok: false, error: err.message }) }
@@ -276,7 +276,7 @@ router.get('/oportunidades', guardCrm, (req, res) => {
     const empresaId = req.query.empresa_id != null ? accesoEmpresa(req, res, req.query.empresa_id) : null
     if (req.query.empresa_id != null && !empresaId) return
     res.json({ ok: true, ...comercial.listarOportunidades(db, {
-      empresaId,
+      empresaId, empresaIds: req.crmEmpresaIds,
       etapa: req.query.etapa || null,
       estado: req.query.estado || null,
       responsable: req.query.responsable || null,
@@ -338,7 +338,7 @@ router.get('/actividades', guardCrm, (req, res) => {
     const empresaId = req.query.empresa_id != null ? accesoEmpresa(req, res, req.query.empresa_id) : null
     if (req.query.empresa_id != null && !empresaId) return
     res.json({ ok: true, actividades: comercial.listarActividades(db, {
-      empresaId,
+      empresaId, empresaIds: req.crmEmpresaIds,
       oportunidadId: req.query.oportunidad_id != null ? Number(req.query.oportunidad_id) : null,
       estado: req.query.estado || 'PENDIENTE',
       vencidasSolo: req.query.vencidas === '1',
@@ -396,7 +396,7 @@ router.get('/informes', guardCrm, (req, res) => {
     const empresaId = req.query.empresa_id != null ? accesoEmpresa(req, res, req.query.empresa_id) : null
     if (req.query.empresa_id != null && !empresaId) return
     res.json(comercial.informes(db, {
-      empresaId,
+      empresaId, empresaIds: req.crmEmpresaIds,
       desde: req.query.desde || null, hasta: req.query.hasta || null,
       responsable: req.query.responsable || null,
     }))
@@ -406,12 +406,12 @@ router.get('/informes', guardCrm, (req, res) => {
 /* --------------------- BÚSQUEDA / DUPLICADOS ----------------------- */
 
 router.get('/buscar', guardCrm, (req, res) => {
-  try { res.json(comercial.buscar(db, { q: req.query.q || '', limit: req.query.limit || 20 })) }
+  try { res.json(comercial.buscar(db, { q: req.query.q || '', limit: req.query.limit || 20, empresaIds: req.crmEmpresaIds })) }
   catch (err) { res.status(400).json({ ok: false, error: err.message }) }
 })
 
 router.get('/duplicados', guardCrm, (req, res) => {
-  try { res.json(comercial.duplicados(db, { q: req.query.q || '', tipo: req.query.tipo || 'empresas' })) }
+  try { res.json(comercial.duplicados(db, { q: req.query.q || '', tipo: req.query.tipo || 'empresas', empresaIds: req.crmEmpresaIds })) }
   catch (err) { res.status(400).json({ ok: false, error: err.message }) }
 })
 

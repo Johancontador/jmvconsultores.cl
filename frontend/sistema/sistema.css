@@ -777,11 +777,44 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   display: flex; flex-direction: column; gap: 4px;
   cursor: pointer;
 }
-.sys .crm-kcard:hover { border-color: var(--accent); }
+.sys .crm-kcard:hover { border-color: var(--accent); box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,.06)); }
+.sys .crm-kcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sys .crm-kcard.terminal { opacity: .85; }
-.sys .crm-kcard .form-input { height: 24px; font-size: var(--fs-xs); }
+.sys .crm-kcard .form-input { height: 26px; font-size: var(--fs-xs); }
+
+/* Toolbar de oportunidades: 2 filas ordenadas (acción / filtros) en vez de
+   una barra envuelta en 3 líneas desordenadas (comparación Twenty). */
+.sys .crm-toolbar { display: flex; flex-direction: column; gap: var(--space-2); }
+.sys .crm-toolbar-fila { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.sys .crm-buscar { width: min(280px, 100%); }
+.sys .crm-filtros { border-top: 1px dashed var(--border); padding-top: var(--space-2); }
+.sys .crm-ft { width: auto; min-width: 130px; }
+.sys .crm-ft::-webkit-datetime-edit { min-width: 110px; } /* fecha en 1 línea */
+/* Segmento Kanban/Tabla cohesivo */
+.sys .crm-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-md, 8px); overflow: hidden; }
+.sys .crm-seg-btn {
+  padding: var(--space-1) var(--space-4); font-size: var(--fs-sm);
+  background: transparent; border: none; cursor: pointer; color: var(--fg-muted, inherit);
+}
+.sys .crm-seg-btn.activa { background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-medium); }
+/* Tarjeta Kanban reforzada */
+.sys .crm-kcard-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+.sys .crm-kcard-monto { font-size: var(--fs-md); font-weight: var(--fw-semibold, 600); }
+.sys .crm-kcard-monto .sub { font-weight: var(--fw-normal, 400); }
+.sys .crm-kcard-meta { display: flex; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.sys .crm-kwho { font-size: var(--fs-xs); color: var(--fg-secondary, inherit); }
 
 @media (max-width: 768px) {
+  .sys .crm-kanban { grid-template-columns: 1fr 1fr; }
+  .sys .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .sys .crm-ft { min-width: 1fr; flex: 1 1 140px; }
+}
+@media (max-width: 480px) {
+  .sys .crm-kanban { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sys .crm-tab, .sys .crm-kcard { transition: none; }
+}
   .sys .crm-kanban { grid-template-columns: 1fr 1fr; }
   .sys .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
 }

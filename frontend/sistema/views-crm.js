@@ -93,12 +93,19 @@ async function renderCrm() {
 /* ================================ PANEL ================================ */
 
 async function renderPanel(cuerpo, base) {
-  const [inf, engagement] = await Promise.all([
+  const [inf, engagement, proximos] = await Promise.all([
     apiGet('/api/crm/informes'),
     apiGet('/api/crm/engagement'),
+    apiGet('/api/crm/oportunidades?estado=abiertas&limit=200'),
   ])
   const resumen = engagement.resumen || {}
   const candidatos = (base.pipeline.pipeline || []).filter((p) => p.etapa === 'PROSPECTO')
+  // §A: próximos seguimientos (fecha futura u hoy) y vencidos, de oportunidades ABIERTAS.
+  const hoy = new Date().toISOString().slice(0, 10)
+  const conSeguimiento = (proximos.oportunidades || []).filter((o) => o.fecha_seguimiento)
+  const proximas = conSeguimiento.filter((o) => o.fecha_seguimiento >= hoy).sort((a, b) => a.fecha_seguimiento.localeCompare(b.fecha_seguimiento)).slice(0, 6)
+  const seguimientoVencido = conSeguimiento.filter((o) => o.fecha_seguimiento < hoy).length
+  const porResp = (inf.por_responsable || []).slice(0, 5)
 
   cuerpo.innerHTML = `
     <div class="kpi-grid">
@@ -121,6 +128,15 @@ async function renderPanel(cuerpo, base) {
         <div class="frm-row mt"><button class="btn btn-secondary btn-sm" data-ir="actividades">Ir a Actividades →</button></div>
       </div>
       <div class="card">
+        <h3>Próximos seguimientos${seguimientoVencido ? ` <span class="chip anulado">${seguimientoVencido} atrasada(s)</span>` : ''}</h3>
+        <p class="sub">Fechas de seguimiento de oportunidades ABIERTAS, ordenadas por fecha.</p>
+        <div class="tbl-wrap" style="border:none"><table class="tbl"><tbody>
+          ${proximas.map((o) => `<tr data-id="${o.id}" style="cursor:pointer" class="crm-panel-opo">
+            <td><b>${esc(o.nombre)}</b><div class="sub">${esc(o.empresa_nombre)}${o.responsable ? ' · ' + esc(o.responsable) : ''}</div></td>
+            <td class="mono">${esc(o.fecha_seguimiento)}</td></tr>`).join('') || '<tr><td class="muted">Sin seguimientos agendados: define «fecha de seguimiento» en tus oportunidades abiertas.</td></tr>'}
+        </tbody></table></div>
+      </div>
+      <div class="card">
         <h3>Salud del portafolio (engagement)</h3>
         <p class="sub">Score 0-100 con datos reales: sync SII, documentos pendientes, cierre y contacto.</p>
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -133,6 +149,19 @@ async function renderPanel(cuerpo, base) {
       </div>
     </div>
 
+    ${(porResp.length ? `
+    <div class="card mt">
+      <h3>Por responsable</h3>
+      <p class="sub">Top ${porResp.length} por proyección ponderada — el detalle completo en Informes.</p>
+      <div class="tbl-wrap" style="border:none"><table class="tbl">
+        <thead><tr><th>Responsable</th><th>Abiertas</th><th>Ganadas</th><th>Perdidas</th><th>Proyección</th></tr></thead>
+        <tbody>${porResp.map((r) => `<tr>
+          <td><b>${esc(r.responsable)}</b></td>
+          <td class="mono">${r.abiertas}</td><td class="mono">${r.ganadas}</td><td class="mono">${r.perdidas}</td>
+          <td class="mono">${fmt(r.proyeccion)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>` : '')}
+
     <div class="card mt">
       <h3>Prospectos nuevos sin gestión (${candidatos.length})</h3>
       <div class="tbl-wrap" style="border:none"><table class="tbl"><tbody>
@@ -144,6 +173,14 @@ async function renderPanel(cuerpo, base) {
       <div class="frm-row mt"><button class="btn btn-primary btn-sm" data-ir="prospectos">Ir a Prospectos →</button></div>
     </div>`
   conectarAtajos(cuerpo)
+  // Panel: abrir la oportunidad directamente desde la fila de seguimientos
+  cuerpo.querySelectorAll('.crm-panel-opo').forEach((tr) =>
+    tr.addEventListener('click', () => modalDetalleOportunidad(Number(tr.dataset.id))))
+}
+
+function ladoIzq(fecha) {
+  // los fecha_docto guardados son ISO o YYYY-MM-DD — mostramos sólo la parte fecha
+  return String(fecha).slice(0, 10)
 }
 
 /* ============================ OPORTUNIDADES ============================ */
@@ -164,27 +201,33 @@ async function renderOportunidades(cuerpo, base) {
 
   cuerpo.innerHTML = `
     <div class="card">
-      <div class="frm-row" style="flex-wrap:wrap;gap:var(--space-2);align-items:center">
-        <button class="btn ${vista === 'kanban' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-vista="kanban">Kanban</button>
-        <button class="btn ${vista === 'tabla' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-vista="tabla">Tabla</button>
-        <span class="spacer"></span>
-        <input id="crm-opo-q" class="form-input" placeholder="Buscar nombre o cliente…" value="${esc(f.q || '')}" style="width:200px">
-        <select id="crm-opo-estado" class="form-input" style="width:auto">
-          <option value="">Todos los estados</option>
-          ${['abiertas', 'ganadas', 'perdidas'].map((v) => `<option value="${v}" ${f.estado === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`).join('')}
-        </select>
-        <select id="crm-opo-etapa" class="form-input" style="width:auto">
-          <option value="">Todas las etapas</option>
-          ${(data.etapas || []).map((e) => `<option value="${esc(e.nombre)}" ${f.etapa === e.nombre ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
-        </select>
-        <select id="crm-opo-resp" class="form-input" style="width:auto">
-          <option value="">Todos los responsables</option>
-          ${opcionesResponsable.map((r) => `<option ${f.responsable === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}
-        </select>
-        <input id="crm-opo-desde" type="date" class="form-input" style="width:auto" value="${esc(f.desde || '')}">
-        <input id="crm-opo-hasta" type="date" class="form-input" style="width:auto" value="${esc(f.hasta || '')}">
-        <button id="crm-opo-export" class="btn btn-secondary btn-sm">Exportar CSV</button>
-        <button id="crm-opo-nueva" class="btn btn-primary btn-sm">+ Oportunidad</button>
+      <div class="crm-toolbar">
+        <div class="crm-toolbar-fila">
+          <div class="crm-seg">
+            <button class="crm-seg-btn ${vista === 'kanban' ? 'activa' : ''}" data-vista="kanban" aria-pressed="${vista === 'kanban'}">Kanban</button>
+            <button class="crm-seg-btn ${vista === 'tabla' ? 'activa' : ''}" data-vista="tabla" aria-pressed="${vista === 'tabla'}">Tabla</button>
+          </div>
+          <input id="crm-opo-q" class="form-input crm-buscar" placeholder="Buscar nombre o cliente…" value="${esc(f.q || '')}" aria-label="Buscar oportunidades">
+          <span class="spacer"></span>
+          <button id="crm-opo-export" class="btn btn-secondary btn-sm">Exportar CSV</button>
+          <button id="crm-opo-nueva" class="btn btn-primary btn-sm">+ Oportunidad</button>
+        </div>
+        <div class="crm-toolbar-fila crm-filtros">
+          <select id="crm-opo-estado" class="form-input crm-ft" aria-label="Estado">
+            <option value="">Estado: todos</option>
+            ${['abiertas', 'ganadas', 'perdidas'].map((v) => `<option value="${v}" ${f.estado === v ? 'selected' : ''}>${v.charAt(0).toUpperCase() + v.slice(1)}</option>`).join('')}
+          </select>
+          <select id="crm-opo-etapa" class="form-input crm-ft" aria-label="Etapa">
+            <option value="">Etapa: todas</option>
+            ${(data.etapas || []).map((e) => `<option value="${esc(e.nombre)}" ${f.etapa === e.nombre ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+          </select>
+          <select id="crm-opo-resp" class="form-input crm-ft" aria-label="Responsable">
+            <option value="">Responsable: todos</option>
+            ${opcionesResponsable.map((r) => `<option ${f.responsable === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+          </select>
+          <input id="crm-opo-desde" type="date" class="form-input crm-ft" value="${esc(f.desde || '')}" aria-label="Cierre desde">
+          <input id="crm-opo-hasta" type="date" class="form-input crm-ft" value="${esc(f.hasta || '')}" aria-label="Cierre hasta">
+        </div>
       </div>
       <div class="sub mt" id="crm-opo-resumen">${data.total} oportunidad(es) filtradas · etapas configurables del embudo</div>
     </div>
@@ -226,16 +269,18 @@ function pintarKanban(cont, data) {
           <div class="sub mono">${fmt(k.monto)} · pesado ${fmt(k.monto_ponderado)}</div>
           <div class="crm-kcards">
             ${cartas.map((o) => `
-              <div class="crm-kcard ${o.terminal ? 'terminal' : ''}" data-id="${o.id}">
-                <b>${esc(o.nombre)}</b>
-                <div class="sub">${esc(o.empresa_nombre)}${o.contacto_nombre ? ' · ' + esc(o.contacto_nombre) : ''}</div>
-                <div class="frm-row" style="justify-content:space-between">
-                  <span class="mono">${fmt(o.monto)}</span>
+              <div class="crm-kcard ${o.terminal ? 'terminal' : ''}" data-id="${o.id}" role="button" tabindex="0" aria-label="Abrir ${esc(o.nombre)}">
+                <div class="crm-kcard-top">
+                  <b>${esc(o.nombre)}</b>
                   <span class="chip ${o.terminal ? (o.ganada ? 'contabilizado' : 'anulado') : 'pendiente'}">${o.probabilidad}%</span>
                 </div>
-                ${o.responsable ? `<div class="sub">👤 ${esc(o.responsable)}</div>` : ''}
-                ${o.fecha_cierre_estimada ? `<div class="sub mono">cierre ${esc(o.fecha_cierre_estimada)}</div>` : ''}
-                ${!o.terminal ? `<select class="form-input crm-ketapa" data-id="${o.id}" style="width:100%;padding:2px 6px" aria-label="Cambiar etapa">
+                <div class="sub">${esc(o.empresa_nombre)}${o.contacto_nombre ? ' · ' + esc(o.contacto_nombre) : ''}</div>
+                <div class="crm-kcard-monto mono">${fmt(o.monto)}<span class="sub"> · pesado ${fmt(o.monto_ponderado)}</span></div>
+                <div class="crm-kcard-meta">
+                  ${o.responsable ? `<span class="crm-kwho" title="Responsable">👤 ${esc(o.responsable)}</span>` : ''}
+                  ${o.fecha_cierre_estimada ? `<span class="mono">cierre ${esc(o.fecha_cierre_estimada)}</span>` : ''}
+                </div>
+                ${!o.terminal ? `<select class="form-input crm-ketapa" data-id="${o.id}" aria-label="Cambiar etapa">
                   ${(data.etapas || []).filter((x) => !x.terminal || x.nombre === 'PERDIDA' || x.nombre === 'GANADA').map((x) => `<option value="${esc(x.nombre)}" ${x.nombre === o.etapa ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}
                 </select>` : ''}
               </div>`).join('') || '<div class="sub" style="padding:var(--space-2)">— vacío —</div>'}
@@ -253,8 +298,11 @@ function pintarKanban(cont, data) {
       } catch (e) { showToast(e.message, 'error'); renderCrm() }
     })
   })
+  const abrir = (el) => modalDetalleOportunidad(Number(el.dataset.id))
   cont.querySelectorAll('.crm-kcard').forEach((c) => {
-    c.addEventListener('dblclick', () => modalDetalleOportunidad(Number(c.dataset.id)))
+    c.addEventListener('dblclick', () => abrir(c))
+    c.addEventListener('keydown', (e) => { if (e.key === 'Enter') abrir(c) })
+    c.addEventListener('click', (e) => { if (e.target.closest('.crm-ketapa')) return; abrir(c) })
   })
 }
 
@@ -400,6 +448,20 @@ async function pintarFicha(empresaId) {
           <td><button class="btn btn-sm crm-ok crm-c-ed" data-id="${c.id}">Editar</button></td></tr>`).join('') || '<tr><td class="muted">Sin contactos registrados.</td></tr>'}
       </tbody></table></div>
       <div class="frm-row mt"><button id="fich-c-nuevo" class="btn btn-secondary btn-sm">+ Contacto</button></div>
+
+      <h3 class="mt">Referencias en el sistema</h3>
+      <p class="sub">Meta-datos de bandeja SII y contabilidad de ESTA empresa (el contenido con números sigue en Compras y Ventas / Informes, con sus permisos).</p>
+      <div class="kpi-grid mt" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+        <div class="kpi"><small>Docs en bandeja</small><strong>${r.documentos?.total ?? 0}</strong></div>
+        <div class="kpi ${r.documentos?.pendientes > 0 ? 'up' : ''}"><small>Pendientes</small><strong style="color:${r.documentos?.pendientes > 0 ? 'var(--warning)' : 'var(--success)'}">${r.documentos?.pendientes ?? 0}</strong></div>
+        <div class="kpi"><small>Compras / Ventas</small><strong>${r.documentos?.compras ?? 0} / ${r.documentos?.ventas ?? 0}</strong></div>
+        <div class="kpi"><small>Último doc</small><strong class="mono" style="font-size:var(--fs-md)">${r.documentos?.ultimo_docto ? esc(ladoIzq(r.documentos.ultimo_docto)) : '—'}</strong></div>
+        <div class="kpi"><small>Período ${r.periodo_contable?.periodo ? esc(r.periodo_contable.periodo) : ''}</small><strong>${r.periodo_contable ? `<span class="chip ${r.periodo_contable.estado === 'ABIERTO' ? 'pendiente' : 'contabilizado'}">${esc(r.periodo_contable.estado)}</span>` : '—'}</strong></div>
+      </div>
+      <div class="frm-row mt">
+        <button class="btn btn-secondary btn-sm" data-hash="documentos">Ver bandeja de documentos →</button>
+        <button class="btn btn-secondary btn-sm" data-hash="reportes">Ver informes contables →</button>
+      </div>
     </div>`
 
   document.getElementById('fich-guardar').addEventListener('click', async () => {
@@ -416,6 +478,7 @@ async function pintarFicha(empresaId) {
     } catch (e) { showToast(e.message, 'error') }
   })
   document.getElementById('fich-c-nuevo').addEventListener('click', () => modalContacto(empresaId, r.empresa.nombre, null))
+  det.querySelectorAll('[data-hash]').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.hash }))
   det.querySelectorAll('.crm-c-ed').forEach((b) => {
     const contacto = r.contactos.find((c) => String(c.id) === b.dataset.id)
     b.addEventListener('click', () => modalContacto(empresaId, r.empresa.nombre, contacto))

@@ -56,6 +56,15 @@ const ETAPAS_SEMILLA = [
 const RE_EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/
 
+/** Helper multitenant (misma política que core/crm.js): WHERE parametrizado
+ * por ids de empresa permitidos; null/undefined = sin límite (super admin).
+ * Cada tabla usa su alias real: `e.id` o `p.empresa_id`/`o.empresa_id`. */
+function filtroTenantC(empresaIds, col = 'e.id') {
+  if (!Array.isArray(empresaIds)) return { sql: '', params: [] }
+  if (!empresaIds.length) return { sql: ` AND ${col} = -1`, params: [] }
+  return { sql: ` AND ${col} IN (${empresaIds.map(() => '?').join(',')})`, params: empresaIds }
+}
+
 function normRut(rut) {
   return String(rut || '').replace(/[.\-\s]/g, '').toUpperCase()
 }
@@ -236,6 +245,25 @@ function obtenerFicha(db, empresaId) {
     SELECT COUNT(*) AS n, COALESCE(SUM(${MONTO_PESADO}),0) AS pesado
     FROM crm_oportunidades o WHERE o.empresa_id = ?
   `).get(empresaId)
+  // §G (referencias, NO duplicación): conteos de documentos/bandeja y período
+  // contable de esta empresa. Solo META-datos — el contenido fiduciario
+  // sigue en sus módulos con sus propias autorizaciones; la ficha comercial
+  // solo enlaza. `documentos` existe (bandeja SII); `periodos_contables` igual.
+  const docsResumen = (() => {
+    try {
+      const r = db.prepare(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN estado = 'PENDIENTE' THEN 1 ELSE 0 END) AS pendientes,
+               SUM(CASE WHEN tipo_flujo = 'compra' THEN 1 ELSE 0 END) AS compras,
+               SUM(CASE WHEN tipo_flujo = 'venta' THEN 1 ELSE 0 END) AS ventas,
+               MAX(COALESCE(fecha_docto, '')) AS ultimo_docto
+        FROM documentos WHERE empresa_id = ?`).get(empresaId)
+      return { total: r?.total || 0, pendientes: r?.pendientes || 0, compras: r?.compras || 0, ventas: r?.ventas || 0, ultimo_docto: r?.ultimo_docto || null }
+    } catch { return { total: 0, pendientes: 0, compras: 0, ventas: 0, ultimo_docto: null } }
+  })()
+  const periodoActual = (() => {
+    try { return db.prepare(`SELECT periodo, estado FROM periodos_contables WHERE empresa_id = ? ORDER BY periodo DESC LIMIT 1`).get(empresaId) || null } catch { return null }
+  })()
   return {
     empresa: { id: emp.id, rut: emp.rut, nombre: emp.nombre },
     ficha: ficha || null,
@@ -245,6 +273,8 @@ function obtenerFicha(db, empresaId) {
     ultima_interaccion: pipeline?.ultima_interaccion || null,
     contactos,
     oportunidades: { total: opo.n, monto_ponderado: opo.pesado },
+    documentos: docsResumen,
+    periodo_contable: periodoActual,
   }
 }
 
@@ -292,9 +322,11 @@ function guardarFicha(db, { usuarioId, empresaId, ficha, ip = null }) {
 
 /* ============================ 2. CONTACTOS =========================== */
 
-function listarContactos(db, { empresaId = null, texto = null, limit = 100, offset = 0 } = {}) {
+function listarContactos(db, { empresaId = null, texto = null, empresaIds = null, limit = 100, offset = 0 } = {}) {
+  const ten = filtroTenantC(empresaIds, 'e.id')
   const where = []
-  const params = []
+  const params = [...ten.params]
+  if (ten.sql) where.push(`1=1${ten.sql}`)
   if (empresaId != null) { where.push('c.empresa_id = ?'); params.push(Number(empresaId)) }
   if (texto) { where.push('(c.nombre LIKE ? OR c.correo LIKE ? OR c.telefono LIKE ? OR e.nombre LIKE ?)'); const p = `%${texto}%`; params.push(p, p, p, p) }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
@@ -406,9 +438,15 @@ function eliminarContacto(db, { usuarioId, contactoId, ip = null }) {
 
 /* ============================ 3. PROSPECTOS ========================== */
 
-function listarProspectos(db, { estado = null, texto = null, limit = 100, offset = 0 } = {}) {
+function listarProspectos(db, { estado = null, texto = null, empresaIds = null, limit = 100, offset = 0 } = {}) {
+  // Tenant §5: un prospecto vinculado a empresa X solo lo ve quien tenga X
+  // asignada; los SIN empresa (NUEVOS) son leads del despacho. Query con
+  // параметриado total (nada concatenado) y params ordenados:
+  //   [..tenant IN, estado, texto x3, limit, offset]
+  const tenPros = filtroTenantC(empresaIds, 'p.empresa_id')  // AND p.empresa_id IN (...)
   const where = []
-  const params = []
+  const params = [...tenPros.params]
+  if (tenPros.sql) where.push(`(p.empresa_id IS NULL OR 1=1${tenPros.sql})`.replace('AND p.empresa_id', 'AND p.empresa_id'))
   if (estado) { where.push('p.estado = ?'); params.push(estado) }
   if (texto) { where.push('(p.nombre LIKE ? OR p.rut LIKE ? OR p.correo LIKE ?)'); const p = `%${texto}%`; params.push(p, p, p) }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
@@ -422,7 +460,7 @@ function listarProspectos(db, { estado = null, texto = null, limit = 100, offset
              p.creado_en DESC
     LIMIT ? OFFSET ?
   `).all(...params, Math.min(Number(limit) || 100, 500), Number(offset) || 0)
-  const total = db.prepare(`SELECT COUNT(*) AS n FROM crm_prospectos p ${whereSql}`).get(...params).n
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM crm_prospectos p LEFT JOIN empresas e ON e.id = p.empresa_id ${whereSql}`).get(...params).n
   return { total, prospectos }
 }
 
@@ -626,10 +664,12 @@ const SELECT_OPO_BASE = `
   WHERE 1=1
 `
 
-function listarOportunidades(db, { empresaId = null, etapa = null, estado = null, responsable = null,
+function listarOportunidades(db, { empresaId = null, empresaIds = null, etapa = null, estado = null, responsable = null,
   desde = null, hasta = null, texto = null, limit = 200, offset = 0 } = {}) {
+  const tenOpo = filtroTenantC(empresaIds, 'o.empresa_id')
   const con = []
-  const params = []
+  const params = [...tenOpo.params]
+  if (tenOpo.sql) con.push(`1=1${tenOpo.sql}`)
   if (empresaId != null) { con.push('o.empresa_id = ?'); params.push(Number(empresaId)) }
   if (etapa) { con.push('o.etapa = ? COLLATE NOCASE'); params.push(etapa) }
   if (estado === 'abiertas') con.push('et.terminal = 0')
@@ -647,21 +687,35 @@ function listarOportunidades(db, { empresaId = null, etapa = null, estado = null
     JOIN crm_oportunidad_etapas et ON et.nombre = o.etapa COLLATE NOCASE
     WHERE 1=1${whereSql}
   `).get(...params).n
+  // NOTA: whereSql ya trae el filtro tenant (INSERTANDO los params a este COUNT
+  // y al SELECT principal en ORDEN — la firma tenOpo queda primero).
 
   const oportunidades = db.prepare(`${SELECT_OPO_BASE}${whereSql}
     ORDER BY o.actualizado_en DESC, o.id DESC
     LIMIT ? OFFSET ?`).all(...params, Math.min(Number(limit) || 200, 1000), Number(offset) || 0)
 
   // KANBAN y tabla leen los MISMOS datos (§E): agregado por etapa con la
-  // misma fórmula ponderada; el filtro de empresa va SIEMPRE parametrizado.
-  const kanbanParams = empresaId != null ? [Number(empresaId)] : []
-  const kanbanFiltro = empresaId != null ? 'AND o.empresa_id = ?' : ''
+  // misma fórmula ponderada; filtro tenant + empresa SIEMPRE parametrizado.
+  // El JOIN-LEFT con insumos del tenant usa correlación directa en el ON:
+  // WHERE con o.* NO vale (anularía el LEFT JOIN de las etapas vacías).
+  const tenOpoOn = Array.isArray(empresaIds)
+    ? (empresaIds.length ? `AND o.empresa_id IN (${empresaIds.map(() => '?').join(',')})` : 'AND o.empresa_id = -1')
+    : ''
+  const kanbanOn = [
+    tenOpoOn,
+    ...(empresaId != null ? ['AND o.empresa_id = ?'] : []),
+  ]
+  const kanbanParams = [
+    ...(Array.isArray(empresaIds) ? empresaIds : []),
+    ...(empresaId != null ? [Number(empresaId)] : []),
+  ]
   const kanban = db.prepare(`
     SELECT et.nombre AS etapa, et.orden, et.terminal, et.ganada,
            COUNT(o.id) AS n, COALESCE(SUM(o.monto),0) AS monto,
            COALESCE(SUM(ROUND(o.monto * o.probabilidad / 100.0)),0) AS monto_ponderado
     FROM crm_oportunidad_etapas et
-    LEFT JOIN crm_oportunidades o ON o.etapa = et.nombre COLLATE NOCASE ${kanbanFiltro}
+    LEFT JOIN crm_oportunidades o
+           ON o.etapa = et.nombre COLLATE NOCASE ${kanbanOn.join(' ')}
     GROUP BY et.nombre, et.orden, et.terminal, et.ganada
     ORDER BY et.orden
   `).all(...kanbanParams)
@@ -864,17 +918,22 @@ function cambiarEtapaOportunidad(db, { usuarioId, oportunidadId, etapa, probabil
 
 /* ========================== 5. ACTIVIDADES =========================== */
 
-function listarActividades(db, { empresaId = null, oportunidadId = null, contactoId = null,
+function listarActividades(db, { empresaId = null, empresaIds = null, oportunidadId = null, contactoId = null,
   estado = 'PENDIENTE', vencidasSolo = false, responsable = null, limit = 200, offset = 0 } = {}) {
+  // Tenant §5: filtrar por la empresa del ancla (a.empresa_id). Actividades
+  // sin ancla no existen (crearActividad exige ancla) aquí el caso NULL es
+  // solo defensivo.
+  const tenAct = filtroTenantC(empresaIds, 'a.empresa_id')
   const con = []
-  const params = []
+  const params = [...tenAct.params]
+  if (tenAct.sql) con.push(`1=1${tenAct.sql}`)
   if (empresaId != null) { con.push('a.empresa_id = ?'); params.push(Number(empresaId)) }
   if (oportunidadId != null) { con.push('a.oportunidad_id = ?'); params.push(Number(oportunidadId)) }
   if (contactoId != null) { con.push('a.contacto_id = ?'); params.push(Number(contactoId)) }
   if (estado) { con.push('a.estado = ?'); params.push(estado) }
   if (vencidasSolo) con.push(`a.vencimiento IS NOT NULL AND a.vencimiento < date('now')`)
   if (responsable) { con.push('a.responsable = ?'); params.push(responsable) }
-  const whereSql = con.length ? `WHERE ${con.join(' AND ')}` : ''
+  const whereSql = con.length ? `WHERE ${con.map((c) => (c.startsWith('1=1') ? c : c)).join(' AND ')}` : ''
   const filas = db.prepare(`
     SELECT a.id, a.tipo, a.titulo, a.detalle, a.estado, a.prioridad, a.vencimiento,
            a.responsable, a.empresa_id, e.nombre AS empresa_nombre,
@@ -987,9 +1046,10 @@ function actualizarActividad(db, { usuarioId, actividadId, actividad, ip = null 
 /* ============================ 6. INFORMES ============================ */
 
 /** WHERE filtrable reutilizable en informes (filtra por tabla `o`). */
-function filtroInformes({ desde = null, hasta = null, responsable = null, empresaId = null } = {}) {
-  const con = []
-  const params = []
+function filtroInformes({ desde = null, hasta = null, responsable = null, empresaId = null, empresaIds = null } = {}) {
+  const ten = filtroTenantC(empresaIds, 'o.empresa_id')
+  const con = ten.sql ? [`1=1${ten.sql}`] : []
+  const params = [...ten.params]
   if (empresaId != null) { con.push('o.empresa_id = ?'); params.push(Number(empresaId)) }
   if (responsable) { con.push('o.responsable = ?'); params.push(responsable) }
   if (desde) { con.push(`date(o.creado_en) >= ?`); params.push(desde) }
@@ -1004,7 +1064,9 @@ function filtroInformes({ desde = null, hasta = null, responsable = null, empres
  * desde/hasta (creado), responsable, empresa.
  */
 function informes(db, filtros = {}) {
-  const { sql: whereSql, params } = filtroInformes(filtros)
+  const { sql: whereSql, params } = filtroInformes({ ...filtros, empresaIds: filtros.empresaIds })
+  // whereSql sin 'AND' inicial: subselects cosen `WHERE ${whereSql}`. El
+  // primer elemento ya es 1=1[ AND tenant] cuando hay tenant.
 
   // Embudo por etapa con las oportunidades YA FILTRADAS (subselect cosido).
   const embudo = db.prepare(`
@@ -1022,7 +1084,7 @@ function informes(db, filtros = {}) {
     ORDER BY et.orden
   `).all(...params)
 
-  const total = embudo.reduce((s, e) => s + e.n, 0)
+  const total = embudo.reduce((s, e) => s + e.n, 0)  // nombre original conservado
   const ganadas = embudo.filter((e) => e.ganada === 1).reduce((s, e) => s + e.n, 0)
   const perdidas = embudo.filter((e) => e.terminal === 1 && e.ganada === 0).reduce((s, e) => s + e.n, 0)
   const abiertas = total - ganadas - perdidas
@@ -1053,14 +1115,21 @@ function informes(db, filtros = {}) {
     ORDER BY n DESC
   `).all(...params)
 
-  const actividadesPend = listarActividades(db, { estado: 'PENDIENTE', limit: 200 })
+  const actividadesPend = listarActividades(db, { estado: 'PENDIENTE', limit: 200, empresaIds: filtros.empresaIds })
   const seguimiento = actividadesPend.filter((a) => a.vencida || (a.vencimiento != null && a.vencimiento <= fechaCorte()))
 
+  // Clientes nuevos §H: fichas dentro del rango Y empresa del tenant.
+  const tenFichas = filtroTenantC(filtros.empresaIds, 'f.empresa_id')
+  const conFichas = []
+  const paramsFichas = [...tenFichas.params]
+  if (tenFichas.sql) conFichas.push(`1=1${tenFichas.sql}`)
+  if (filtros.desde) 
+  { conFichas.push('date(f.creado_en) >= ?'); paramsFichas.push(filtros.desde) }
+  if (filtros.hasta) { conFichas.push('date(f.creado_en) <= ?'); paramsFichas.push(filtros.hasta) }
   const clientesNuevos = db.prepare(`
     SELECT COUNT(*) AS n FROM crm_fichas f
-    WHERE ${(filtros.desde) ? `date(f.creado_en) >= @desde` : '1=1'}
-      ${(filtros.hasta) ? `AND date(f.creado_en) <= @hasta` : ''}
-  `).get({ desde: filtros.desde || null, hasta: filtros.hasta || null }).n
+    WHERE ${conFichas.join(' AND ') || '1=1'}
+  `).get(...paramsFichas).n
 
   return {
     ok: true,
@@ -1082,23 +1151,28 @@ function fechaCorte() {
 
 /* ======================= 7. BÚSQUEDA GLOBAL CRM ====================== */
 
-function buscar(db, { q = '', limit = 20 } = {}) {
+function buscar(db, { q = '', limit = 20, empresaIds = null } = {}) {
   const texto = String(q || '').trim()
   if (texto.length < 2) return { ok: true, q: texto, grupos: [] }
   const like = `%${texto}%`
   const grupos = []
+  const tenEmp = filtroTenantC(empresaIds, 'e.id')
+  const tenProsp = filtroTenantC(empresaIds, 'p.empresa_id')
+  const tenCont = filtroTenantC(empresaIds, 'e.id')
+  const tenOpo = filtroTenantC(empresaIds, 'o.empresa_id')
 
   // Empresas: LIKE directo + fallback exacto por RUT normalizado en JS.
+  // Tenant §5: solo empresas asignadas al caller.
   let empresas = db.prepare(`
     SELECT e.id, e.rut, e.nombre, f.nombre_comercial, f.fuente, p.etapa
     FROM empresas e
     LEFT JOIN crm_fichas f ON f.empresa_id = e.id
     LEFT JOIN crm_pipeline p ON p.empresa_id = e.id
-    WHERE e.nombre LIKE ? OR e.rut LIKE ? LIMIT ?
-  `).all(like, like, limit)
+    WHERE 1=1${tenEmp.sql} AND (e.nombre LIKE ? OR e.rut LIKE ?) LIMIT ?
+  `).all(...tenEmp.params, like, like, limit)
   if (empresas.length === 0) {
     const porRut = empresaPorRut(db, texto)
-    if (porRut != null) {
+    if (porRut != null && (!Array.isArray(empresaIds) || empresaIds.includes(porRut))) {
       empresas = db.prepare(`
         SELECT e.id, e.rut, e.nombre, f.nombre_comercial, f.fuente, p.etapa
         FROM empresas e
@@ -1110,28 +1184,29 @@ function buscar(db, { q = '', limit = 20 } = {}) {
   if (empresas.length) grupos.push({ entidad: 'empresas', filas: empresas })
 
   const prospectos = db.prepare(`
-    SELECT id, nombre, rut, correo, estado, prioridad, responsable
-    FROM crm_prospectos
-    WHERE nombre LIKE ? OR rut LIKE ? OR correo LIKE ?
-    ORDER BY CASE estado WHEN 'NUEVO' THEN 0 ELSE 1 END LIMIT ?
-  `).all(like, like, like, limit)
+    SELECT p.id, p.nombre, p.rut, p.correo, p.estado, p.prioridad, p.responsable
+    FROM crm_prospectos p
+    WHERE (p.empresa_id IS NULL OR 1=1${tenProsp.sql})
+      AND (p.nombre LIKE ? OR p.rut LIKE ? OR p.correo LIKE ?)
+    ORDER BY CASE p.estado WHEN 'NUEVO' THEN 0 ELSE 1 END LIMIT ?
+  `).all(...tenProsp.params, like, like, like, limit)
   if (prospectos.length) grupos.push({ entidad: 'prospectos', filas: prospectos })
 
   const contactos = db.prepare(`
     SELECT c.id, c.empresa_id, e.nombre AS empresa_nombre, c.nombre, c.cargo, c.correo, c.telefono
     FROM crm_contactos c JOIN empresas e ON e.id = c.empresa_id
-    WHERE c.nombre LIKE ? OR c.correo LIKE ? OR c.telefono LIKE ? OR e.nombre LIKE ?
+    WHERE 1=1${tenCont.sql} AND (c.nombre LIKE ? OR c.correo LIKE ? OR c.telefono LIKE ? OR e.nombre LIKE ?)
     LIMIT ?
-  `).all(like, like, like, like, limit)
+  `).all(...tenCont.params, like, like, like, like, limit)
   if (contactos.length) grupos.push({ entidad: 'contactos', filas: contactos })
 
   const oportunidades = db.prepare(`
     SELECT o.id, o.nombre, o.empresa_id, e.nombre AS empresa_nombre,
            o.etapa, o.monto, ROUND(o.monto * o.probabilidad / 100.0) AS monto_ponderado, o.responsable
     FROM crm_oportunidades o JOIN empresas e ON e.id = o.empresa_id
-    WHERE o.nombre LIKE ? OR e.nombre LIKE ?
+    WHERE 1=1${tenOpo.sql} AND (o.nombre LIKE ? OR e.nombre LIKE ?)
     LIMIT ?
-  `).all(like, like, limit)
+  `).all(...tenOpo.params, like, like, limit)
   if (oportunidades.length) grupos.push({ entidad: 'oportunidades', filas: oportunidades })
 
   return { ok: true, q: texto, grupos }
@@ -1140,30 +1215,36 @@ function buscar(db, { q = '', limit = 20 } = {}) {
 /* ========================= 8. DUPLICADOS ============================= */
 
 /** Posibles duplicados §B §C: empresas (maestro), prospectos y contactos. */
-function duplicados(db, { q = '', tipo = 'empresas' } = {}) {
+function duplicados(db, { q = '', tipo = 'empresas', empresaIds = null } = {}) {
   const texto = String(q || '').trim()
   if (texto.length < 3) return { ok: true, tipo, q: texto, coincidencias: [] }
   const like = `%${texto}%`
   let coincidencias = []
   if (tipo === 'empresas') {
+    const tenEmp = filtroTenantC(empresaIds, 'e.id')
     const porRut = empresaPorRut(db, texto)
+    const idRutOk = porRut != null && (!Array.isArray(empresaIds) || empresaIds.includes(porRut)) ? Number(porRut) : null
     coincidencias = db.prepare(`
       SELECT e.id, e.rut, e.nombre, f.correo FROM empresas e
       LEFT JOIN crm_fichas f ON f.empresa_id = e.id
-      WHERE e.nombre LIKE ? OR e.rut LIKE ?${porRut != null ? ' OR e.id = ' + Number(porRut) : ''}
+      WHERE 1=1${tenEmp.sql} AND (e.nombre LIKE ? OR e.rut LIKE ?${idRutOk != null ? ' OR e.id = ?' : ''})
       LIMIT 20
-    `).all(like, like)
+    `).all(...tenEmp.params, like, like, ...(idRutOk != null ? [idRutOk] : []))
   } else if (tipo === 'prospectos') {
+    const tenProsp = filtroTenantC(empresaIds, 'p.empresa_id')
     coincidencias = db.prepare(`
-      SELECT id, nombre, rut, correo, estado FROM crm_prospectos
-      WHERE nombre LIKE ? OR rut LIKE ? OR correo LIKE ? LIMIT 20
-    `).all(like, like, like)
+      SELECT p.id, p.nombre, p.rut, p.correo, p.estado FROM crm_prospectos p
+      WHERE (p.empresa_id IS NULL OR 1=1${tenProsp.sql}) AND (p.nombre LIKE ? OR p.rut LIKE ? OR p.correo LIKE ?)
+      LIMIT 20
+    `).all(...tenProsp.params, like, like, like)
   } else if (tipo === 'contactos') {
+    const tenCont = filtroTenantC(empresaIds, 'e.id')
     coincidencias = db.prepare(`
       SELECT c.id, c.nombre, c.correo, e.nombre AS empresa_nombre, e.rut
       FROM crm_contactos c JOIN empresas e ON e.id = c.empresa_id
-      WHERE c.nombre LIKE ? OR c.correo LIKE ? LIMIT 20
-    `).all(like, like)
+      WHERE 1=1${tenCont.sql} AND (c.nombre LIKE ? OR c.correo LIKE ?)
+      LIMIT 20
+    `).all(...tenCont.params, like, like)
   } else {
     throw new Error(`tipo de dedupe inválido: ${tipo} (empresas|prospectos|contactos)`)
   }
