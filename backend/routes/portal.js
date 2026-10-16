@@ -23,6 +23,7 @@ const cobranzaCore = require('../core/cobranza')
 const portalCredito = require('../core/portal-credito')
 const portalCostos = require('../core/portal-costos')
 const portalCotizaciones = require('../core/portal-cotizaciones')
+const portalComercial = require('../core/portal-comercial')
 const onboarding = require('../core/onboarding')
 
 function construirRouter(db) {
@@ -457,6 +458,18 @@ function construirRouter(db) {
 
   router.get('/metricas', (req, res) => {
     res.json({ ok: true, metricas: portal.catalogo() })
+  })
+
+  /* ---------------- SEGUIMIENTO COMERCIAL (solo lectura, §CRM-Portal) ----------------
+   * El dueño ve el pipeline de SU empresa (oportunidades/etapas/próximos pasos).
+   * El CRM operativo sigue siendo del despacho (guardCrm): aquí NO hay escritura,
+   * ni prospectos internos, ni responsables del despacho (core antifuga). */
+
+  router.get('/empresas/:empresaId/comercial', (req, res) => {
+    const id = accesoEmpresa(req, res, req.params.empresaId)
+    if (!id) return
+    try { res.json({ ok: true, comercial: portalComercial.resumenComercial(db, { empresaId: id }) }) }
+    catch (err) { res.status(422).json({ ok: false, error: err.message }) }
   })
 
   /* ---------------- REPORTES GUARDADOS (§H, config no datos) ---------------- */

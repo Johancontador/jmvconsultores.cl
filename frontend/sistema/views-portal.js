@@ -1354,3 +1354,89 @@ window.VIEWS['portal-cotizaciones'] = {
     await cargar()
   },
 }
+
+/* --------------- SEGUIMIENTO COMERCIAL (solo lectura, 2026-10) ---------------
+ * El dueño ve el pipeline de SU empresa: embudo por etapa, oportunidades con
+ * monto/probabilidad y próximos pasos pendientes. TODO lo resuelve el server
+ * en /api/portal/empresas/:id/comercial (aislamiento por asignación — el CRM
+ * operativo sigue siendo del despacho; aquí NO hay escritura). */
+window.VIEWS['portal-comercial'] = {
+  titulo: 'Portal — Mi seguimiento comercial',
+  async render(cont) {
+    const eid = S.empresa.id
+    cont.innerHTML = `
+      <div class="card">
+        <h3>Mi seguimiento comercial</h3>
+        <p class="hint">Vista de solo lectura de las oportunidades que tu contador lleva en el pipeline de tu empresa. Para cambios o detalle, coordina con tu contador.</p>
+        <div id="pmk-resumen">${UIEstado.cargando()}</div>
+      </div>
+      <div class="card mt">
+        <h3>Embudo por etapa</h3>
+        <div id="pmk-embudo">${UIEstado.cargando()}</div>
+      </div>
+      <div class="card mt">
+        <h3>Mis oportunidades</h3>
+        <div id="pmk-opos">${UIEstado.cargando()}</div>
+      </div>
+      <div class="card mt">
+        <h3>Próximos pasos</h3>
+        <div id="pmk-act">${UIEstado.cargando()}</div>
+      </div>`
+
+    const fmtFecha = (f) => f ? esc(String(f).slice(0, 10)) : '—'
+    const badgeEtapa = (o) => o.terminal
+      ? `<span style="color:${o.ganada ? 'var(--ok,green)' : 'var(--danger,red)'};font-weight:600">${esc(o.etapa)}</span>`
+      : `<span>${esc(o.etapa)}</span>`
+
+    try {
+      const r = await apiGet(`/api/portal/empresas/${eid}/comercial`)
+      const C = r.comercial
+
+      const zonaR = document.getElementById('pmk-resumen')
+      if (!C.total) {
+        zonaR.innerHTML = UIEstado.vacio('Sin oportunidades aún', 'Cuando tu contador registre seguimiento comercial, lo verás aquí.')
+      } else {
+        zonaR.innerHTML = `
+          <div class="frm-row" style="gap:16px">
+            <div><span class="frm-label">Abiertas</span><div style="font-weight:600">${C.abiertas}</div></div>
+            <div><span class="frm-label">Ganadas</span><div style="font-weight:600">${C.ganadas}</div></div>
+            <div><span class="frm-label">Perdidas</span><div style="font-weight:600">${C.perdidas}</div></div>
+            <div><span class="frm-label">Proyección ponderada</span><div style="font-weight:600">${fmtCLP(C.proyeccion_ponderada)}</div></div>
+          </div>`
+      }
+
+      document.getElementById('pmk-embudo').innerHTML = C.etapas.filter((e) => e.n > 0).length
+        ? `<div class="frm-row" style="gap:12px">${C.etapas.filter((e) => e.n > 0).map((e) => `
+            <div style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+              <span class="frm-label">${esc(e.etapa)}${e.terminal ? ' ·' : ''}</span>
+              <div style="font-weight:600">${fmtCLP(e.monto)}</div>
+              <span class="hint">${e.n} oportunidad(es)</span>
+            </div>`).join('')}</div>`
+        : UIEstado.vacio('Embudo vacío', 'Sin oportunidades registradas todavía.')
+
+      document.getElementById('pmk-opos').innerHTML = C.oportunidades.length
+        ? `<div style="overflow:auto"><table class="tbl">
+            <thead><tr><th>Nombre</th><th>Etapa</th><th style="text-align:right">Monto</th><th>Prob.</th><th>Cierre est.</th><th>Próx. seguim.</th></tr></thead>
+            <tbody>${C.oportunidades.map((o) => `
+              <tr>
+                <td>${esc(o.nombre)}</td>
+                <td>${badgeEtapa(o)}</td>
+                <td style="text-align:right">${fmtCLP(o.monto)}</td>
+                <td>${o.terminal ? '—' : o.probabilidad + '%'}</td>
+                <td class="hint">${fmtFecha(o.fecha_cierre_estimada)}</td>
+                <td class="hint">${fmtFecha(o.fecha_seguimiento)}</td>
+              </tr>`).join('')}</tbody></table></div>`
+        : UIEstado.vacio('Sin oportunidades', '—')
+
+      document.getElementById('pmk-act').innerHTML = C.pendientes.length
+        ? `<ul style="margin:0;padding-left:18px">${C.pendientes.map((a) => `
+            <li style="margin:4px 0">${a.vencida ? '<span style="color:var(--danger,red)">⏰</span> ' : ''}<strong>${esc(a.tipo)}</strong> — ${esc(a.titulo)}${a.oportunidad_nombre ? ` <span class="hint">(${esc(a.oportunidad_nombre)})</span>` : ''} <span class="hint">· ${fmtFecha(a.fecha)}</span></li>`).join('')}</ul>`
+        : UIEstado.vacio('Sin próximos pasos pendientes', '—')
+    } catch (err) {
+      document.getElementById('pmk-resumen').innerHTML = UIEstado.error(err.message)
+      document.getElementById('pmk-embudo').textContent = ''
+      document.getElementById('pmk-opos').textContent = ''
+      document.getElementById('pmk-act').textContent = ''
+    }
+  },
+}

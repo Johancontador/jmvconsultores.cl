@@ -587,6 +587,7 @@ const MENU = [
       { key: 'portal-productos', label: 'Productos vendidos', permiso: null },
       { key: 'portal-credito', label: 'Crédito autorizado', permiso: null },
       { key: 'portal-costos', label: 'Hoja de costos', permiso: null },
+      { key: 'portal-comercial', label: 'Mi seguimiento comercial', permiso: null },
       { key: 'portal-cotizaciones', label: 'Cotizaciones y embudo', permiso: null },
       { key: 'portal-cobranza', label: 'Cobranza (solo lectura)', permiso: null },
       { key: 'portal-reportes', label: 'Reportes guardados', permiso: null },
