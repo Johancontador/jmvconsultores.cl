@@ -8,15 +8,15 @@ Referencias: `docs/SITIO-PUBLICO-2026-10-16.md` (rediseño) ·
 
 ## 1. Qué se publica
 
-Rango `vps/master..master` — **4 commits, 18 archivos, 0 borrados y 0 renombrados**
-(el cuarto commit es este documento y el registro de la incidencia):
+Rango `vps/master..master` — **18 archivos, 0 borrados y 0 renombrados**, en **3
+commits de contenido** más los commits de documentación (que no tocan código):
 
 | commit | contenido |
 |---|---|
 | `97934fd` | feat(portal): seguimiento comercial read-only del dueño en su Portal |
 | `1caacf8` | feat(sitio): rediseño unificado de landing, acceso y registro |
 | `88f8d55` | fix(login): el botón Mostrar/Ocultar contraseña nunca se enganchaba |
-| *(commit de docs)* | auditoría previa al push, este runbook y la incidencia móvil |
+| *commits de docs* | auditoría previa al push, este runbook, la incidencia móvil y este bloqueo |
 
 ```
 A backend/core/portal-comercial.js      M frontend/registro.html
@@ -134,7 +134,7 @@ encuentra origen: el VPS o `cloudflared` están caídos (ver §4).
 
 ```bash
 ssh johan@100.116.109.54 'echo VPS_OK; cd /home/johan/iva-mensual && git rev-parse --short HEAD'
-git fetch vps master && git rev-list --left-right --count vps/master...master   # esperado: 0  4
+git fetch vps master && git rev-list --left-right --count vps/master...master   # esperado: izquierda 0
 ```
 
 - izquierda `0` → producción es ancestro nuestro: adelante.
@@ -170,7 +170,7 @@ alguien movió producción: parar y volver al paso 0.
 
 ```bash
 cd /home/johan/iva-mensual
-git fetch && git log --oneline -4          # confirmar los 4 commits
+git fetch && git log --oneline -5          # confirmar los commits a publicar
 git pull                                    # fast-forward; si pide merge, parar
 node scripts/seed-versionado.js             # debe decir «Sin cambios: 33 …»
 systemctl list-units --type=service | grep -i jmv    # confirmar el nombre real (jmv-www)
@@ -224,8 +224,8 @@ el rollback de código no requiere purgar cachés.
    anti-caché no depende de ellas.
 4. **Decisión del usuario:** si prefiere publicar solo `97934fd` + `1caacf8` y dejar el
    hotfix `88f8d55` para después, es posible: `git push vps 1caacf8:master` y desplegar
-   el hotfix en una segunda ventana. Recomendado publicar los 4 juntos (el `88f8d55`
-   arregla un botón roto en la página que se está publicando).
+   el hotfix en una segunda ventana. Recomendado publicar los 3 commits de contenido
+   juntos (el `88f8d55` arregla un botón roto en la página que se está publicando).
 
 ## 4. Bloqueo de ejecución — 2026-10-16 23:42 · VPS fuera de línea
 
