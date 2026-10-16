@@ -11,6 +11,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css">
   <style>
+    /* Shell compartido con la landing/login (las reglas de lp-nav viven en el
+       <style> de landing.html: acá se replican para el mismo look sin acoplar
+       los tres archivos a un CSS común). */
+    .lp-nav {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+      padding: var(--space-3) var(--space-6);
+      background: rgba(2,6,23,0.8); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .lp-logo { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); color: var(--fg-primary); text-decoration: none; }
+    .lp-logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--accent-soft); font-size: var(--fs-lg); }
+    .lp-links { display: flex; align-items: center; gap: var(--space-5); }
+    .lp-links a { font-size: var(--fs-sm); color: var(--fg-secondary); text-decoration: none; transition: color var(--dur-fast); }
+    .lp-links a:hover { color: var(--fg-primary); }
+    @media (max-width: 920px) {
+      .lp-nav { padding: var(--space-3) var(--space-4); }
+      .lp-links { gap: var(--space-3); }
+      .lp-links a + a { display: none; } /* en móvil: solo «Iniciar sesión» */
+    }
+    .reg-pie {
+      padding: var(--space-6) var(--space-6) var(--space-8);
+      text-align: center; color: var(--fg-muted); font-size: var(--fs-sm);
+      border-top: 1px solid var(--border-subtle);
+    }
     .reg-wrap { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-4); }
     .reg-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: var(--space-6); align-items: start; }
     @media (max-width: 860px) { .reg-grid { grid-template-columns: 1fr; } }
@@ -44,7 +69,7 @@
     </div>
   </div>
 
-  <div class="reg-wrap" id="root">
+    <div class="reg-wrap" id="root">
     <div class="reg-grid">
       <div class="reg-card">
         <h1 class="reg-title">Crea tu cuenta en 2 minutos</h1>
@@ -114,6 +139,11 @@
       </aside>
     </div>
   </div>
+
+  <footer class="reg-pie">
+    <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
+    <div style="margin-top: var(--space-2);">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl</div>
+  </footer>
 
   <script src="/shared/toast.js"></script>
   <script src="/shared/api.js"></script>
