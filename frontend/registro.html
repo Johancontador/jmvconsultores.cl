@@ -2,156 +2,151 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Crear cuenta — Software Contable JMV</title>
-  <meta name="description" content="Registra tu empresa con tu RUT y clave SII: el sistema arma tu contabilidad sola y parte con 3 meses gratis.">
-    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Crear cuenta — Sistema Contable JMV Consultores</title>
+  <meta name="description" content="Registra tu empresa con tu RUT y clave SII: el sistema descarga tus documentos tributarios y arma tu contabilidad. 90 días de prueba.">
+  <meta name="robots" content="noindex,follow">
+  <meta name="theme-color" content="#faf7f2">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css">
-  <style>
-    /* Shell compartido con la landing/login (las reglas de lp-nav viven en el
-       <style> de landing.html: acá se replican para el mismo look sin acoplar
-       los tres archivos a un CSS común). */
-    .lp-nav {
-      position: sticky; top: 0; z-index: 50;
-      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-      padding: var(--space-3) var(--space-6);
-      background: rgba(2,6,23,0.8); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .lp-logo { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); color: var(--fg-primary); text-decoration: none; }
-    .lp-logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--accent-soft); font-size: var(--fs-lg); }
-    .lp-links { display: flex; align-items: center; gap: var(--space-5); }
-    .lp-links a { font-size: var(--fs-sm); color: var(--fg-secondary); text-decoration: none; transition: color var(--dur-fast); }
-    .lp-links a:hover { color: var(--fg-primary); }
-    @media (max-width: 920px) {
-      .lp-nav { padding: var(--space-3) var(--space-4); }
-      .lp-links { gap: var(--space-3); }
-      .lp-links a + a { display: none; } /* en móvil: solo «Iniciar sesión» */
-    }
-    .reg-pie {
-      padding: var(--space-6) var(--space-6) var(--space-8);
-      text-align: center; color: var(--fg-muted); font-size: var(--fs-sm);
-      border-top: 1px solid var(--border-subtle);
-    }
-    .reg-wrap { max-width: 960px; margin: 0 auto; padding: var(--space-8) var(--space-4); }
-    .reg-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: var(--space-6); align-items: start; }
-    @media (max-width: 860px) { .reg-grid { grid-template-columns: 1fr; } }
-    .reg-card {
-      background: var(--bg-surface); border: 1px solid var(--border-default);
-      border-radius: var(--radius-xl); padding: var(--space-6); box-shadow: var(--shadow-lg);
-    }
-    .reg-aside { background: linear-gradient(180deg, rgba(99,102,241,0.08), rgba(2,6,23,0)); }
-    .reg-aside ul { list-style: none; padding: 0; margin: var(--space-4) 0; }
-    .reg-aside li { padding: var(--space-2) 0; display: flex; gap: var(--space-2); align-items: baseline; color: var(--fg-secondary); }
-    .reg-aside li::before { content: "✓"; color: var(--success); font-weight: 700; }
-    .reg-title { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-2xl); margin: 0 0 var(--space-2); }
-    .reg-sub { color: var(--fg-secondary); margin: 0 0 var(--space-5); }
-    .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; } /* honeypot */
-    .field-ok { color: var(--success); font-size: var(--fs-xs); }
-    .field-bad { color: var(--danger); font-size: var(--fs-xs); }
-    .reg-exito { text-align: center; padding: var(--space-8) var(--space-6); }
-    .reg-exito .big { font-size: 3rem; }
-    .btn-block { width: 100%; }
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: girar .8s linear infinite; vertical-align: -3px; }
-    @keyframes girar { to { transform: rotate(360deg); } }
-    details.priv { margin-top: var(--space-3); font-size: var(--fs-xs); color: var(--fg-muted); }
-  </style>
+  <!-- Tipografía sin bloquear el primer render (mismo patrón que landing) -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="/css/sitio.css?v=3fc0f66c">
 </head>
-<body>
-  <div class="lp-nav">
-    <a class="lp-logo" href="/"><span class="lp-logo-badge">📚</span> Sistema Contable</a>
-    <div class="lp-links">
-      <a href="/">Iniciar sesión</a>
-      <a href="https://jmvconsultores.cl" target="_blank" rel="noopener">jmvconsultores.cl</a>
-    </div>
-  </div>
+<body class="pv pv-auth">
+  <a class="pv-skip" href="#root">Saltar al formulario</a>
 
-    <div class="reg-wrap" id="root">
-    <div class="reg-grid">
-      <div class="reg-card">
-        <h1 class="reg-title">Crea tu cuenta en 2 minutos</h1>
-        <p class="reg-sub">Con tu <strong>RUT de empresa y clave tributaria SII</strong> el sistema arma tu contabilidad solo. Empiezas hoy con <strong>3 meses gratis</strong>, sin tarjeta.</p>
-
-        <form id="form-registro" novalidate>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="f-usuario">Usuario</label>
-              <input class="form-input" id="f-usuario" type="text" autocomplete="username" placeholder="miempresa" required minlength="4">
-              <span id="chk-usuario"></span>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="f-clave">Contraseña (mínimo 8)</label>
-              <input class="form-input" id="f-clave" type="password" autocomplete="new-password" required minlength="8">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="f-rut">RUT de tu empresa</label>
-              <input class="form-input" id="f-rut" type="text" placeholder="76123456-7" required>
-              <span id="chk-rut"></span>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="f-telefono">WhatsApp (opcional)</label>
-              <input class="form-input" id="f-telefono" type="tel" placeholder="912345678">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="f-nombre">¿Cómo quieres ver tu empresa?</label>
-              <input class="form-input" id="f-nombre" type="text" placeholder="Mi Negocio Ltda" required>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="f-clavesii">Clave tributaria SII</label>
-            <input class="form-input" id="f-clavesii" type="password" autocomplete="off" required minlength="6">
-            <span class="text-muted" style="font-size:var(--fs-xs)">La validamos en vivo contra el SII y queda cifrada. Solo la usamos para descargar tus documentos.</span>
-          </div>
-
-          <!-- Honeypot anti-bot: campo oculto que los bots rellenan -->
-          <div class="hp" aria-hidden="true">
-            <label for="f-web">No completar este campo</label>
-            <input id="f-web" type="text" tabindex="-1" autocomplete="off">
-          </div>
-
-          <button type="submit" class="btn btn-primary btn-block" id="btn-enviar">Crear mi cuenta — 3 meses gratis</button>
-          <p id="reg-error" class="field-bad" style="margin-top:var(--space-2)"></p>
-
-          <details class="priv">
-            <summary>¿Qué haremos con tus datos?</summary>
-            <p>Tu clave SII se guarda cifrada (AES-256-GCM) y solo se usa para descargar tus documentos tributarios. No la compartimos con nadie. Cada acción en el sistema queda auditada.</p>
-          </details>
-        </form>
+  <header class="pv-bar">
+    <div class="pv-wrap">
+      <div class="pv-bar__in">
+        <a class="pv-brand" href="/">
+          <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="38" height="29">
+          <span>Sistema Contable<small>JMV Consultores</small></span>
+        </a>
+        <div class="pv-bar__cta">
+          <a href="/" class="pv-btn pv-btn--ghost pv-btn--sm">Ya tengo cuenta — Ingresar</a>
+        </div>
       </div>
-
-      <aside class="reg-card reg-aside">
-        <h2 style="font-family:var(--font-display); margin-top:0">Qué pasa al enviar</h2>
-        <ul>
-          <li>Validamos tu RUT + clave SII contra el SII en ese momento.</li>
-          <li>Se crea tu empresa con plan de cuentas contable listo.</li>
-          <li>Recibes <strong>90 días de prueba</strong> (licencia automática).</li>
-          <li>Descarga tus documentos del mes y revisa tu IVA.</li>
-        </ul>
-        <p class="text-muted" style="font-size:var(--fs-sm)">Después de la prueba: plan PYME $29.900/mes (1 empresa), PRO $59.900/mes (3) o DESPACHO $119.900/mes (10). Cancelas cuando quieras.</p>
-        <p class="text-muted" style="font-size:var(--fs-xs)">¿Ya tienes cuenta? <a href="/">Inicia sesión aquí</a>. ¿Dudas? Escríbenos por WhatsApp al <a href="https://wa.me/56975752213" target="_blank" rel="noopener">+56 9 7575 2213</a>.</p>
-      </aside>
     </div>
-  </div>
+  </header>
 
-  <footer class="reg-pie">
-    <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
-    <div style="margin-top: var(--space-2);">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl</div>
+  <main class="pv-auth__main pv-auth__main--single">
+    <div id="root">
+      <div class="pv-split" style="gap:var(--pv-s6)">
+        <div class="pv-panel-card">
+          <span class="pv-eyebrow">Registro</span>
+          <h1 class="pv-h2" style="font-size:var(--pv-fs-2xl);margin-top:var(--pv-s4)">Crea tu cuenta en pocos minutos</h1>
+          <p class="pv-sub" style="margin-top:var(--pv-s2);margin-bottom:var(--pv-s5)">
+            Con tu <strong>RUT de empresa y clave tributaria SII</strong> el sistema descarga tus documentos y
+            arma la contabilidad. Incluye <strong>90 días de prueba</strong>, sin tarjeta.
+          </p>
+
+          <form id="form-registro" novalidate>
+            <div class="pv-row">
+              <div class="pv-field">
+                <label class="pv-label" for="f-usuario">Usuario</label>
+                <input class="pv-input" id="f-usuario" name="username" type="text" autocomplete="username" placeholder="miempresa" required minlength="4">
+                <span id="chk-usuario" aria-live="polite"></span>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="f-clave">Contraseña (mínimo 8)</label>
+                <input class="pv-input" id="f-clave" name="password" type="password" autocomplete="new-password" required minlength="8">
+              </div>
+            </div>
+
+            <div class="pv-row">
+              <div class="pv-field">
+                <label class="pv-label" for="f-rut">RUT de tu empresa</label>
+                <input class="pv-input" id="f-rut" name="rut" type="text" placeholder="76123456-7" required>
+                <span id="chk-rut" aria-live="polite"></span>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="f-telefono">WhatsApp (opcional)</label>
+                <input class="pv-input" id="f-telefono" name="telefono" type="tel" placeholder="912345678" autocomplete="tel">
+              </div>
+            </div>
+
+            <div class="pv-field">
+              <label class="pv-label" for="f-nombre">¿Cómo quieres ver tu empresa?</label>
+              <input class="pv-input" id="f-nombre" name="nombre_empresa" type="text" placeholder="Mi Negocio Ltda" required>
+              <p class="pv-hint">Es el nombre que verás en el panel; no reemplaza la razón social tributaria.</p>
+            </div>
+
+            <div class="pv-field">
+              <label class="pv-label" for="f-clavesii">Clave tributaria SII</label>
+              <input class="pv-input" id="f-clavesii" name="clave_sii" type="password" autocomplete="off" required minlength="6">
+              <p class="pv-hint">La validamos en vivo contra el SII y queda cifrada. Solo la usamos para descargar tus documentos.</p>
+            </div>
+
+            <!-- Honeypot anti-bot: campo oculto que los bots rellenan -->
+            <div class="pv-hp" aria-hidden="true">
+              <label for="f-web">No completar este campo</label>
+              <input id="f-web" name="web" type="text" tabindex="-1" autocomplete="off">
+            </div>
+
+            <div class="pv-field pv-check">
+              <input type="checkbox" id="f-consent" required>
+              <label for="f-consent">Autorizo a JMV Consultores a tratar estos datos para crear mi cuenta y prestarme el servicio, según la normativa de protección de datos.</label>
+            </div>
+
+            <button type="submit" class="pv-btn pv-btn--primary pv-btn--block pv-btn--lg" id="btn-enviar">Crear mi cuenta — 90 días de prueba</button>
+            <p id="reg-error" class="pv-bad-txt" role="alert" style="margin-top:var(--pv-s3)"></p>
+
+            <details class="pv-details">
+              <summary>¿Qué haremos con tus datos?</summary>
+              <p>Tu clave SII se guarda cifrada (AES-256-GCM) y solo se usa para descargar tus documentos tributarios. No la compartimos con terceros. Cada acción en el sistema queda auditada con usuario y fecha.</p>
+            </details>
+          </form>
+        </div>
+
+        <aside class="pv-panel-card" style="background:var(--pv-elevated)">
+          <h2 class="pv-h3" style="font-size:var(--pv-fs-xl)">Qué pasa al enviar</h2>
+          <ul class="pv-list">
+            <li><span class="pv-dot" aria-hidden="true">1</span><span><b>Validación SII</b> — comprobamos tu RUT y clave tributaria en ese momento.</span></li>
+            <li><span class="pv-dot" aria-hidden="true">2</span><span><b>Empresa creada</b> — con plan de cuentas contable listo para operar.</span></li>
+            <li><span class="pv-dot" aria-hidden="true">3</span><span><b>90 días de prueba</b> — licencia automática al crear la cuenta.</span></li>
+            <li><span class="pv-dot" aria-hidden="true">4</span><span><b>Primer período</b> — sincronizas el mes y revisas tu IVA en el sistema.</span></li>
+          </ul>
+
+          <div class="pv-divider" style="margin:var(--pv-s5) 0"></div>
+
+          <p class="pv-muted" style="font-size:var(--pv-fs-sm)">
+            Después de la prueba: plan <b>PYME</b> $29.900/mes (1 empresa), <b>PRO</b> $59.900/mes (3 empresas)
+            o <b>DESPACHO</b> $119.900/mes (10 empresas). Cancelas cuando quieras.
+          </p>
+          <p class="pv-muted" style="margin-top:var(--pv-s4)">
+            ¿Ya tienes cuenta? <a href="/">Inicia sesión aquí</a>.<br>
+            ¿Dudas? Escríbenos por WhatsApp al <a href="https://wa.me/56975752213" target="_blank" rel="noopener">+56 9 7575 2213</a>.
+          </p>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="pv-legal">
+    <div class="pv-wrap">
+      <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
+      <div class="pv-legal__links">
+        <a href="/">Sitio principal</a>
+        <a href="/">Ingresar</a>
+        <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacto</a>
+      </div>
+      <p class="pv-aviso">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl.</p>
+    </div>
   </footer>
 
-  <script src="/shared/toast.js"></script>
-  <script src="/shared/api.js"></script>
+  <script src="/shared/api.js?v=80d2c456"></script>
   <script>
+    // Registro: MISMO backend y MISMAS validaciones que antes (/api/auth/registro).
+    // Solo cambia el sistema visual y los nombres de clase de estado.
     function esc(s) {
-      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
     }
     const $ = (id) => document.getElementById(id)
+    const TEXTO_BTN = 'Crear mi cuenta — 90 días de prueba'
 
     // ---- Disponibilidad en vivo (usuario y RUT) ----
     let timerUsuario = null, timerRut = null
@@ -162,11 +157,11 @@
         const r = await apiGet(`/api/auth/registro/disponible?${q}`)
         if (tipo === 'usuario') {
           $out.textContent = r.username ? '✓ disponible' : '✗ ya existe — elige otro'
-          $out.className = r.username ? 'field-ok' : 'field-bad'
+          $out.className = r.username ? 'pv-ok-txt' : 'pv-bad-txt'
         } else {
-          if (!r.rut_valido) { $out.textContent = '✗ RUT inválido'; $out.className = 'field-bad'; return }
+          if (!r.rut_valido) { $out.textContent = '✗ RUT inválido'; $out.className = 'pv-bad-txt'; return }
           $out.textContent = r.rut ? '✓ RUT disponible' : '✗ este RUT ya tiene cuenta — inicia sesión'
-          $out.className = r.rut ? 'field-ok' : 'field-bad'
+          $out.className = r.rut ? 'pv-ok-txt' : 'pv-bad-txt'
         }
       } catch (err) { /* silencioso: la validación final la hace el servidor */ }
     }
@@ -192,31 +187,38 @@
         clave_sii: $('f-clavesii').value,
         nombre_empresa: $('f-nombre').value.trim(),
         telefono: $('f-telefono').value.trim(),
-        web: $('f-web').value, // honeypot: debe ser ''
+        web: $('f-web').value, // honeypot: debe ir vacío
       }
       if (!cuerpo.username || !cuerpo.password || !cuerpo.rut || !cuerpo.clave_sii || !cuerpo.nombre_empresa) {
         error.textContent = 'Completa todos los campos obligatorios.'
         return
       }
+      if (!$('f-consent').checked) {
+        error.textContent = 'Marca la autorización de tratamiento de datos para continuar.'
+        return
+      }
       btn.disabled = true
-      btn.innerHTML = '<span class="spinner"></span> Validando contra el SII…'
+      btn.innerHTML = '<span class="pv-spin" aria-hidden="true"></span> Validando contra el SII…'
       try {
         const r = await apiPost('/api/auth/registro', cuerpo)
         const fin = r.licencia && r.licencia.fin ? r.licencia.fin : ''
         document.getElementById('root').innerHTML = `
-          <div class="reg-card reg-exito">
-            <div class="big">🎉</div>
-            <h1 class="reg-title">¡Tu cuenta está creada!</h1>
-            <p class="reg-sub">Tu empresa quedó registrada con <strong>90 días de prueba</strong>${fin ? ` (hasta el <strong>${esc(fin)}</strong>)` : ''}.</p>
-            <p><a class="btn btn-primary" href="/">Entrar al sistema</a></p>
-            <p class="text-muted" style="font-size:var(--fs-sm); max-width:520px; margin:var(--space-4) auto">
-              Primer paso sugerido: entra al <strong>Sistema Contable</strong> y sincroniza el mes actual en <strong>Libros</strong> — tus compras y ventas del SII aparecerán listas para contabilizar.
+          <div class="pv-panel-card pv-exito">
+            <div class="pv-exito__ico" aria-hidden="true">🎉</div>
+            <h1 class="pv-h2" style="font-size:var(--pv-fs-2xl)">¡Tu cuenta está creada!</h1>
+            <p class="pv-sub" style="margin-top:var(--pv-s3)">
+              Tu empresa quedó registrada con <strong>90 días de prueba</strong>${fin ? ` (hasta el <strong>${esc(fin)}</strong>)` : ''}.
+            </p>
+            <p style="margin-top:var(--pv-s5)"><a class="pv-btn pv-btn--primary pv-btn--lg" href="/">Entrar al sistema</a></p>
+            <p class="pv-muted" style="max-width:520px;margin:var(--pv-s5) auto 0">
+              Primer paso sugerido: entra al <strong>Sistema Contable</strong> y sincroniza el mes actual en <strong>Libros</strong> —
+              tus compras y ventas del SII aparecerán listas para contabilizar.
             </p>
           </div>`
       } catch (err) {
         error.textContent = `✗ ${err.message}`
         btn.disabled = false
-        btn.textContent = 'Crear mi cuenta — 3 meses gratis'
+        btn.textContent = TEXTO_BTN
       }
     })
   </script>

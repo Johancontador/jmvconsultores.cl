@@ -3,146 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Ingresar — Sistema Contable JMV</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <title>Ingresar — Sistema Contable JMV Consultores</title>
+  <meta name="description" content="Acceso al Sistema Contable de JMV Consultores: documentos del SII, períodos, reportes y gestiones de tu empresa.">
+  <meta name="robots" content="noindex,follow">
+  <meta name="theme-color" content="#faf7f2">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css">
-  <style>
-    /* SHELL COMPARTIDO CON LA LANDING: el acceso ya NO es una página aislada —
-       usa la misma barra, tipografía, tokens y tarjeta que landing.html.
-       Las reglas de barra/footer/beneficios se declaran ACÁ con clases lg-*
-       (en landing.html viven en su <style> interno, no en app.css — evito el
-       acoplamiento y la colisión con .login-* del design system). */
-    .lg-bar {
-      flex: none;
-      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-      padding: var(--space-3) var(--space-6);
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .lg-logotipo {
-      display: flex; align-items: center; gap: var(--space-2);
-      font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg);
-      color: var(--fg-primary); text-decoration: none;
-    }
-    .lg-logotipo img { height: 34px; width: auto; display: block; }
-    .lg-cta { display: flex; align-items: center; gap: var(--space-3); }
-    @media (max-width: 920px) { .lg-bar { padding: var(--space-3) var(--space-4); } }
-
-    .lg-benefits { list-style: none; padding: 0; margin: 0; }
-    .lg-pie {
-      flex: none; padding: var(--space-6) var(--space-6) var(--space-8);
-      text-align: center; color: var(--fg-muted); font-size: var(--fs-sm);
-      border-top: 1px solid var(--border-subtle);
-    }
-    .lg-pie a { color: var(--fg-secondary); }
-    .lg-pie a:hover { color: var(--fg-primary); }
-    body.lg-body { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; background: var(--bg-canvas); }
-    .lg-main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-10);
-      align-items: center;
-      max-width: 980px;
-      width: 100%;
-      margin: 0 auto;
-      padding: var(--space-8) var(--space-6);
-      padding-top: calc(var(--space-8) + env(safe-area-inset-top));
-      padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
-    }
-    .lg-main > div { min-width: 0; }
-    @media (max-width: 860px) { .lg-main { grid-template-columns: 1fr; gap: var(--space-6); } }
-
-    /* Intro (columna izquierda) — reutiliza la voz de la sección #acceso */
-    .lg-intro .lg-kicker {
-      display: inline-flex; align-items: center; gap: var(--space-2);
-      padding: var(--space-1) var(--space-4); border-radius: var(--radius-full);
-      background: var(--accent-soft); color: var(--accent);
-      font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.04em;
-      text-transform: uppercase; margin-bottom: var(--space-4);
-    }
-    .lg-intro h1 { font-family: var(--font-display); font-size: clamp(1.7rem, 3.4vw, 2.4rem); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; margin-bottom: var(--space-3); }
-    .lg-intro h1 em { font-style: normal; color: var(--accent); }
-    .lg-intro p { color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
-    .lg-intro .lp-benefits li { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); min-width: 0; }
-    .lg-intro .lp-benefits li b { color: var(--fg-primary); }
-    .lg-intro .lp-benefits li span:last-child { min-width: 0; overflow-wrap: anywhere; }
-
-    /* Tarjeta de acceso — idéntica a .lp-login-card de la landing */
-    .lg-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow-lg);
-      padding: var(--space-8);
-    }
-    .lg-card h2 { font-family: var(--font-display); font-size: var(--fs-2xl); margin-bottom: var(--space-2); }
-    .lg-card .sub { color: var(--fg-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-6); }
-    .lg-card .form-group { margin-bottom: var(--space-4); }
-    /* 16px evita el zoom automático de iOS al enfocar */
-    .lg-card .form-input { font-size: 16px; }
-    .lg-card .btn-primary { width: 100%; justify-content: center; margin-top: var(--space-2); min-height: 48px; }
-    .lg-pass-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
-    .lg-pass-row .form-label { flex: none; }
-    .lg-pass-toggle { background: none; border: none; color: var(--accent); font-size: var(--fs-xs); font-weight: var(--fw-medium); cursor: pointer; padding: 0; min-height: 44px; }
-    .lg-error { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
-    .lg-error:empty { display: none; }
-    .lg-foot { margin-top: var(--space-5); text-align: center; font-size: var(--fs-xs); color: var(--fg-muted); }
-    .lg-foot a { color: var(--accent); font-weight: var(--fw-medium); }
-    @media (max-width: 360px) { .lg-card { padding: var(--space-6) var(--space-4); } }
-  </style>
+  <!-- Tipografía sin bloquear el primer render (mismo patrón que landing) -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="/css/sitio.css?v=3fc0f66c">
 </head>
-<body class="lg-body">
-  <nav class="lg-bar" aria-label="Barra JMV">
-    <a class="lg-logotipo" href="/"><img src="/assets/logo-light.svg" alt="JMV Consultores"> Sistema Contable</a>
-    <div class="lg-cta">
-      <a href="/" class="btn btn-secondary btn-sm">&larr; Página principal</a>
-    </div>
-  </nav>
+<body class="pv pv-auth">
+  <a class="pv-skip" href="#login-form">Saltar al formulario</a>
 
-  <main class="lg-main">
-    <div class="lg-intro">
-      <span class="lg-kicker">Acceso clientes</span>
-      <h1>Ingresa a tu <em>Sistema Contable</em></h1>
-      <p>Libros de compras y ventas que se cargan solos desde el SII, contabilización en partida doble y períodos cerrados con auditoría — el mismo panel que administra tu contador.</p>
-      <ul class="lg-benefits" style="margin-top:var(--space-5)">
-        <li><span>📚</span><span><b>RCV centralizado</b> — la conexión mensual al SII baja tus documentos sin digitar.</span></li>
-        <li><span>⚡</span><span><b>Período al día</b> — propuestas, asientos y cierre con un clic.</span></li>
-        <li><span>🛡️</span><span><b>Datos en tu servidor</b> — sin terceros, con auditoría inmutable.</span></li>
-      </ul>
-    </div>
-
-    <form class="lg-card" id="login-form" autocomplete="on">
-      <h2>Ingresar</h2>
-      <p class="sub">Con tus credenciales de JMV Consultores</p>
-      <div class="lg-error" id="login-error"></div>
-      <div class="form-group">
-        <label class="form-label" for="input-username">Usuario</label>
-        <input type="text" id="input-username" class="form-input" autocomplete="username" data-user required>
-      </div>
-      <div class="form-group">
-        <div class="lg-pass-row">
-          <label class="form-label" for="input-password">Contraseña</label>
-          <button type="button" class="lg-pass-toggle" data-pass-toggle aria-label="Mostrar contraseña">Mostrar</button>
+  <header class="pv-bar">
+    <div class="pv-wrap">
+      <div class="pv-bar__in">
+        <a class="pv-brand" href="/">
+          <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="38" height="29">
+          <span>Sistema Contable<small>JMV Consultores</small></span>
+        </a>
+        <div class="pv-bar__cta">
+          <a href="/" class="pv-btn pv-btn--quiet pv-btn--sm">← Volver al sitio</a>
+          <a href="/registro.html" class="pv-btn pv-btn--ghost pv-btn--sm">Crear cuenta</a>
         </div>
-        <input type="password" id="input-password" class="form-input" autocomplete="current-password" data-pass required>
       </div>
-      <button type="submit" class="btn btn-primary" id="btn-login">Ingresar</button>
-      <p class="lg-foot">¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacta a tu contador</a> · <a href="/">Volver a la página principal</a></p>
-    </form>
+    </div>
+  </header>
+
+  <main class="pv-auth__main">
+    <div class="pv-auth__intro">
+      <span class="pv-eyebrow">Acceso clientes</span>
+      <h1>Ingresa a tu <span class="pv-accent-text">Sistema Contable</span></h1>
+      <p class="pv-sub">
+        El mismo panel con el que trabaja tu contador: documentos del SII centralizados,
+        contabilización en partida doble, períodos con checklist de cierre y auditoría de cada cambio.
+      </p>
+
+      <ul class="pv-list">
+        <li><span class="pv-dot" aria-hidden="true">1</span><span><b>RCV centralizado</b> — la conexión mensual al SII baja tus documentos sin digitar.</span></li>
+        <li><span class="pv-dot" aria-hidden="true">2</span><span><b>Período al día</b> — propuestas de asiento, revisión y cierre con checklist.</span></li>
+        <li><span class="pv-dot" aria-hidden="true">3</span><span><b>Infraestructura propia</b> — tus datos en el servidor de JMV, con auditoría inmutable.</span></li>
+      </ul>
+
+      <!-- Composición 3D simplificada: mismo lenguaje visual que la landing,
+           sin distraer del formulario. -->
+      <div class="pv-stage" aria-hidden="true" style="min-height:260px;margin-top:var(--pv-s7)">
+        <!-- Sin transform inline: el escenario usa el del sistema visual, que ya
+             se anula en pantallas angostas (a 390 px el 3D desbordaba el ancho). -->
+        <div class="pv-stage__deck">
+          <div class="pv-panel pv-panel--main" style="padding:var(--pv-s4)">
+            <div class="pv-panel__head" style="margin-bottom:var(--pv-s3)">
+              <b style="font-family:var(--pv-font-display);font-size:var(--pv-fs-sm)">Tus empresas</b>
+              <span class="pv-chip">Sesión única</span>
+            </div>
+            <div class="pv-li"><span>Empresa activa</span><b>Seleccionada</b></div>
+            <div class="pv-li"><span>Períodos abiertos</span><b>Al día</b></div>
+            <div class="pv-li"><span>Documentos del RCV</span><b>Sincronizados</b></div>
+          </div>
+          <div class="pv-panel pv-panel--float pv-panel--b">
+            <span class="pv-kpi__label">Seguridad</span>
+            <div class="pv-li" style="padding-top:2px"><span>Roles por empresa</span><b>Activos</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <form class="pv-panel-card" id="login-form" autocomplete="on">
+        <h2 class="pv-h3" style="font-size:var(--pv-fs-2xl)">Ingresar</h2>
+        <p class="pv-sub" style="margin-bottom:var(--pv-s5)">Con tus credenciales de JMV Consultores.</p>
+
+        <div class="pv-msg pv-msg--err" id="login-error" role="alert"></div>
+
+        <div class="pv-field">
+          <label class="pv-label" for="input-username">Usuario</label>
+          <input type="text" id="input-username" class="pv-input" autocomplete="username" data-user required>
+        </div>
+
+        <div class="pv-field">
+          <div class="pv-pass-row">
+            <label class="pv-label" for="input-password">Contraseña</label>
+            <button type="button" class="pv-pass-toggle" data-pass-toggle aria-label="Mostrar contraseña">Mostrar</button>
+          </div>
+          <input type="password" id="input-password" class="pv-input" autocomplete="current-password" data-pass required>
+        </div>
+
+        <button type="submit" class="pv-btn pv-btn--primary pv-btn--block pv-btn--lg" id="btn-login">Ingresar</button>
+
+        <p class="pv-form-foot">
+          ¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacta a tu contador</a><br>
+          ¿Aún no tienes cuenta? <a href="/registro.html">Créala con tu RUT y clave SII</a>
+        </p>
+      </form>
+    </div>
   </main>
 
-  <footer class="lg-pie">
-    <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
-    <div style="margin-top: var(--space-2);">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl</div>
+  <footer class="pv-legal">
+    <div class="pv-wrap">
+      <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
+      <div class="pv-legal__links">
+        <a href="/">Sitio principal</a>
+        <a href="/registro.html">Crear cuenta</a>
+        <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacto</a>
+      </div>
+      <p class="pv-aviso">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl.</p>
+    </div>
   </footer>
 
-  <script src="/shared/api.js"></script>
-  <script src="/shared/login-auth.js"></script>
+  <script src="/shared/api.js?v=80d2c456"></script>
+  <script src="/shared/login-auth.js?v=c13541cc"></script>
   <script>
+    // Autenticación intacta: la MISMA pieza pública (login-auth.js) hace el
+    // POST a /api/auth/login y redirige a /sistema/. Acá solo se monta.
     montarLoginPublico({
       form: document.getElementById('login-form'),
       errorEl: document.getElementById('login-error'),

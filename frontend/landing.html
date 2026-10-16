@@ -3,536 +3,625 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Sistema Contable JMV — Contabilidad integral automática para contadores</title>
-  <meta name="description" content="Contabilidad integral con libros de compra y venta que se cargan solos desde el SII: partida doble, clasificación con reglas, reportes, conciliación y cierre de período auditado.">
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <title>JMV Consultores — Contabilidad, tributación y gestión en un solo lugar</title>
+  <meta name="description" content="Asesoría contable y tributaria para empresas chilenas, con una plataforma que carga los libros de compra y venta desde el SII: partida doble, clasificación con reglas, reportes y cierre de período auditado.">
+  <link rel="canonical" href="https://jmvconsultores.cl/">
+  <meta name="theme-color" content="#faf7f2">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JMV Consultores">
+  <meta property="og:title" content="JMV Consultores — Contabilidad, tributación y gestión en un solo lugar">
+  <meta property="og:description" content="Consultoría contable y una plataforma conectada al SII: libros automáticos, partida doble, reportes y períodos cerrados con auditoría.">
+  <meta property="og:url" content="https://jmvconsultores.cl/">
+  <meta property="og:image" content="https://jmvconsultores.cl/assets/logo-ink.svg">
+  <meta property="og:locale" content="es_CL">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="JMV Consultores — Contabilidad, tributación y gestión en un solo lugar">
+  <meta name="twitter:description" content="Consultoría contable y plataforma conectada al SII: libros automáticos, partida doble y cierre auditado.">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css">
-  <style>
-    /* Estilos propios de la landing (no tocan el design system de la app) */
-    .lp { min-height: 100vh; background: var(--bg-canvas); }
-    .lp-nav {
-      position: sticky; top: 0; z-index: 50;
-      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-      padding: var(--space-3) var(--space-6);
-      background: rgba(2,6,23,0.8); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-    .lp-logo { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
-    .lp-logo img { height: 34px; width: auto; display: block; }
-    .lp-links { display: flex; align-items: center; gap: var(--space-5); }
-    .lp-links a { font-size: var(--fs-sm); color: var(--fg-secondary); transition: color var(--dur-fast); }
-    .lp-links a:hover { color: var(--fg-primary); }
-    .lp-acciones { display: flex; align-items: center; gap: var(--space-3); }
-    @media (max-width: 920px) {
-      .lp-links a.lp-hide-m { display: none; }
-      .lp-nav { padding: var(--space-3) var(--space-4); }
-    }
-    /* Móvil: los links y «Agendar» viven en el menú compacto; la barra deja
-       solo logo + toggle + (Acceso clientes). Sin overflow, con apertura/cierre. */
-    .lp-burger {
-      display: none; padding: var(--space-2); background: transparent;
-      border: 1px solid var(--border-default); border-radius: var(--radius-md);
-      color: var(--fg-primary); cursor: pointer; min-width: 44px; min-height: 44px;
-      align-items: center; justify-content: center; font-size: var(--fs-lg); line-height: 1;
-    }
-    .lp-movil { display: none; }
-    @media (max-width: 920px) {
-      .lp-burger { display: inline-flex; }
-      .lp-acciones { display: none; }
-      .lp-movil {
-        display: none; position: absolute; top: 100%; left: 0; right: 0;
-        background: var(--bg-surface); border-bottom: 1px solid var(--border-default);
-        box-shadow: var(--shadow-lg); padding: var(--space-4); z-index: 49;
-      }
-      .lp-movil.open { display: flex; flex-direction: column; gap: var(--space-2); }
-      .lp-movil a { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); color: var(--fg-primary); font-size: var(--fs-md); }
-      .lp-movil a:hover { background: var(--bg-hover); }
-    }
-    @media (max-width: 400px) {
-      /* En teléfonos muy angostos, «Acceso clientes» compacto para no cortar la barra. */
-      .lp-nav a.btn { padding-left: var(--space-2); padding-right: var(--space-2); }
-    }
-
-    .lp-hero { max-width: 1160px; margin: 0 auto; padding: var(--space-14, 3.5rem) var(--space-6) var(--space-12); text-align: center; }
-    .lp-kicker {
-      display: inline-flex; align-items: center; gap: var(--space-2);
-      padding: var(--space-1) var(--space-4); border-radius: var(--radius-full);
-      background: var(--accent-soft); color: var(--accent);
-      font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.04em; text-transform: uppercase;
-      margin-bottom: var(--space-5);
-    }
-    .lp-hero h1 {
-      font-family: var(--font-display); font-size: clamp(2.2rem, 5.5vw, 3.8rem);
-      line-height: 1.08; letter-spacing: -0.02em; font-weight: 700;
-      max-width: 820px; margin: 0 auto var(--space-5);
-    }
-    .lp-hero h1 em { font-style: normal; color: var(--accent); }
-    .lp-hero p.lead { font-size: var(--fs-lg); color: var(--fg-secondary); max-width: 640px; margin: 0 auto var(--space-8); line-height: var(--lh-relaxed); }
-    .lp-cta-row { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
-
-    /* Mock del dashboard: composición fiel al sistema (KPIs + ≈, sin cifras invent) */
-    .lp-mock {
-      max-width: 980px; margin: var(--space-12) auto 0; padding: 0 var(--space-4);
-      border: 1px solid var(--border-default); border-radius: var(--radius-2xl);
-      background: linear-gradient(180deg, var(--accent-soft), transparent 40%), var(--bg-surface);
-      box-shadow: var(--shadow-xl); overflow: hidden; text-align: left;
-    }
-    .lp-mock-bar { display: flex; gap: 6px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle); }
-    .lp-mock-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--c-slate-700); }
-    .lp-mock-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); padding: var(--space-6); }
-    .lp-mock-kpi { background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
-    .lp-mock-kpi small { display: block; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); margin-bottom: var(--space-1); }
-    .lp-mock-kpi strong { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 600; color: var(--fg-secondary); }
-    .lp-mock-kpi.acc strong { color: var(--accent); }
-    /* Composición del KPI sin cifras: línea que sugiere el valor (el número
-       real lo ve el cliente en SU sistema; no se inventan montos públicos). */
-    .lp-mock-line { display: inline-block; width: 84px; height: 0.9em; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--c-slate-600), var(--c-slate-700)); vertical-align: baseline; }
-    .lp-line-2 { width: 64px; }
-    .lp-line-3 { width: 52px; }
-    .acc-line { background: linear-gradient(90deg, var(--accent), rgba(46,134,200,0.4)); }
-    .lp-mock-bars { grid-column: 1 / -1; display: flex; align-items: flex-end; gap: var(--space-2); height: 140px; padding: var(--space-4); background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
-    .lp-mock-bars i { flex: 1; background: linear-gradient(180deg, var(--accent), rgba(46,134,200,0.25)); border-radius: 4px 4px 0 0; min-height: 12%; }
-    .lp-mock-bars i:nth-child(even) { background: linear-gradient(180deg, var(--c-slate-500), rgba(100,116,139,0.2)); }
-    @media (prefers-reduced-motion: no-preference) {
-      .lp-mock-bars i { animation: lp-grow 0.9s var(--ease-out) backwards; }
-      .lp-mock-bars i:nth-child(2) { animation-delay: 60ms; } .lp-mock-bars i:nth-child(3) { animation-delay: 120ms; }
-      .lp-mock-bars i:nth-child(4) { animation-delay: 180ms; } .lp-mock-bars i:nth-child(5) { animation-delay: 240ms; }
-      .lp-mock-bars i:nth-child(6) { animation-delay: 300ms; } .lp-mock-bars i:nth-child(7) { animation-delay: 360ms; }
-      .lp-mock-bars i:nth-child(8) { animation-delay: 420ms; }
-      @keyframes lp-grow { from { transform: scaleY(0); } }
-    }
-
-    .lp-flow { display: flex; align-items: stretch; gap: var(--space-3); margin-top: var(--space-8); flex-wrap: wrap; }
-    .lp-step { flex: 1; min-width: 170px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); position: relative; }
-    .lp-step .n { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); margin-bottom: var(--space-2); }
-    .lp-step b { display: block; font-size: var(--fs-sm); margin-bottom: var(--space-1); }
-    .lp-step span.txt { font-size: var(--fs-xs); color: var(--fg-secondary); line-height: var(--lh-relaxed); display: block; }
-    .lp-step .arr { position: absolute; right: -14px; top: 50%; transform: translateY(-50%); color: var(--c-slate-500); font-size: 16px; z-index: 1; }
-    @media (max-width: 860px) { .lp-step .arr { display: none; } }
-
-    .lp-section { max-width: 1160px; margin: 0 auto; padding: var(--space-16) var(--space-6); }
-    .lp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-5); margin-top: var(--space-8); }
-    .lp-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); padding: var(--space-6); transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base); }
-    .lp-card:hover { transform: translateY(-4px); border-color: var(--border-strong); }
-    .lp-card .ico { font-size: 28px; margin-bottom: var(--space-3); }
-    .lp-card h3 { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 600; margin-bottom: var(--space-2); }
-    .lp-card p { color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
-    .lp-card a { display: inline-block; margin-top: var(--space-3); font-size: var(--fs-sm); color: var(--accent); font-weight: var(--fw-medium); }
-    .lp-h2 { font-family: var(--font-display); font-size: clamp(1.6rem, 3.4vw, 2.3rem); font-weight: 700; letter-spacing: -0.01em; }
-    .lp-center { text-align: center; max-width: 720px; margin: 0 auto; }
-    .lp-center p { color: var(--fg-secondary); margin-top: var(--space-3); line-height: var(--lh-relaxed); }
-
-    /* Confianza: credenciales cualitativas SIN cifras inventadas */
-    .lp-confianza { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: center; margin-top: var(--space-8); }
-    .lp-confianza span {
-      display: inline-flex; align-items: center; gap: var(--space-2);
-      padding: var(--space-2) var(--space-4); border-radius: var(--radius-full);
-      background: var(--bg-surface); border: 1px solid var(--border-subtle);
-      font-size: var(--fs-sm); color: var(--fg-secondary);
-    }
-    .lp-confianza b { color: var(--fg-primary); font-weight: var(--fw-medium); }
-
-    /* FAQ accesible */
-    .lp-faq { max-width: 760px; margin: var(--space-8) auto 0; display: flex; flex-direction: column; gap: var(--space-3); }
-    .lp-faq details { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); }
-    .lp-faq summary {
-      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-      padding: var(--space-4) var(--space-5); cursor: pointer; user-select: none;
-      font-weight: var(--fw-medium); font-size: var(--fs-md); color: var(--fg-primary); list-style: none;
-    }
-    .lp-faq summary::-webkit-details-marker { display: none; }
-    .lp-faq summary::after { content: '+'; font-size: var(--fs-xl); color: var(--accent); transition: transform var(--dur-base) var(--ease-out); }
-    .lp-faq details[open] summary::after { transform: rotate(45deg); }
-    .lp-faq .lp-faq-body { padding: 0 var(--space-5) var(--space-5); color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
-    .lp-faq .lp-faq-body a { color: var(--accent); }
-
-    /* Contacto */
-    .lp-contacto-wrap { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: var(--space-10); align-items: start; max-width: 980px; margin: 0 auto; }
-    .lp-contacto-wrap > div { min-width: 0; }
-    @media (max-width: 860px) { .lp-contacto-wrap { grid-template-columns: 1fr; } }
-    .lp-contacto-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); padding: var(--space-8); }
-    .lp-contacto-card h2 { font-family: var(--font-display); font-size: var(--fs-2xl); margin-bottom: var(--space-2); }
-    .lp-contacto-card .sub { color: var(--fg-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-6); }
-    .lp-datos { list-style: none; padding: 0; margin: var(--space-4) 0 0; display: flex; flex-direction: column; gap: var(--space-3); }
-    .lp-datos li { display: flex; gap: var(--space-3); align-items: baseline; color: var(--fg-secondary); font-size: var(--fs-sm); }
-    .lp-datos a { color: var(--accent); font-weight: var(--fw-medium); }
-    .lp-form-ok { background: var(--success-soft); color: var(--success); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
-    .lp-form-err { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
-    .lp-form-err:empty { display: none; }
-    .lp-form-ok:empty { display: none; }
-
-    .lp-footer { padding: var(--space-8) var(--space-6); text-align: center; color: var(--fg-muted); font-size: var(--fs-sm); border-top: 1px solid var(--border-subtle); }
-    .lp-footer .lp-foot-links { display: flex; gap: var(--space-5); justify-content: center; flex-wrap: wrap; margin-top: var(--space-3); }
-    .lp-footer a { color: var(--fg-secondary); }
-    .lp-footer a:hover { color: var(--fg-primary); }
-
-    /* Login: presente en la última sección del sitio (única forma de acceso,
-       conectada con la presentación, NO una segunda landing) */
-    .lp-login-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-10); align-items: center; max-width: 980px; margin: 0 auto; }
-    /* Hijo de grid debe poder encoger: el <ul class=lp-benefits> (li display:flex)
-       empujaba min-content de 376px dentro de la columna de 327 y desbordaba. */
-    .lp-login-wrap > div { min-width: 0; }
-    @media (max-width: 860px) { .lp-login-wrap { grid-template-columns: 1fr; } }
-    .lp-login-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); padding: var(--space-8); }
-    .lp-login-card h2 { font-family: var(--font-display); font-size: var(--fs-2xl); margin-bottom: var(--space-2); }
-    .lp-login-card .sub { color: var(--fg-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-6); }
-    .lp-error { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
-    .lp-error:empty { display: none; }
-    .lp-benefits li { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); min-width: 0; }
-    .lp-benefits li span:last-child { min-width: 0; overflow-wrap: anywhere; }
-    .lp-benefits li b { color: var(--fg-primary); }
-    .lp-benefits .ico { flex-shrink: 0; }
-    #lp-toast { position: fixed; bottom: var(--space-6); left: 50%; transform: translateX(-50%); background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: var(--radius-full); padding: var(--space-3) var(--space-6); font-size: var(--fs-sm); box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity var(--dur-base); z-index: 100; }
-    #lp-toast.show { opacity: 1; }
-  </style>
+  <!-- Tipografía sin bloquear el primer render: el stylesheet de Google Fonts
+       tardaba >3 s en el entorno de QA y bloqueaba el DOMContentLoaded. Con
+       preload + media=print (que se activa al cargar) el HTML y /css/sitio.css
+       pintan de inmediato; display=swap evita el texto invisible. -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="/css/sitio.css?v=3fc0f66c">
 </head>
-<body>
-  <div class="lp">
-    <nav class="lp-nav" aria-label="Navegación principal">
-      <div class="lp-logo"><img src="/assets/logo-light.svg" alt="JMV Consultores"> Sistema Contable</div>
-      <div class="lp-links">
-        <a href="#servicios" class="lp-hide-m">Servicios</a>
-        <a href="#plataforma" class="lp-hide-m">Plataforma</a>
-        <a href="#como-trabajamos" class="lp-hide-m">Cómo trabajamos</a>
-        <a href="#faq" class="lp-hide-m">FAQ</a>
-        <a href="#contacto" class="lp-hide-m">Contacto</a>
+<body class="pv">
+  <a class="pv-skip" href="#contenido">Saltar al contenido</a>
+
+  <header class="pv-bar">
+    <div class="pv-wrap">
+      <div class="pv-bar__in">
+        <a class="pv-brand" href="/">
+          <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="38" height="29">
+          <span>Sistema Contable<small>JMV Consultores</small></span>
+        </a>
+
+        <nav class="pv-nav" aria-label="Secciones del sitio">
+          <a href="#servicios">Servicios</a>
+          <a href="#plataforma">Plataforma</a>
+          <a href="#metodologia">Cómo trabajamos</a>
+          <a href="#faq">Preguntas frecuentes</a>
+          <a href="#contacto">Contacto</a>
+        </nav>
+
+        <div class="pv-bar__cta">
+          <a href="#acceso" class="pv-btn pv-btn--ghost pv-btn--sm">Ingresar al sistema</a>
+          <a href="#contacto" class="pv-btn pv-btn--primary pv-btn--sm">Solicitar asesoría</a>
+        </div>
+
+        <button class="pv-burger" id="pv-burger" aria-expanded="false" aria-controls="pv-drawer" aria-label="Abrir menú">
+          <span aria-hidden="true">☰</span>
+        </button>
       </div>
-      <div class="lp-acciones">
-        <a href="#contacto" class="btn btn-primary btn-sm">Agendar consulta</a>
-        <a href="#acceso" class="btn btn-secondary btn-sm">Acceso clientes</a>
-      </div>
-      <button class="lp-burger" id="lp-burger" aria-expanded="false" aria-controls="lp-movil" aria-label="Abrir menú">☰</button>
-      <div class="lp-movil" id="lp-movil">
+
+      <div class="pv-drawer" id="pv-drawer">
         <a href="#servicios">Servicios</a>
         <a href="#plataforma">Plataforma</a>
-        <a href="#como-trabajamos">Cómo trabajamos</a>
+        <a href="#metodologia">Cómo trabajamos</a>
         <a href="#faq">Preguntas frecuentes</a>
         <a href="#contacto">Contacto</a>
-        <a href="#contacto" class="btn btn-primary" style="margin-top: var(--space-2);">Agendar consulta</a>
+        <a href="#acceso">Ingresar al sistema</a>
+        <a href="/registro.html" class="pv-btn pv-btn--primary">Crear cuenta</a>
       </div>
-    </nav>
+    </div>
+  </header>
 
-    <header class="lp-hero">
-      <span class="lp-kicker">Libros que se cargan solos desde el SII</span>
-      <h1>Contabilidad, control y gestión <em>en un solo lugar</em></h1>
-      <p class="lead">JMV Consultores ordena los procesos contables, tributarios y administrativos de tu empresa con asesoría profesional y una plataforma que conecta directo con el SII: compras y ventas centralizadas, asientos en partida doble y períodos cerrados con auditoría.</p>
-      <div class="lp-cta-row">
-        <a href="#contacto" class="btn btn-primary btn-lg">Agenda una consulta</a>
-        <a href="#acceso" class="btn btn-secondary btn-lg">Iniciar sesión</a>
-      </div>
+  <main id="contenido">
+    <!-- ── HERO: escaparate 3D + propuesta de valor ─────────────────────── -->
+    <section class="pv-hero">
+      <div class="pv-wrap pv-hero__in">
+        <div class="pv-hero__copy">
+          <span class="pv-eyebrow">Contabilidad · Tributación · Gestión</span>
+          <h1 class="pv-h1">Más claridad para tus números.<br><span class="pv-accent-text">Más control para tu negocio.</span></h1>
+          <p class="pv-lead">
+            Consultoría contable y herramientas digitales para gestionar, controlar y comprender mejor tu empresa:
+            un contador asignado y una plataforma conectada al SII donde tus libros se cargan solos.
+          </p>
+          <div class="pv-hero__cta">
+            <a href="#servicios" class="pv-btn pv-btn--primary pv-btn--lg">Conocer nuestras soluciones</a>
+            <a href="#acceso" class="pv-btn pv-btn--ghost pv-btn--lg">Ingresar al sistema</a>
+          </div>
+          <p class="pv-hero__nota">Los paneles que ves a la derecha son una representación de la interfaz. Las cifras reales las ves dentro de tu propio sistema.</p>
+        </div>
 
-      <div class="lp-mock" aria-hidden="true">
-        <div class="lp-mock-bar"><span></span><span></span><span></span></div>
-        <div class="lp-mock-body">
-          <div class="lp-mock-kpi"><small>Ventas del período</small><strong><span class="lp-mock-line"></span></strong></div>
-          <div class="lp-mock-kpi"><small>Compras del período</small><strong><span class="lp-mock-line lp-line-2"></span></strong></div>
-          <div class="lp-mock-kpi"><small>IVA determinado</small><strong><span class="lp-mock-line acc-line"></span></strong></div>
-          <div class="lp-mock-kpi"><small>Documentos sincronizados</small><strong><span class="lp-mock-line lp-line-3"></span></strong></div>
-          <div class="lp-mock-bars"><i style="height:38%"></i><i style="height:52%"></i><i style="height:44%"></i><i style="height:66%"></i><i style="height:58%"></i><i style="height:79%"></i><i style="height:71%"></i><i style="height:92%"></i></div>
-        </div>
-      </div>
+        <div class="pv-stage" id="pv-stage" aria-hidden="true">
+          <div class="pv-stage__deck" id="pv-deck">
+            <div class="pv-panel pv-panel--main">
+              <div class="pv-panel__head">
+                <div>
+                  <span class="pv-kpi__label">Período en curso</span>
+                  <b style="font-family:var(--pv-font-display)">Resumen tributario</b>
+                </div>
+                <span class="pv-chip">Sincronizado</span>
+              </div>
+              <div class="pv-kpis">
+                <div class="pv-kpi"><span class="pv-kpi__label">Ventas del período</span><span class="pv-kpi__val">——</span></div>
+                <div class="pv-kpi"><span class="pv-kpi__label">Compras del período</span><span class="pv-kpi__val">——</span></div>
+                <div class="pv-kpi"><span class="pv-kpi__label">IVA determinado</span><span class="pv-kpi__val">——</span></div>
+                <div class="pv-kpi"><span class="pv-kpi__label">Documentos del RCV</span><span class="pv-kpi__val">——</span></div>
+              </div>
+              <div class="pv-bars">
+                <i style="height:38%"></i><i style="height:52%"></i><i style="height:44%"></i><i style="height:66%"></i>
+                <i style="height:58%"></i><i style="height:79%"></i><i style="height:71%"></i><i style="height:92%"></i>
+              </div>
+              <div class="pv-bar-line"></div>
+              <div class="pv-li"><span>Libro de compras</span><b>Al día</b></div>
+              <div class="pv-li"><span>Libro de ventas</span><b>Al día</b></div>
+              <div class="pv-li"><span>Asientos del período</span><b>En revisión</b></div>
+            </div>
 
-      <div class="lp-confianza" aria-label="Fortalezas de JMV Consultores">
-        <span><b>Asesoría continua</b> — contador asignado</span>
-        <span><b>Multi-empresa</b> — todo en un panel</span>
-        <span><b>Datos en tu servidor</b> — sin terceros</span>
-        <span><b>Auditoría inmutable</b> — cada cambio registrado</span>
-      </div>
-    </header>
+            <div class="pv-panel pv-panel--float pv-panel--a">
+              <span class="pv-kpi__label">Conexión SII</span>
+              <div class="pv-li" style="padding-top:2px"><span>RCV compras y ventas</span><span class="pv-chip">Listo</span></div>
+              <div class="pv-li"><span>Conciliación declarado</span><span class="pv-chip pv-chip--warn">Revisar</span></div>
+            </div>
 
-    <section class="lp-section" id="servicios">
-      <div class="lp-center">
-        <h2 class="lp-h2">Servicios</h2>
-        <p>La contabilidad de tu empresa en manos de especialistas, con procesos digitales que eliminan el trabajo repetitivo.</p>
-      </div>
-      <div class="lp-grid">
-        <div class="lp-card">
-          <div class="ico">📊</div>
-          <h3>Contabilidad y estados financieros</h3>
-          <p>Partida doble, libro diario y mayor, balance de situación y estado de resultados, con cierre de período auditado.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
-        </div>
-        <div class="lp-card">
-          <div class="ico">👥</div>
-          <h3>Remuneraciones y gestión laboral</h3>
-          <p>Liquidaciones de sueldo, libro de remuneraciones, previsiones y carga de contratos, siempre al día con la normativa vigente.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
-        </div>
-        <div class="lp-card">
-          <div class="ico">🏛️</div>
-          <h3>Cumplimiento tributario</h3>
-          <p>F29, F22, RCV y declaraciones mensuales al día, con conciliación contra el SII antes de cada cierre.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
-        </div>
-        <div class="lp-card">
-          <div class="ico">🤝</div>
-          <h3>Asesoría y acompañamiento</h3>
-          <p>Un contador asignado a tu empresa: consultas por WhatsApp, revisión de períodos y soporte continuo.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
-        </div>
-        <div class="lp-card">
-          <div class="ico">🚀</div>
-          <h3>Emprendedores y pymes</h3>
-          <p>Contabilidad desde el primer día: onboarding, facturación electrónica y reportes simples para decidir rápido.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
-        </div>
-        <div class="lp-card">
-          <div class="ico">🛡️</div>
-          <h3>Prevención de riesgos</h3>
-          <p>Cumplimiento documental y detección temprana de errores en compras, ventas y declaraciones.</p>
-          <a href="#contacto">Consultar por este servicio →</a>
+            <div class="pv-panel pv-panel--float pv-panel--b">
+              <span class="pv-kpi__label">Cierre de período</span>
+              <div class="pv-li" style="padding-top:2px"><span>Checklist de cierre</span><b>3 de 5</b></div>
+              <div class="pv-li"><span>Período bloqueado</span><b>Pendiente</b></div>
+            </div>
+
+            <div class="pv-panel pv-panel--c">
+              <span class="pv-kpi__label">Trazabilidad</span>
+              <div class="pv-li" style="color:var(--pv-ink-inv-2);padding-top:2px"><span>Auditoría inmutable</span><b style="color:var(--pv-ink-inv)">Activa</b></div>
+              <div class="pv-li" style="color:var(--pv-ink-inv-2)"><span>Roles por empresa</span><b style="color:var(--pv-ink-inv)">Configurados</b></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="lp-section" id="plataforma" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
-      <div class="lp-center">
-        <h2 class="lp-h2">La plataforma: del SII al balance, sin pasos manuales</h2>
-        <p>La conexión con el SII trae los documentos; el sistema los clasifica, contabiliza y cierra el período. Tú solo revisas y apruebas.</p>
-      </div>
-      <div class="lp-flow">
-        <div class="lp-step"><span class="n">1</span><b>Conexión SII</b><span class="txt">El RCV de compras y ventas se descarga solo, mes a mes, para cada empresa.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">2</span><b>Centralización</b><span class="txt">Documentos normalizados en una sola bandeja: folio, RUT, neto, IVA y total.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">3</span><b>Clasificación con reglas</b><span class="txt">El motor aprende: cada proveedor y tipo de documento cae en su cuenta.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">4</span><b>Contabilización</b><span class="txt">Asientos en partida doble, cuadrados y auditados — diario y mayor al instante.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">5</span><b>Reportes y cierre</b><span class="txt">Balance, resultados, conciliación contra el SII y período cerrado con checklist.</span></div>
-      </div>
-      <div class="lp-grid">
-        <div class="lp-card"><div class="ico">🔌</div><h3>Bandeja del SII automática</h3><p>La conexión corre en segundo plano: RCV de compra y venta al día, con conciliación honesta contra lo declarado.</p></div>
-        <div class="lp-card"><div class="ico">⚖️</div><h3>Contabilidad en partida doble</h3><p>Plan de cuentas chileno precargado, asientos validados en vivo, libro diario y mayor con saldo corrido.</p></div>
-        <div class="lp-card"><div class="ico">💼</div><h3>Gestión comercial</h3><p>CRM de oportunidades, clientes, proveedores y cotizaciones conectados con la contabilidad.</p></div>
-        <div class="lp-card"><div class="ico">📈</div><h3>Informes y control</h3><p>Reportes contables y comerciales con filtros por empresa y período, exportables cuando los necesites.</p></div>
-        <div class="lp-card"><div class="ico">🔐</div><h3>Roles y permisos</h3><p>Cada usuario ve solo sus empresas; períodos cerrados se bloquean y queda auditoría de todo.</p></div>
-        <div class="lp-card"><div class="ico">🧰</div><h3>Herramientas tributarias</h3><p>Detección de duplicadas, interés penal del F29, checklist de cierre y conversor DTE a Excel.</p></div>
-      </div>
-      <div class="lp-center" style="margin-top: var(--space-10);">
-        <a href="#acceso" class="btn btn-primary btn-lg">Acceso clientes</a>
-        <p class="hint" style="margin-top: var(--space-3);">Si ya eres cliente de JMV, entra directo con tu usuario.</p>
-      </div>
-    </section>
-
-    <section class="lp-section" id="como-trabajamos">
-      <div class="lp-center">
-        <h2 class="lp-h2">Cómo trabajamos</h2>
-        <p>Un proceso simple en tres etapas, con un contador responsable de tu cuenta en todo momento.</p>
-      </div>
-      <div class="lp-flow">
-        <div class="lp-step"><span class="n">1</span><b>Diagnóstico</b><span class="txt">Conocemos tu empresa, tus procesos y tus necesidades contables, tributarias y administrativas.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">2</span><b>Organización e implementación</b><span class="txt">Configuramos el plan de cuentas, las reglas de clasificación y los servicios correspondientes a tu caso.</span><span class="arr">→</span></div>
-        <div class="lp-step"><span class="n">3</span><b>Seguimiento y control</b><span class="txt">Períodos al día, informes regulares y contactos directos con tu contador para decisiones oportunas.</span></div>
-      </div>
-    </section>
-
-    <section class="lp-section" id="faq">
-      <div class="lp-center">
-        <h2 class="lp-h2">Preguntas frecuentes</h2>
-        <p>Lo que más nos preguntan antes de empezar.</p>
-      </div>
-      <div class="lp-faq">
-        <details>
-          <summary>¿Qué necesito para empezar?</summary>
-          <div class="lp-faq-body">Tu RUT de empresa y la clave tributaria del SII (clave 2). Con eso la plataforma descarga tus documentos y armamos tu contabilidad. El diagnóstico inicial es sin costo: <a href="#contacto">agéndalo aquí</a>.</div>
-        </details>
-        <details>
-          <summary>¿La plataforma reemplaza a mi contador?</summary>
-          <div class="lp-faq-body">No: la plataforma es la herramienta que usamos para servirte mejor. Cada empresa JMV tiene un contador asignado que revisa, valida y acompaña los cierres de período.</div>
-        </details>
-        <details>
-          <summary>¿Mis datos están seguros?</summary>
-          <div class="lp-faq-body">La plataforma corre en infraestructura propia con acceso por roles y auditoría inmutable: cada cambio queda registrado con usuario y fecha. Tus documentos nunca salen de la plataforma para acciones externas a la gestión (la conversión DTE a Excel ocurre 100% en tu navegador).</div>
-        </details>
-        <details>
-          <summary>¿Puedo llevar varias empresas?</summary>
-          <div class="lp-faq-body">Sí. El panel soporta multi-empresa con selector central y contabilidad separada por empresa; los contadores que llevan carteras completas operan todo desde una sola sesión.</div>
-        </details>
-        <details>
-          <summary>¿Cuánto cuesta?</summary>
-          <div class="lp-faq-body">Depende del tamaño de tu empresa y los servicios que contrates. La autoevaluación la hacemos en el diagnóstico: <a href="#contacto">agenda una consulta</a> y recibimos tu propuesta con precio claro y sin sorpresas.</div>
-        </details>
-        <details>
-          <summary>¿Se integran con mis facturas electrónicas?</summary>
-          <div class="lp-faq-body">Sí: los documentos tributarios electrónicos (DTE) llegan al sistema vía la conexión con el SII (RCV de compra y venta) y quedan centralizados en la bandeja para su clasificación y contabilización.</div>
-        </details>
-      </div>
-    </section>
-
-    <section class="lp-section" id="contacto">
-      <div class="lp-contacto-wrap">
-        <div>
-          <h2 class="lp-h2">Conversemos</h2>
-          <p style="color: var(--fg-secondary); margin-top: var(--space-3); line-height: var(--lh-relaxed);">Cuéntanos qué necesita tu empresa y te contactamos para agendar un diagnóstico. Respuesta al día hábil siguiente. También puedes escribir por WhatsApp o al correo institucional.</p>
-          <ul class="lp-datos">
-            <li>💬 <span>WhatsApp: <a href="https://wa.me/56975752213" target="_blank" rel="noopener">+56 9 7575 2213</a></span></li>
-            <li>✉️ <span>Mail: <a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></span></li>
-            <li>🌐 <span>Sitio: <a href="https://jmvconsultores.cl/" target="_blank" rel="noopener">jmvconsultores.cl</a></span></li>
-          </ul>
+    <!-- ── PROPUESTA DE VALOR ─────────────────────────────────────────────── -->
+    <section class="pv-section" id="propuesta">
+      <div class="pv-wrap">
+        <div class="pv-center pv-reveal">
+          <span class="pv-eyebrow">Qué resolvemos</span>
+          <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Dos problemas, una misma causa</h2>
+          <p class="pv-sub" style="margin-top:var(--pv-s3)">
+            Primero: la información contable llega tarde, dispersa y en planillas. Segundo: nadie te explica qué
+            significan esos números para las decisiones del mes. JMV ataca los dos: ordena el dato y lo traduce.
+          </p>
         </div>
-        <div class="lp-contacto-card">
-          <h2>Agendar consulta</h2>
-          <p class="sub">Te contactamos para coordinar el diagnóstico.</p>
-          <div class="lp-form-ok" id="lp-form-ok" hidden></div>
-          <div class="lp-form-err" id="lp-form-err"></div>
-          <form id="lp-contacto-form" novalidate>
-            <div class="form-group">
-              <label class="form-label" for="c-nombre">Nombre</label>
-              <input type="text" id="c-nombre" class="form-input" autocomplete="name" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="c-empresa">Empresa</label>
-              <input type="text" id="c-empresa" class="form-input" autocomplete="organization" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="c-cel">Teléfono o email</label>
-              <input type="text" id="c-cel" class="form-input" autocomplete="tel" inputmode="text" required>
-              <p class="form-hint">con formato libre; te contactamos por tu canal preferido</p>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="c-msg">¿Qué necesitas?</label>
-              <textarea id="c-msg" class="form-textarea" style="min-height:90px" required></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary" id="c-env" style="width:100%; min-height:48px;">Enviar mensaje</button>
-          </form>
+        <div class="pv-grid pv-grid--3 pv-reveal" style="margin-top:var(--pv-s7)">
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">📥</div>
+            <h3 class="pv-h3">El dato tributario, sin digitar</h3>
+            <p>Los documentos de compra y venta entran desde el Registro de Compras y Ventas del SII. La bandeja centraliza folio, RUT, neto, IVA y total sin transcripción manual.</p>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">⚖️</div>
+            <h3 class="pv-h3">Contabilidad cuadrada</h3>
+            <p>Partida doble con plan de cuentas chileno, asientos validados y libro diario/mayor con saldo corrido. Cada cambio queda registrado con usuario y fecha.</p>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">🧭</div>
+            <h3 class="pv-h3">Criterio profesional encima</h3>
+            <p>Un contador asignado revisa el período, explica desviaciones y acompaña el cierre. La plataforma es la herramienta; el criterio sigue siendo humano.</p>
+          </article>
         </div>
       </div>
     </section>
 
-    <section class="lp-section lp-final" id="acceso">
-      <div class="lp-login-wrap">
-        <div>
-          <h2 class="lp-h2">Acceso clientes</h2>
-          <p style="color: var(--fg-secondary); margin-top: var(--space-3); line-height: var(--lh-relaxed);">El Sistema Contable es la plataforma operativa que usan los clientes de JMV Consultores: revisión de documentos, períodos, reportes y gestiones con JMV.</p>
-          <ul class="lp-benefits" style="margin-top: var(--space-6); list-style: none; padding: 0;">
-            <li><span class="ico">📚</span><span><b>Libros de compras y ventas automáticos</b> — la conexión mensual con el SII centraliza todo el RCV sin digitar.</span></li>
-            <li><span class="ico">⚡</span><span><b>Contabilización automática</b> — clasifica, propone y contabiliza el período en un clic, partida doble siempre cuadrada.</span></li>
-            <li><span class="ico">☑️</span><span><b>Cierre de período auditado</b> — checklist, asientos propuestos y períodos bloqueados.</span></li>
-          </ul>
-          <p style="margin-top: var(--space-5);"><a href="/registro.html" class="btn btn-secondary" style="white-space:normal; text-align:center;">¿Nueva empresa? Crea tu cuenta con tu RUT y clave SII</a></p>
+    <!-- ── SERVICIOS ──────────────────────────────────────────────────────── -->
+    <section class="pv-section pv-surface-band" id="servicios">
+      <div class="pv-wrap">
+        <div class="pv-center pv-reveal">
+          <span class="pv-eyebrow">Servicios profesionales</span>
+          <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Lo que hacemos por tu empresa</h2>
+          <p class="pv-sub" style="margin-top:var(--pv-s3)">Servicios de consultoría contable y tributaria. Se contratan por separado de la plataforma.</p>
         </div>
-        <div class="lp-login-card">
-          <h2>Ingresar</h2>
-          <p class="sub">Con tus credenciales de JMV Consultores</p>
-          <div class="lp-error" id="lp-error"></div>
-          <form id="lp-form">
-            <div class="form-group">
-              <label class="form-label" for="lp-user">Usuario</label>
-              <input type="text" id="lp-user" class="form-input" autocomplete="username" data-user required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="lp-pass">Contraseña</label>
-              <input type="password" id="lp-pass" class="form-input" autocomplete="current-password" data-pass required>
-            </div>
-            <button type="submit" class="btn btn-primary" id="lp-btn" style="width:100%; min-height:48px;">Entrar al sistema →</button>
-          </form>
-          <p class="sub" style="margin-top: var(--space-4); margin-bottom: 0; text-align: center;">¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto" style="color:var(--accent); font-weight:600">Contacta a tu contador</a></p>
+
+        <div class="pv-grid pv-reveal" style="margin-top:var(--pv-s7)">
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">📊</div>
+            <h3 class="pv-h3">Contabilidad y estados financieros</h3>
+            <p>Partida doble, libro diario y mayor, balance y estado de resultados, con cierre de período auditado.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">👥</div>
+            <h3 class="pv-h3">Remuneraciones y gestión laboral</h3>
+            <p>Liquidaciones de sueldo, libro de remuneraciones, previsiones y carga de contratos, al día con la normativa vigente.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">🏛️</div>
+            <h3 class="pv-h3">Cumplimiento tributario</h3>
+            <p>F29, F22, RCV y declaraciones mensuales al día, con conciliación contra el SII antes de cada cierre.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">🤝</div>
+            <h3 class="pv-h3">Asesoría y acompañamiento</h3>
+            <p>Un contador asignado a tu empresa: consultas directas, revisión de períodos y soporte continuo.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">🚀</div>
+            <h3 class="pv-h3">Emprendedores y pymes</h3>
+            <p>Contabilidad desde el primer día: onboarding, facturación electrónica y reportes simples para decidir rápido.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
+          <article class="pv-card">
+            <div class="pv-card__ico" aria-hidden="true">🛡️</div>
+            <h3 class="pv-h3">Prevención de riesgos</h3>
+            <p>Revisión documental y detección temprana de inconsistencias en compras, ventas y declaraciones.</p>
+            <a class="pv-card__link" href="#contacto">Consultar por este servicio →</a>
+          </article>
         </div>
       </div>
     </section>
 
-    <footer class="lp-footer">
+    <!-- ── PLATAFORMA (sección oscura: el producto en profundidad) ────────── -->
+    <section class="pv-section pv-ink" id="plataforma">
+      <div class="pv-wrap">
+        <div class="pv-center pv-reveal">
+          <span class="pv-eyebrow">La plataforma</span>
+          <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Del SII al balance, sin pasos manuales</h2>
+          <p class="pv-lead" style="margin-top:var(--pv-s3)">La conexión con el SII trae los documentos; el sistema los clasifica, contabiliza y cierra el período. Tú revisas y apruebas.</p>
+        </div>
+
+        <div class="pv-flow pv-reveal" style="margin-top:var(--pv-s7)">
+          <div class="pv-step"><span class="pv-step__n">1</span><b>Conexión SII</b><span>El RCV de compras y ventas se descarga mes a mes, para cada empresa.</span></div>
+          <div class="pv-step"><span class="pv-step__n">2</span><b>Centralización</b><span>Documentos normalizados en una bandeja: folio, RUT, neto, IVA y total.</span></div>
+          <div class="pv-step"><span class="pv-step__n">3</span><b>Clasificación con reglas</b><span>Cada proveedor y tipo de documento cae en su cuenta según reglas configurables.</span></div>
+          <div class="pv-step"><span class="pv-step__n">4</span><b>Contabilización</b><span>Asientos en partida doble, cuadrados y auditados: diario y mayor al instante.</span></div>
+          <div class="pv-step"><span class="pv-step__n">5</span><b>Reportes y cierre</b><span>Balance, resultados, conciliación contra el SII y período cerrado con checklist.</span></div>
+        </div>
+
+        <div class="pv-grid pv-reveal" style="margin-top:var(--pv-s7)">
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">🔌</div><h3 class="pv-h3">Bandeja del SII automática</h3><p>La conexión corre en segundo plano: RCV de compra y venta al día, con conciliación contra lo declarado.</p></article>
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">⚖️</div><h3 class="pv-h3">Partida doble</h3><p>Plan de cuentas chileno precargado, asientos validados en vivo, libro diario y mayor con saldo corrido.</p></article>
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">💼</div><h3 class="pv-h3">Gestión comercial</h3><p>CRM de oportunidades, clientes, proveedores y cotizaciones conectados con la contabilidad.</p></article>
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">📈</div><h3 class="pv-h3">Informes y control</h3><p>Reportes contables y comerciales con filtros por empresa y período, exportables cuando los necesites.</p></article>
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">🔐</div><h3 class="pv-h3">Roles y permisos</h3><p>Cada usuario ve solo sus empresas; los períodos cerrados se bloquean y todo cambio queda auditado.</p></article>
+          <article class="pv-card"><div class="pv-card__ico" aria-hidden="true">🧰</div><h3 class="pv-h3">Herramientas tributarias</h3><p>Detección de duplicados, interés penal del F29, calculadora de IVA y conversión de DTE a Excel en tu navegador.</p></article>
+        </div>
+
+        <div class="pv-center" style="margin-top:var(--pv-s8)">
+          <a href="#acceso" class="pv-btn pv-btn--light pv-btn--lg">Ingresar al sistema</a>
+          <p class="pv-muted" style="margin-top:var(--pv-s3);color:var(--pv-ink-inv-2)">Si ya eres cliente de JMV, entra con tu usuario. Si no, <a href="/registro.html">crea tu cuenta con tu RUT y clave SII</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── METODOLOGÍA ────────────────────────────────────────────────────── -->
+    <section class="pv-section" id="metodologia">
+      <div class="pv-wrap">
+        <div class="pv-center pv-reveal">
+          <span class="pv-eyebrow">Cómo trabajamos</span>
+          <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Tres etapas, un responsable</h2>
+          <p class="pv-sub" style="margin-top:var(--pv-s3)">Un contador a cargo de tu cuenta desde el diagnóstico hasta el seguimiento mensual.</p>
+        </div>
+        <div class="pv-flow pv-reveal" style="margin-top:var(--pv-s7)">
+          <div class="pv-step"><span class="pv-step__n">1</span><b>Diagnóstico</b><span>Conocemos tu empresa, tus procesos y tus necesidades contables, tributarias y administrativas.</span></div>
+          <div class="pv-step"><span class="pv-step__n">2</span><b>Organización e implementación</b><span>Configuramos el plan de cuentas, las reglas de clasificación y los servicios según tu caso.</span></div>
+          <div class="pv-step"><span class="pv-step__n">3</span><b>Seguimiento y control</b><span>Períodos al día, informes regulares y contacto directo con tu contador para decisiones oportunas.</span></div>
+        </div>
+
+        <div class="pv-reveal" style="margin-top:var(--pv-s8)">
+          <div class="pv-center">
+            <h3 class="pv-h3">Lo que puedes verificar, no lo que prometemos</h3>
+            <p class="pv-sub" style="margin-top:var(--pv-s2)">No publicamos cifras de clientes, porcentajes de ahorro ni acreditaciones que no podamos respaldar. Preferimos mostrar cómo se trabaja.</p>
+          </div>
+          <div class="pv-chips">
+            <span><b>Asesoría continua</b> — contador asignado</span>
+            <span><b>Multi-empresa</b> — todo en un panel</span>
+            <span><b>Infraestructura propia</b> — datos en tu servidor</span>
+            <span><b>Auditoría inmutable</b> — cada cambio registrado</span>
+            <span><b>Trazabilidad de cierres</b> — checklist por período</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FAQ ────────────────────────────────────────────────────────────── -->
+    <section class="pv-section pv-surface-band" id="faq">
+      <div class="pv-wrap">
+        <div class="pv-center pv-reveal">
+          <span class="pv-eyebrow">Preguntas frecuentes</span>
+          <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Lo que más nos preguntan</h2>
+        </div>
+
+        <div class="pv-faq pv-reveal" style="max-width:820px;margin-left:auto;margin-right:auto">
+          <details>
+            <summary>¿Qué necesito para empezar?</summary>
+            <div class="pv-faq__b">Tu RUT de empresa y la clave tributaria del SII. Con eso la plataforma descarga tus documentos y armamos la contabilidad. El diagnóstico inicial es sin costo: <a href="#contacto">agéndalo aquí</a>.</div>
+          </details>
+          <details>
+            <summary>¿La plataforma reemplaza a mi contador?</summary>
+            <div class="pv-faq__b">No. La plataforma es la herramienta con la que trabajamos para servirte mejor. Cada empresa JMV tiene un contador asignado que revisa, valida y acompaña los cierres de período.</div>
+          </details>
+          <details>
+            <summary>¿Mis datos están seguros?</summary>
+            <div class="pv-faq__b">La plataforma corre en infraestructura propia, con acceso por roles y auditoría inmutable: cada cambio queda registrado con usuario y fecha. La clave del SII se guarda cifrada y solo se usa para descargar tus documentos. La conversión de DTE a Excel ocurre 100% en tu navegador.</div>
+          </details>
+          <details>
+            <summary>¿Puedo llevar varias empresas?</summary>
+            <div class="pv-faq__b">Sí. El panel soporta multi-empresa con selector central y contabilidad separada por empresa; los contadores que llevan carteras completas operan todo desde una sola sesión.</div>
+          </details>
+          <details>
+            <summary>¿Cuánto cuesta?</summary>
+            <div class="pv-faq__b">Depende del tamaño de tu empresa y de los servicios que contrates. Lo revisamos en el diagnóstico: <a href="#contacto">agenda una consulta</a> y recibes una propuesta con precio claro, sin sorpresas.</div>
+          </details>
+          <details>
+            <summary>¿Se integran con mis facturas electrónicas?</summary>
+            <div class="pv-faq__b">Sí. Los documentos tributarios electrónicos llegan al sistema por la conexión con el SII (RCV de compra y venta) y quedan centralizados en la bandeja para su clasificación y contabilización.</div>
+          </details>
+          <details>
+            <summary>¿Puedo probar la plataforma antes de contratar?</summary>
+            <div class="pv-faq__b">Puedes <a href="/registro.html">crear tu cuenta</a> con tu RUT y clave SII: validamos el acceso al SII en ese momento y quedas operativo para revisar tu mes. Si prefieres que lo hagamos juntos, <a href="#contacto">agenda el diagnóstico</a>.</div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CONTACTO / CAPTACIÓN ───────────────────────────────────────────── -->
+    <section class="pv-section" id="contacto">
+      <div class="pv-wrap">
+        <div class="pv-split">
+          <div class="pv-reveal">
+            <span class="pv-eyebrow">Contacto</span>
+            <h2 class="pv-h2" style="margin-top:var(--pv-s4)">Conversemos</h2>
+            <p class="pv-sub" style="margin-top:var(--pv-s3)">
+              Cuéntanos qué necesita tu empresa y te contactamos para agendar un diagnóstico.
+              Respondemos el día hábil siguiente, por el canal que prefieras.
+            </p>
+            <ul class="pv-datos">
+              <li>💬 <span><b>WhatsApp:</b> <a href="https://wa.me/56975752213" target="_blank" rel="noopener">+56 9 7575 2213</a></span></li>
+              <li>✉️ <span><b>Correo:</b> <a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></span></li>
+              <li>🌐 <span><b>Sitio:</b> <a href="https://jmvconsultores.cl/" target="_blank" rel="noopener">jmvconsultores.cl</a></span></li>
+            </ul>
+            <ul class="pv-list">
+              <li><span class="pv-dot" aria-hidden="true">1</span><span><b>Escribes</b> — nos cuentas tu situación y el servicio que te interesa.</span></li>
+              <li><span class="pv-dot" aria-hidden="true">2</span><span><b>Diagnóstico</b> — revisamos tu caso y te proponemos un plan con precio claro.</span></li>
+              <li><span class="pv-dot" aria-hidden="true">3</span><span><b>Implementación</b> — dejamos tu contabilidad ordenada y tu acceso al sistema listo.</span></li>
+            </ul>
+          </div>
+
+          <div class="pv-panel-card pv-reveal">
+            <h3 class="pv-h3">Agendar consulta</h3>
+            <p class="pv-sub" style="margin-bottom:var(--pv-s5)">Te contactamos para coordinar el diagnóstico.</p>
+            <div class="pv-msg pv-msg--ok" id="lp-form-ok" hidden></div>
+            <div class="pv-msg pv-msg--err" id="lp-form-err"></div>
+            <form id="lp-contacto-form" novalidate>
+              <div class="pv-field">
+                <label class="pv-label" for="c-nombre">Nombre</label>
+                <input type="text" id="c-nombre" class="pv-input" autocomplete="name" required>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="c-empresa">Empresa</label>
+                <input type="text" id="c-empresa" class="pv-input" autocomplete="organization" required>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="c-cel">Teléfono o correo</label>
+                <input type="text" id="c-cel" class="pv-input" autocomplete="tel" required>
+                <p class="pv-hint">Formato libre: te contactamos por tu canal preferido.</p>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="c-servicio">Servicio de interés</label>
+                <select id="c-servicio" class="pv-input">
+                  <option value="">Aún no lo defino</option>
+                  <option>Contabilidad y estados financieros</option>
+                  <option>Remuneraciones y gestión laboral</option>
+                  <option>Cumplimiento tributario</option>
+                  <option>Asesoría y acompañamiento</option>
+                  <option>Emprendedores y pymes</option>
+                  <option>Prevención de riesgos</option>
+                  <option>Plataforma / Sistema Contable</option>
+                </select>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="c-msg">¿Qué necesitas?</label>
+                <textarea id="c-msg" class="pv-textarea" required></textarea>
+              </div>
+              <div class="pv-field pv-check">
+                <input type="checkbox" id="c-consent" required>
+                <label for="c-consent">Autorizo a JMV Consultores a usar estos datos para contactarme y responder mi solicitud. No se comparten con terceros.</label>
+              </div>
+              <button type="submit" class="pv-btn pv-btn--primary pv-btn--block pv-btn--lg" id="c-env">Enviar mensaje</button>
+              <p class="pv-hint" style="margin-top:var(--pv-s3)">Al enviar, tu mensaje queda registrado para que el equipo lo atienda. Si el envío falla, te ofrecemos escribirlo por WhatsApp sin perder el texto.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ACCESO CLIENTES ────────────────────────────────────────────────── -->
+    <section class="pv-section pv-surface-band" id="acceso">
+      <div class="pv-wrap">
+        <div class="pv-split">
+          <div class="pv-reveal">
+            <span class="pv-eyebrow">Acceso clientes</span>
+            <h2 class="pv-h2" style="margin-top:var(--pv-s4)">El Sistema Contable</h2>
+            <p class="pv-sub" style="margin-top:var(--pv-s3)">
+              La plataforma operativa que usan los clientes de JMV Consultores: revisión de documentos,
+              períodos, reportes y gestiones con el equipo.
+            </p>
+            <ul class="pv-list">
+              <li><span class="pv-dot" aria-hidden="true">1</span><span><b>Libros automáticos</b> — la conexión mensual con el SII centraliza el RCV sin digitar.</span></li>
+              <li><span class="pv-dot" aria-hidden="true">2</span><span><b>Contabilización asistida</b> — clasifica, propone y contabiliza el período; partida doble siempre cuadrada.</span></li>
+              <li><span class="pv-dot" aria-hidden="true">3</span><span><b>Cierre auditado</b> — checklist, asientos propuestos y períodos bloqueados.</span></li>
+            </ul>
+            <p style="margin-top:var(--pv-s5)">
+              <a href="/registro.html" class="pv-btn pv-btn--ghost">¿Nueva empresa? Crear cuenta con RUT y clave SII</a>
+            </p>
+          </div>
+
+          <div class="pv-panel-card pv-reveal">
+            <h3 class="pv-h3">Ingresar</h3>
+            <p class="pv-sub" style="margin-bottom:var(--pv-s5)">Con tus credenciales de JMV Consultores.</p>
+            <div class="pv-msg pv-msg--err" id="lp-error"></div>
+            <form id="lp-form">
+              <div class="pv-field">
+                <label class="pv-label" for="lp-user">Usuario</label>
+                <input type="text" id="lp-user" class="pv-input" autocomplete="username" data-user required>
+              </div>
+              <div class="pv-field">
+                <label class="pv-label" for="lp-pass">Contraseña</label>
+                <input type="password" id="lp-pass" class="pv-input" autocomplete="current-password" data-pass required>
+              </div>
+              <button type="submit" class="pv-btn pv-btn--primary pv-btn--block pv-btn--lg" id="lp-btn">Entrar al sistema</button>
+            </form>
+            <p class="pv-form-foot">¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacta a tu contador</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pv-legal">
+    <div class="pv-wrap">
       <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
-      <div class="lp-foot-links">
+      <div class="pv-legal__links">
         <a href="https://jmvconsultores.cl/" target="_blank" rel="noopener">Sitio institucional</a>
+        <a href="#servicios">Servicios</a>
+        <a href="#plataforma">Plataforma</a>
         <a href="#acceso">Acceso clientes</a>
         <a href="#contacto">Contacto</a>
+        <a href="/registro.html">Crear cuenta</a>
       </div>
-      <div style="margin-top: var(--space-3);">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl</div>
-    </footer>
-  </div>
+      <p class="pv-aviso">Los cálculos y reportes de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl.</p>
+    </div>
+  </footer>
 
-  <div id="lp-toast" role="status"></div>
+  <div class="pv-toast" id="lp-toast" role="status" aria-live="polite"></div>
 
-  <script src="/shared/api.js"></script>
-  <script src="/shared/login-auth.js"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "JMV Consultores",
+    "url": "https://jmvconsultores.cl/",
+    "email": "contacto@jmvconsultores.cl",
+    "telephone": "+56975752213",
+    "areaServed": { "@type": "Country", "name": "Chile" },
+    "description": "Consultoría contable, tributaria y de gestión para empresas chilenas, con plataforma conectada al SII.",
+    "knowsAbout": ["Contabilidad", "Tributación en Chile", "Remuneraciones", "RCV SII", "Estados financieros"]
+  }
+  </script>
+
+  <script src="/shared/api.js?v=80d2c456"></script>
+  <script src="/shared/login-auth.js?v=c13541cc"></script>
   <script>
-    // Menú compacto móvil: apertura/cierre real (criterio del prompt maestro).
-    const burger = document.getElementById('lp-burger')
-    const movil = document.getElementById('lp-movil')
-    if (burger && movil) {
+    // ── Menú móvil (accesible: aria-expanded + cierre al navegar y con Escape) ──
+    ;(function menuMovil() {
+      const burger = document.getElementById('pv-burger')
+      const drawer = document.getElementById('pv-drawer')
+      if (!burger || !drawer) return
+      const cerrar = () => {
+        drawer.dataset.open = 'false'
+        burger.setAttribute('aria-expanded', 'false')
+        burger.setAttribute('aria-label', 'Abrir menú')
+        burger.firstElementChild.textContent = '☰'
+      }
       burger.addEventListener('click', () => {
-        const abierto = movil.classList.toggle('open')
+        const abierto = drawer.dataset.open !== 'true'
+        drawer.dataset.open = String(abierto)
         burger.setAttribute('aria-expanded', String(abierto))
         burger.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú')
-        burger.textContent = abierto ? '✕' : '☰'
+        burger.firstElementChild.textContent = abierto ? '✕' : '☰'
       })
-      movil.addEventListener('click', (e) => {
-        if (e.target.closest('a')) {
-          movil.classList.remove('open')
-          burger.setAttribute('aria-expanded', 'false')
-          burger.textContent = '☰'
-        }
-      })
-    }
+      drawer.addEventListener('click', (e) => { if (e.target.closest('a')) cerrar() })
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar() })
+    })()
 
-    // Login embebido: comparte la ÚNICA lógica con login.html (login-auth.js) —
-    // el backend valida SIEMPRE; acá solo presentación.
+    // ── Movimiento: revelado progresivo, inclinación y parallax del escenario ──
+    // Se activa solo si el usuario no pidió menos movimiento; sin JS todo visible.
+    ;(function movimiento() {
+      const prefiereQuieto = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (prefiereQuieto) return
+      document.documentElement.classList.add('pv-js')
+
+      const objetivos = document.querySelectorAll('.pv-reveal')
+      // Aparición progresiva SIN poder ocultar contenido: si el observador no
+      // existe, falla, o el contexto nunca scrollea (captura full-page, lector
+      // de pantalla, print), todo queda visible. `.pv-js` se activa solo acá
+      // (con JS y sin reduced-motion): sin JS nada se oculta nunca.
+      const mostrar = (el) => el.classList.add('pv-in')
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entradas) => {
+          entradas.forEach((en) => { if (en.isIntersecting) { mostrar(en.target); io.unobserve(en.target) } })
+        }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 })
+        objetivos.forEach((o) => io.observe(o))
+        // Red de seguridad: pase lo que pase, a los 3 s nada queda oculto.
+        setTimeout(() => {
+          const pendientes = [...objetivos].filter((o) => !o.classList.contains('pv-in'))
+          if (pendientes.length) { pendientes.forEach(mostrar); io.disconnect() }
+        }, 3000)
+        window.addEventListener('beforeprint', () => objetivos.forEach(mostrar))
+      } else {
+        objetivos.forEach(mostrar)
+      }
+
+      // Parallax + inclinación: un solo listener con rAF (sin jank en móvil).
+      const stage = document.getElementById('pv-stage')
+      const deck = document.getElementById('pv-deck')
+      if (stage && deck && window.matchMedia('(min-width: 981px)').matches) {
+        let raf = null, mx = 0, my = 0
+        const aplicar = () => {
+          raf = null
+          const giroY = -13 + mx * 6
+          const giroX = 6 - my * 5
+          deck.style.transform = `rotateX(${giroX.toFixed(2)}deg) rotateY(${giroY.toFixed(2)}deg)`
+        }
+        stage.addEventListener('pointermove', (e) => {
+          const r = stage.getBoundingClientRect()
+          mx = ((e.clientX - r.left) / r.width - 0.5) * 2
+          my = ((e.clientY - r.top) / r.height - 0.5) * 2
+          if (!raf) raf = requestAnimationFrame(aplicar)
+        })
+        stage.addEventListener('pointerleave', () => {
+          mx = 0; my = 0
+          if (!raf) raf = requestAnimationFrame(aplicar)
+        })
+      }
+    })()
+
+    // ── Login embebido: MISMA lógica que login.html (login-auth.js, backend valida) ──
     const toast = document.getElementById('lp-toast')
+    let toastTimer = null
     function avisar(msg) {
       toast.textContent = msg
-      toast.classList.add('show')
-      setTimeout(() => toast.classList.remove('show'), 2500)
+      toast.dataset.on = 'true'
+      clearTimeout(toastTimer)
+      toastTimer = setTimeout(() => { toast.dataset.on = 'false' }, 3200)
     }
     montarLoginPublico({
       form: document.getElementById('lp-form'),
       errorEl: document.getElementById('lp-error'),
       btn: document.getElementById('lp-btn'),
-      textoBoton: 'Entrar al sistema →',
+      textoBoton: 'Entrar al sistema',
       destino: '/sistema/',
       alExito: (estado) => {
-        if (estado === 'sesion-activa') avisar('Ya tienes sesión activa — usa «Entrar al sistema» abajo')
+        if (estado === 'sesion-activa') avisar('Ya tienes sesión activa — usa «Ingresar al sistema»')
         else avisar('Bienvenido — cargando el sistema…')
       },
     })
 
-    // Contacto: validación client-side + envío real al backend público.
-    // Si el endpoint no está disponible, manda el mensaje via WhatsApp con los
-    // datos del form — estático no se quedará a un mensaje no procesado.
-    const cForm = document.getElementById('lp-contacto-form')
-    const cErr = document.getElementById('lp-form-err')
-    const cOk = document.getElementById('lp-form-ok')
-    const cBtn = document.getElementById('c-env')
+    // ── Contacto: validación local + POST real a /api/contacto ──
+    // Sin simulación de éxito: si el endpoint falla, el mensaje no se pierde
+    // (se ofrece WhatsApp con el texto ya redactado).
+    ;(function contacto() {
+      const form = document.getElementById('lp-contacto-form')
+      const err = document.getElementById('lp-form-err')
+      const ok = document.getElementById('lp-form-ok')
+      const btn = document.getElementById('c-env')
+      if (!form) return
 
-    cForm.addEventListener('submit', async (e) => {
-      e.preventDefault()
-      cErr.textContent = ''
-      cOk.hidden = true
-      const datos = {
-        nombre: document.getElementById('c-nombre').value.trim(),
-        empresa: document.getElementById('c-empresa').value.trim(),
-        contacto: document.getElementById('c-cel').value.trim(),
-        mensaje: document.getElementById('c-msg').value.trim(),
-      }
-      const faltan = Object.entries(datos).filter(([, v]) => !v).map(([k]) => ({ nombre: 'Nombre', empresa: 'Empresa', contacto: 'Teléfono o email', mensaje: 'Mensaje' }[k]))
-      if (faltan.length) { cErr.textContent = 'Faltan campos: ' + faltan.join(', '); return }
-      cBtn.disabled = true
-      cBtn.textContent = 'Enviando…'
-      try {
-        const res = await fetch('/api/contacto', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(datos),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo enviar. Escríbenos por WhatsApp al +56 9 7575 2213.')
-        cOk.textContent = data.mensaje || 'Mensaje enviado. Te contactamos al día hábil siguiente.'
-        cOk.hidden = false
-        cForm.reset()
-      } catch (err) {
-        // Fallback honesto: el canal SIEMPRE funciona (WhatsApp).
-        const texto = encodeURIComponent(`Hola JMV: soy ${datos.nombre} de ${datos.empresa} — ${datos.mensaje} — contacto: ${datos.contacto}`)
-        window.open('https://wa.me/56975752213?text=' + texto, '_blank', 'noopener')
-        cOk.textContent = 'Abrimos WhatsApp con tu mensaje listo para enviar.'
-        cOk.hidden = false
-      } finally {
-        cBtn.disabled = false
-        cBtn.textContent = 'Enviar mensaje'
-      }
-    })
+      const etiquetas = { nombre: 'Nombre', empresa: 'Empresa', contacto: 'Teléfono o correo', mensaje: 'Mensaje' }
 
-    // Si ya tiene sesión activa, ofrecer entrar directo (siempre 200: sin ruido 401 en consola)
-    fetch('/api/auth/estado').then((r) => r.json()).then((d) => { if (d.autenticado) avisar('Ya tienes sesión activa — usa \u0022Entrar al sistema\u0022 abajo') }).catch(() => {})
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        err.textContent = ''
+        ok.hidden = true
+        const servicio = document.getElementById('c-servicio').value
+        const datos = {
+          nombre: document.getElementById('c-nombre').value.trim(),
+          empresa: document.getElementById('c-empresa').value.trim(),
+          contacto: document.getElementById('c-cel').value.trim(),
+          mensaje: (servicio ? `[${servicio}] ` : '') + document.getElementById('c-msg').value.trim(),
+        }
+        const consent = document.getElementById('c-consent').checked
+
+        const faltan = Object.entries(datos).filter(([k, v]) => !v && etiquetas[k]).map(([k]) => etiquetas[k])
+        if (faltan.length) { err.textContent = 'Faltan campos: ' + faltan.join(', '); return }
+        if (!consent) { err.textContent = 'Marca la autorización de contacto para poder responder tu solicitud.'; return }
+
+        btn.disabled = true
+        btn.innerHTML = '<span class="pv-spin" aria-hidden="true"></span> Enviando…'
+        try {
+          const res = await fetch('/api/contacto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: datos.nombre, empresa: datos.empresa, contacto: datos.contacto, mensaje: datos.mensaje }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo enviar el mensaje.')
+          ok.textContent = data.mensaje || 'Mensaje enviado. Te contactamos el día hábil siguiente.'
+          ok.hidden = false
+          form.reset()
+        } catch (fallo) {
+          // Fallback honesto: el canal siempre funciona y el texto no se pierde.
+          const texto = encodeURIComponent(`Hola JMV: soy ${datos.nombre} de ${datos.empresa}. ${datos.mensaje} — contacto: ${datos.contacto}`)
+          window.open('https://wa.me/56975752213?text=' + texto, '_blank', 'noopener')
+          err.textContent = 'No pudimos registrar el mensaje en el sistema (' + fallo.message + '). Abrimos WhatsApp con tu texto listo para enviar.'
+        } finally {
+          btn.disabled = false
+          btn.textContent = 'Enviar mensaje'
+        }
+      })
+    })()
+
+    // Sesión ya activa: aviso informativo (endpoint siempre 200, sin 401 en consola).
+    fetch('/api/auth/estado').then((r) => r.json()).then((d) => {
+      if (d.autenticado) avisar('Ya tienes sesión activa — entra directo desde «Acceso clientes»')
+    }).catch(() => {})
   </script>
 </body>
 </html>
