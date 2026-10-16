@@ -45,7 +45,8 @@ A docs/DESPLIEGUE-SITIO-2026-10-16.md   A docs/INCIDENCIA-SISTEMA-MOVIL-2026-10-
   lectura (no hace `CREATE`/`ALTER`) y no hay archivos de migración en el rango.
   Consecuencia práctica: **el rollback es solo código + reinicio**, la base de datos
   no cambia de forma.
-- **Producción pudo moverse y hoy no se puede comprobar.** La referencia local
+- **Producción pudo moverse y hoy no se puede comprobar (y además está caída, §4).**
+  La referencia local
   `vps/master` quedó en `ad09d47` (2026-10-16 14:56, «update by push»), pero el VPS
   **no responde**: `ssh johan@100.116.109.54` agota tiempo (IP Tailscale, puerto 22).
   Por eso el runbook empieza reconectando y re-verificando. Si la izquierda de
@@ -122,15 +123,24 @@ Los comandos del VPS van **en el VPS**; los locales, **en este repo**.
 
 ### Paso 0 — Reconectar y re-verificar (obligatorio, hoy bloqueado por red)
 
+Primero, ¿está vivo el sitio? (si producción está caída, no es momento de publicar):
+
+```bash
+curl -sI https://app.jmvconsultores.cl/ | head -1   # esperado: HTTP/2 200
+```
+
+Un `530` con cuerpo `error code: 1033` significa que el túnel Argo de Cloudflare no
+encuentra origen: el VPS o `cloudflared` están caídos (ver §4).
+
 ```bash
 ssh johan@100.116.109.54 'echo VPS_OK; cd /home/johan/iva-mensual && git rev-parse --short HEAD'
-git fetch vps master && git rev-list --left-right --count vps/master...master   # esperado: 0  3
+git fetch vps master && git rev-list --left-right --count vps/master...master   # esperado: 0  4
 ```
 
 - izquierda `0` → producción es ancestro nuestro: adelante.
 - izquierda `> 0` → **DETENER**: producción avanzó, revisar antes de publicar.
-- Si `ssh` no responde (caso de hoy): levantar Tailscale/VPN y reintentar. **No
-  publicar a ciegas.**
+- Si `ssh` no responde: comprobar Tailscale (`tailscale status | grep remusaas`) y
+  reintentar. **No publicar a ciegas.**
 
 ### Paso 1 — Respaldo verificable ANTES de tocar nada (en el VPS)
 
@@ -216,3 +226,47 @@ el rollback de código no requiere purgar cachés.
    hotfix `88f8d55` para después, es posible: `git push vps 1caacf8:master` y desplegar
    el hotfix en una segunda ventana. Recomendado publicar los 4 juntos (el `88f8d55`
    arregla un botón roto en la página que se está publicando).
+
+## 4. Bloqueo de ejecución — 2026-10-16 23:42 · VPS fuera de línea
+
+**Autorización recibida; despliegue NO ejecutado por indisponibilidad de la
+infraestructura.** Nada empujado, nada desplegado, ningún cambio en producción.
+
+### Diagnóstico (tres señales independientes)
+
+| comprobación | resultado |
+|---|---|
+| `https://app.jmvconsultores.cl/` | **HTTP 530**, cuerpo `error code: 1033` (17 bytes) — túnel Argo sin origen |
+| `https://jmvconsultores.cl/` | **HTTP 530** — afecta a los dos dominios, no solo a la app |
+| Tailscale peer `remusaas` (100.116.109.54) | `offline, last seen 1h ago, tx 6240 rx 0` |
+| `tailscale ping` / TCP 22·443·8443·8080 | sin respuesta en los cuatro puertos |
+| DNS | resuelve a Cloudflare (188.114.96.5): el DNS no es la causa |
+
+El error 1033 (no 521/522) apunta al túnel, pero el `rx 0` de Tailscale y los puertos
+muertos apuntan a la máquina: **el VPS está fuera de línea**, y con él el sitio público.
+Es un incidente de operación, independiente de este despliegue.
+
+### Rutas de acceso: no hay Plan B
+
+Buscado en todo el repo: **no hay IP pública ni host alterno** para el VPS; el único
+acceso documentado es SSH por Tailscale (`ssh://johan@100.116.109.54/...`).
+`.github/workflows/` solo tiene `ci.yml` (CI, no deploy). En la máquina local existen las
+claves `~/.ssh/id_ed25519` e `~/.ssh/id_geodaniela` (la segunda es la que cita
+`docs/PLAN.md`), pero el bloqueo es de **red**, no de autenticación: no respondería
+ninguna clave. Conclusión: hace falta que el host vuelva, no otra credencial.
+
+### Al volver el VPS, en este orden
+
+1. Confirmar que el sitio responde: `curl -sI https://app.jmvconsultores.cl/ | head -1` → `200`.
+2. `systemctl status jmv-tunnel cloudflared --no-pager` — es el servicio que da el 1033
+   si murió; `journalctl -u jmv-tunnel -n 50 --no-pager` para ver por qué.
+3. `systemctl status jmv-www` (o `docker ps`) y `uptime` — distinguir «host reinició» de
+   «proceso caído».
+4. Recién entonces ejecutar el runbook desde el paso 0.
+
+### Razón por la que un 1033 no cambia el plan de despliegue
+
+El sitio estaba caído **antes** de tocar nada: el estado previo de producción no se
+puede confirmar por HTTP, así que el paso 0 (comparar `vps/master` contra `master` y
+revisar que el push sea fast-forward) sigue siendo el único control válido y hay que
+ejecutarlo igual, con el sitio ya arriba.
