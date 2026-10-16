@@ -221,7 +221,7 @@
       <p class="lead">JMV Consultores ordena los procesos contables, tributarios y administrativos de tu empresa con asesoría profesional y una plataforma que conecta directo con el SII: compras y ventas centralizadas, asientos en partida doble y períodos cerrados con auditoría.</p>
       <div class="lp-cta-row">
         <a href="#contacto" class="btn btn-primary btn-lg">Agenda una consulta</a>
-        <a href="#plataforma" class="btn btn-secondary btn-lg">Conoce la plataforma</a>
+        <a href="#acceso" class="btn btn-secondary btn-lg">Iniciar sesión</a>
       </div>
 
       <div class="lp-mock" aria-hidden="true">
@@ -418,11 +418,11 @@
           <form id="lp-form">
             <div class="form-group">
               <label class="form-label" for="lp-user">Usuario</label>
-              <input type="text" id="lp-user" class="form-input" autocomplete="username" required>
+              <input type="text" id="lp-user" class="form-input" autocomplete="username" data-user required>
             </div>
             <div class="form-group">
               <label class="form-label" for="lp-pass">Contraseña</label>
-              <input type="password" id="lp-pass" class="form-input" autocomplete="current-password" required>
+              <input type="password" id="lp-pass" class="form-input" autocomplete="current-password" data-pass required>
             </div>
             <button type="submit" class="btn btn-primary" id="lp-btn" style="width:100%; min-height:48px;">Entrar al sistema →</button>
           </form>
@@ -444,6 +444,8 @@
 
   <div id="lp-toast" role="status"></div>
 
+  <script src="/shared/api.js"></script>
+  <script src="/shared/login-auth.js"></script>
   <script>
     // Menú compacto móvil: apertura/cierre real (criterio del prompt maestro).
     const burger = document.getElementById('lp-burger')
@@ -464,41 +466,24 @@
       })
     }
 
-    // Login embebido: mismo endpoint que login.html — al éxito entra al Sistema Contable.
-    const form = document.getElementById('lp-form')
-    const errorBox = document.getElementById('lp-error')
-    const btn = document.getElementById('lp-btn')
+    // Login embebido: comparte la ÚNICA lógica con login.html (login-auth.js) —
+    // el backend valida SIEMPRE; acá solo presentación.
     const toast = document.getElementById('lp-toast')
-
     function avisar(msg) {
       toast.textContent = msg
       toast.classList.add('show')
       setTimeout(() => toast.classList.remove('show'), 2500)
     }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault()
-      errorBox.textContent = ''
-      btn.disabled = true
-      btn.textContent = 'Verificando…'
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: document.getElementById('lp-user').value.trim(),
-            password: document.getElementById('lp-pass').value,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || data.ok === false) throw new Error(data.error || 'Credenciales inválidas')
-        avisar('Bienvenido — cargando el sistema…')
-        setTimeout(() => { window.location.href = '/sistema/' }, 600)
-      } catch (err) {
-        errorBox.textContent = err.message
-        btn.disabled = false
-        btn.textContent = 'Entrar al sistema →'
-      }
+    montarLoginPublico({
+      form: document.getElementById('lp-form'),
+      errorEl: document.getElementById('lp-error'),
+      btn: document.getElementById('lp-btn'),
+      textoBoton: 'Entrar al sistema →',
+      destino: '/sistema/',
+      alExito: (estado) => {
+        if (estado === 'sesion-activa') avisar('Ya tienes sesión activa — usa «Entrar al sistema» abajo')
+        else avisar('Bienvenido — cargando el sistema…')
+      },
     })
 
     // Contacto: validación client-side + envío real al backend público.

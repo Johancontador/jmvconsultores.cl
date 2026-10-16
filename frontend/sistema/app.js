@@ -172,6 +172,9 @@ function setEmpresa(id) {
 /* ---------- login embebido (mismo template que la landing) ---------- */
 
 function renderLogin(mensaje = '') {
+  // MISMA FAMILIA VISUAL que la landing y /login.html (shell unificado):
+  // logo JMV + «Ingresar» + retorno claro a la página principal. La lógica
+  // del SPA (cambio forzado, onboarding) es propia del sistema privado.
   $app().innerHTML = `
    <div class="sys-login">
      <div class="login-card">
@@ -191,6 +194,10 @@ function renderLogin(mensaje = '') {
          </div>
          <button type="submit" class="btn btn-primary" id="lg-btn" style="width:100%">Entrar</button>
        </form>
+       <p class="sub" style="margin-top:var(--space-4);text-align:center;font-size:var(--fs-xs)">
+         <a href="/" style="color:var(--accent);font-weight:var(--fw-medium)">&larr; Página principal</a>
+         · <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener" style="color:var(--fg-secondary)">Contacta a tu contador</a>
+       </p>
      </div>
    </div>`
   document.getElementById('login-form').addEventListener('submit', async (e) => {

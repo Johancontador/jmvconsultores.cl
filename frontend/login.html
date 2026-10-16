@@ -10,116 +10,145 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/app.css">
   <style>
-    /* Clases lg-* PROPIAS de esta página: la sección .login-* de app.css
-       (login-logo = badge 56x56 del design system) es otra cosa — colisión
-      CGFloat histórica que descuadraba el logo y la tarjeta en móvil. */
-    body.lg-body {
-      min-height: 100vh;
-      min-height: 100svh; /* móvil: respeta la altura real con barra de URL */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background:
-        radial-gradient(560px circle at 50% 0%, var(--accent-soft), transparent 65%),
-        var(--bg-canvas);
-      padding: var(--space-4);
-      padding:
-        calc(var(--space-4) + env(safe-area-inset-top))
-        calc(var(--space-4) + env(safe-area-inset-right))
-        calc(var(--space-4) + env(safe-area-inset-bottom))
-        calc(var(--space-4) + env(safe-area-inset-left));
+    /* SHELL COMPARTIDO CON LA LANDING: el acceso ya NO es una página aislada —
+       usa la misma barra, tipografía, tokens y tarjeta que landing.html.
+       Las reglas de barra/footer/beneficios se declaran ACÁ con clases lg-*
+       (en landing.html viven en su <style> interno, no en app.css — evito el
+       acoplamiento y la colisión con .login-* del design system). */
+    .lg-bar {
+      flex: none;
+      display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+      padding: var(--space-3) var(--space-6);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .lg-card {
+    .lg-logotipo {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg);
+      color: var(--fg-primary); text-decoration: none;
+    }
+    .lg-logotipo img { height: 34px; width: auto; display: block; }
+    .lg-cta { display: flex; align-items: center; gap: var(--space-3); }
+    @media (max-width: 920px) { .lg-bar { padding: var(--space-3) var(--space-4); } }
+
+    .lg-benefits { list-style: none; padding: 0; margin: 0; }
+    .lg-pie {
+      flex: none; padding: var(--space-6) var(--space-6) var(--space-8);
+      text-align: center; color: var(--fg-muted); font-size: var(--fs-sm);
+      border-top: 1px solid var(--border-subtle);
+    }
+    .lg-pie a { color: var(--fg-secondary); }
+    .lg-pie a:hover { color: var(--fg-primary); }
+    body.lg-body { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; background: var(--bg-canvas); }
+    .lg-main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-10);
+      align-items: center;
+      max-width: 980px;
       width: 100%;
-      max-width: 380px;
+      margin: 0 auto;
+      padding: var(--space-8) var(--space-6);
+      padding-top: calc(var(--space-8) + env(safe-area-inset-top));
+      padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+    }
+    .lg-main > div { min-width: 0; }
+    @media (max-width: 860px) { .lg-main { grid-template-columns: 1fr; gap: var(--space-6); } }
+
+    /* Intro (columna izquierda) — reutiliza la voz de la sección #acceso */
+    .lg-intro .lg-kicker {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-1) var(--space-4); border-radius: var(--radius-full);
+      background: var(--accent-soft); color: var(--accent);
+      font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.04em;
+      text-transform: uppercase; margin-bottom: var(--space-4);
+    }
+    .lg-intro h1 { font-family: var(--font-display); font-size: clamp(1.7rem, 3.4vw, 2.4rem); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; margin-bottom: var(--space-3); }
+    .lg-intro h1 em { font-style: normal; color: var(--accent); }
+    .lg-intro p { color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); }
+    .lg-intro .lp-benefits li { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); color: var(--fg-secondary); font-size: var(--fs-sm); line-height: var(--lh-relaxed); min-width: 0; }
+    .lg-intro .lp-benefits li b { color: var(--fg-primary); }
+    .lg-intro .lp-benefits li span:last-child { min-width: 0; overflow-wrap: anywhere; }
+
+    /* Tarjeta de acceso — idéntica a .lp-login-card de la landing */
+    .lg-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-default);
       border-radius: var(--radius-xl);
-      padding: var(--space-8) var(--space-6);
       box-shadow: var(--shadow-lg);
+      padding: var(--space-8);
     }
-    .lg-logo { text-align: center; margin-bottom: var(--space-7, 1.75rem); }
-    .lg-logo img { height: 44px; width: auto; display: block; margin: 0 auto var(--space-2); }
-    .lg-logo b { display: block; font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-bold); letter-spacing: -0.01em; color: var(--fg-primary); }
-    .lg-logo small { display: block; margin-top: 2px; font-size: 0.68rem; font-weight: var(--fw-medium); color: var(--fg-muted); letter-spacing: 0.08em; text-transform: uppercase; }
-    .lg-error {
-      color: var(--danger);
-      background: var(--danger-soft);
-      border: 1px solid rgba(var(--danger-rgb), 0.25);
-      border-radius: var(--radius-md);
-      font-size: var(--fs-sm);
-      padding: var(--space-3);
-      margin-bottom: var(--space-4);
-    }
-    .lg-error:empty { display: none; }
+    .lg-card h2 { font-family: var(--font-display); font-size: var(--fs-2xl); margin-bottom: var(--space-2); }
+    .lg-card .sub { color: var(--fg-secondary); font-size: var(--fs-sm); margin-bottom: var(--space-6); }
     .lg-card .form-group { margin-bottom: var(--space-4); }
-    /* 16px en el input evita el zoom automático de iOS al enfocar */
+    /* 16px evita el zoom automático de iOS al enfocar */
     .lg-card .form-input { font-size: 16px; }
-    .lg-card .btn-primary {
-      width: 100%;
-      justify-content: center;
-      margin-top: var(--space-2);
-      padding-top: var(--space-3);
-      padding-bottom: var(--space-3);
-      min-height: 48px; /* target táctil cómodo */
-    }
-    .lg-foot { margin-top: var(--space-6); text-align: center; font-size: var(--fs-xs); color: var(--fg-muted); }
-    .lg-foot a { color: var(--fg-secondary); text-decoration: none; border-bottom: 1px solid var(--border-default); padding-bottom: 1px; }
-    .lg-foot a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-    @media (max-width: 360px) {
-      .lg-card { padding: var(--space-6) var(--space-4); }
-      .lg-logo img { height: 38px; }
-    }
+    .lg-card .btn-primary { width: 100%; justify-content: center; margin-top: var(--space-2); min-height: 48px; }
+    .lg-pass-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+    .lg-pass-row .form-label { flex: none; }
+    .lg-pass-toggle { background: none; border: none; color: var(--accent); font-size: var(--fs-xs); font-weight: var(--fw-medium); cursor: pointer; padding: 0; min-height: 44px; }
+    .lg-error { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-sm); margin-bottom: var(--space-4); }
+    .lg-error:empty { display: none; }
+    .lg-foot { margin-top: var(--space-5); text-align: center; font-size: var(--fs-xs); color: var(--fg-muted); }
+    .lg-foot a { color: var(--accent); font-weight: var(--fw-medium); }
+    @media (max-width: 360px) { .lg-card { padding: var(--space-6) var(--space-4); } }
   </style>
 </head>
 <body class="lg-body">
-  <form class="lg-card" id="login-form" autocomplete="on">
-    <div class="lg-logo">
-      <img src="/assets/logo-light.svg" alt="JMV Consultores">
-      <b>Sistema Contable</b>
-      <small>JMV Consultores</small>
+  <nav class="lg-bar" aria-label="Barra JMV">
+    <a class="lg-logotipo" href="/"><img src="/assets/logo-light.svg" alt="JMV Consultores"> Sistema Contable</a>
+    <div class="lg-cta">
+      <a href="/" class="btn btn-secondary btn-sm">&larr; Página principal</a>
     </div>
-    <div class="lg-error" id="login-error"></div>
-    <div class="form-group">
-      <label class="form-label" for="input-username">Usuario</label>
-      <input type="text" id="input-username" class="form-input" autocomplete="username" required>
+  </nav>
+
+  <main class="lg-main">
+    <div class="lg-intro">
+      <span class="lg-kicker">Acceso clientes</span>
+      <h1>Ingresa a tu <em>Sistema Contable</em></h1>
+      <p>Libros de compras y ventas que se cargan solos desde el SII, contabilización en partida doble y períodos cerrados con auditoría — el mismo panel que administra tu contador.</p>
+      <ul class="lg-benefits" style="margin-top:var(--space-5)">
+        <li><span>📚</span><span><b>RCV centralizado</b> — la conexión mensual al SII baja tus documentos sin digitar.</span></li>
+        <li><span>⚡</span><span><b>Período al día</b> — propuestas, asientos y cierre con un clic.</span></li>
+        <li><span>🛡️</span><span><b>Datos en tu servidor</b> — sin terceros, con auditoría inmutable.</span></li>
+      </ul>
     </div>
-    <div class="form-group">
-      <label class="form-label" for="input-password">Contraseña</label>
-      <input type="password" id="input-password" class="form-input" autocomplete="current-password" required>
-    </div>
-    <button type="submit" class="btn btn-primary" id="btn-login">Ingresar</button>
-    <p class="lg-foot">¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto">Contacta a JMV Consultores</a></p>
-  </form>
+
+    <form class="lg-card" id="login-form" autocomplete="on">
+      <h2>Ingresar</h2>
+      <p class="sub">Con tus credenciales de JMV Consultores</p>
+      <div class="lg-error" id="login-error"></div>
+      <div class="form-group">
+        <label class="form-label" for="input-username">Usuario</label>
+        <input type="text" id="input-username" class="form-input" autocomplete="username" data-user required>
+      </div>
+      <div class="form-group">
+        <div class="lg-pass-row">
+          <label class="form-label" for="input-password">Contraseña</label>
+          <button type="button" class="lg-pass-toggle" data-pass-toggle aria-label="Mostrar contraseña">Mostrar</button>
+        </div>
+        <input type="password" id="input-password" class="form-input" autocomplete="current-password" data-pass required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="btn-login">Ingresar</button>
+      <p class="lg-foot">¿Problemas para entrar? <a href="https://jmvconsultores.cl/#contacto" target="_blank" rel="noopener">Contacta a tu contador</a> · <a href="/">Volver a la página principal</a></p>
+    </form>
+  </main>
+
+  <footer class="lg-pie">
+    <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
+    <div style="margin-top: var(--space-2);">Los cálculos de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl</div>
+  </footer>
 
   <script src="/shared/api.js"></script>
+  <script src="/shared/login-auth.js"></script>
   <script>
-    const form = document.getElementById('login-form')
-    const errorEl = document.getElementById('login-error')
-    const btn = document.getElementById('btn-login')
-
-    // Si ya hay sesión activa, entrar directo al Sistema Contable.
-    // Sondeo con /estado (siempre 200): sin ruido 401 en consola.
-    fetch('/api/auth/estado').then((r) => r.json()).then((d) => {
-      if (d.autenticado) window.location.href = '/sistema/'
-    }).catch(() => {})
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault()
-      errorEl.textContent = ''
-      btn.disabled = true
-      btn.textContent = 'Ingresando…'
-      try {
-        await apiPost('/api/auth/login', {
-          username: document.getElementById('input-username').value.trim(),
-          password: document.getElementById('input-password').value,
-        })
-        window.location.href = '/sistema/'
-      } catch (err) {
-        errorEl.textContent = err.message || 'No se pudo iniciar sesión'
-        btn.disabled = false
-        btn.textContent = 'Ingresar'
-      }
+    montarLoginPublico({
+      form: document.getElementById('login-form'),
+      errorEl: document.getElementById('login-error'),
+      btn: document.getElementById('btn-login'),
+      textoBoton: 'Ingresar',
+      destino: '/sistema/',
     })
   </script>
 </body>
