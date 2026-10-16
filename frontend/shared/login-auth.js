@@ -12,6 +12,12 @@
 function montarLoginPublico({ form, errorEl, btn, textoBoton = 'Entrar al sistema →', destino = '/sistema/', alExito }) {
   if (!form || !btn) return null
 
+  // Los elementos se resuelven UNA vez, fuera del handler: el bloque del
+  // toggle de contraseña (abajo) los necesita y antes los leía desde el
+  // scope del listener → ReferenceError «clave is not defined» al montar.
+  const usuario = form.querySelector('[data-user]')
+  const clave = form.querySelector('[data-pass]')
+
   // Sesión ya activa: mostrar el acceso directo de inmediato (login.html
   // redirige; en la landing solo avisa). Sin ruido 401 en consola.
   fetch('/api/auth/estado').then((r) => r.json()).then((d) => {
@@ -25,8 +31,7 @@ function montarLoginPublico({ form, errorEl, btn, textoBoton = 'Entrar al sistem
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     if (errorEl) errorEl.textContent = ''
-    const usuario = form.querySelector('[data-user]')
-    const clave = form.querySelector('[data-pass]')
+    if (!usuario || !clave) return
     if (!usuario.value.trim() || !clave.value) {
       if (errorEl) errorEl.textContent = 'Ingresa tu usuario y contraseña.'
       return
