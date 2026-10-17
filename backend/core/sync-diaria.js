@@ -17,6 +17,15 @@
  *
  * Disparo (services/server.js o cron externo): scripts/sync-diaria.js
  *
+ * Actor (quién firma la auditoría): una corrida por cron o la reanudación al
+ * arrancar NO tienen autor humano, así que cuando el llamador no pasa usuario
+ * se usa el admin semilla (`licencias.usuarioSistema`, el mismo criterio que
+ * las transiciones por paso del tiempo). Antes se auditaba con null y
+ * `registrarAccion` lanzaba AL FINAL de la corrida — después de consultar el
+ * SII — con lo que el cron salía en error todos los días sin imprimir el
+ * resumen y la reanudación del arranque se reportaba como fallida aunque
+ * hubiera sincronizado.
+ *
  * Módulo puro: BD por parámetro. Nunca imprime secretos.
  */
 
@@ -24,6 +33,7 @@ const documentosCore = require('./documentos')
 const { claveSiiDescifrada } = require('./empresas')
 const { registrarAccion } = require('./auditoria')
 const jobsP = require('./jobs-persistentes')
+const licencias = require('./licencias')
 const rcv = require('../services/rcv')
 
 const PAUSA_MS = Number(process.env.SII_PAUSA_MS || 2000)   // entre consultas al SII
@@ -44,6 +54,10 @@ function dormir(ms) { return new Promise((r) => setTimeout(r, ms)) }
  */
 async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip = null } = {}) {
   const periodo = periodoActual()
+  // Ver la nota del encabezado: sin usuario explícito (cron / arranque) firma
+  // el admin semilla. Si no existiera ninguno, `registrarAccion` fallará —
+  // que es lo correcto: una corrida sin actor auditable no debe pasar.
+  const actor = usuarioId ?? licencias.usuarioSistema(db)
   const empresas = db.prepare(`
     SELECT id, rut, nombre FROM empresas WHERE activo = 1
   `).all().filter((e) => {
@@ -65,7 +79,7 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
       tipo: 'sync_diaria',
       claveUnicidad: `${emp.id}:${periodo}`,
       empresaId: emp.id,
-      usuarioId,
+      usuarioId: actor,
       periodoDesde: periodo,
       periodoHasta: periodo,
     })
@@ -105,7 +119,7 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
       try {
         const docs = await rcv.consultarRCV(emp.rut, clave, tipo, periodo)
         detalle[flujo] = documentosCore.ingestarBatch(db, {
-          empresaId: emp.id, usuarioId, tipoFlujo: flujo, periodo, documentos: docs, ip,
+          empresaId: emp.id, usuarioId: actor, tipoFlujo: flujo, periodo, documentos: docs, ip,
         })
       } catch (err) {
         detalle[flujo] = { error: err.message }
@@ -135,7 +149,7 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
   }
 
   registrarAccion(db, {
-    empresaId: null, usuarioId,
+    empresaId: null, usuarioId: actor,
     accion: 'sync_diaria.ejecutar', entidad: 'jobs_persistentes', entidadId: periodo,
     despues: { procesadas: resumen.procesadas, ok: resumen.ok, con_errores: resumen.con_errores, saltadas: resumen.saltadas },
     ip,

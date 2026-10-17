@@ -219,3 +219,37 @@ test('T5: el arranque pasa la BD a reanudarSyncDiaria', () => {
   assert.ok(/require\(['"]\.\/db['"]\)/.test(src), 'la BD se obtiene del módulo ./db')
   assert.ok(/^\s*(let|const|var)\s+db\b/m.test(src), 'la instancia de la BD se guarda en una variable')
 })
+
+// ===== T6: corrida headless (cron / arranque) sin autor humano =====
+
+/**
+ * El cron (`scripts/sync-diaria.js`) y la reanudación al arrancar no tienen
+ * usuario. Con actor nulo, `registrarAccion` lanzaba AL FINAL de la corrida
+ * —después de consultar el SII— así que el cron salía en error todos los días
+ * sin imprimir el resumen. Aquí se comprueba que la corrida automática completa
+ * y firma con el admin semilla, sin relajar la auditoría.
+ */
+test('T6: corrida sin usuario firma el admin del sistema (no aborta al cerrar)', async () => {
+  const { registrarAccion } = require('../backend/core/auditoria')
+  const licencias = require('../backend/core/licencias')
+  const sistema = licencias.usuarioSistema(db)
+  assert.strictEqual(sistema, adminId, 'el actor del sistema es el admin semilla')
+
+  // CONTROL: el arreglo no relaja la auditoría — sin actor sigue siendo error.
+  assert.throws(
+    () => registrarAccion(db, { usuarioId: null, accion: 'prueba', entidad: 'prueba' }),
+    /usuarioId es obligatorio/,
+    'registrarAccion sigue exigiendo actor'
+  )
+
+  const contar = () => db.prepare(`SELECT COUNT(*) n FROM auditoria WHERE accion = 'sync_diaria.ejecutar'`).get().n
+  // empresaIds vacío: no toca el SII, pero SÍ recorre el cierre de la corrida
+  // (registrarAccion), que es exactamente donde el actor nulo reventaba.
+  const antes = contar()
+  const r = await sync.ejecutarSyncDiaria(db, { empresaIds: [] })
+  assert.strictEqual(r.procesadas, 0, 'no procesa empresas cuando no hay ninguna seleccionada')
+  assert.strictEqual(contar(), antes + 1, 'la corrida headless quedó auditada')
+
+  const ultima = db.prepare(`SELECT usuario_id FROM auditoria WHERE accion = 'sync_diaria.ejecutar' ORDER BY id DESC LIMIT 1`).get()
+  assert.strictEqual(ultima.usuario_id, sistema, 'atribuida al admin del sistema, no a null')
+})
