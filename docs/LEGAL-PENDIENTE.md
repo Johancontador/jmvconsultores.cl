@@ -1,8 +1,22 @@
-# Legal del sitio: qué falta y borradores
+# Legal del sitio: estado y borradores
 
-Estado a 2026-10-17. **Esto no es asesoría legal**: son borradores redactados a
-partir de lo que el sitio hace hoy, para que los revise un abogado antes de
-publicarlos. No publicar con marcadores `{{ }}` sin completar.
+**Actualizado el 2026-10-17: las tres páginas están publicadas.**
+
+- `/privacidad.html`, `/cookies.html` y `/terminos.html` responden 200, tienen
+  canonical propio, están en el sitemap y se enlazan desde el pie de las 28
+  páginas y de la 404 (lo verifica el test T18).
+- Datos confirmados por el propietario y publicados: **JMV Consultores SpA**,
+  representada por **Johan Morales**, domicilio **Región Metropolitana, Chile**,
+  correo de privacidad **privacidad@jmvconsultores.cl**.
+- **RUT: no publicado por decisión del propietario.** Los tres textos dicen que
+  se entrega a solicitud escrita. Es una brecha respecto del art. 28 de la Ley
+  19.496 mientras no se publique.
+- **Correo de privacidad: aún sin buzón.** El dominio no tiene MX; hay que
+  configurarlo (ver `docs/CORREO-DOMINIO.md`).
+
+Lo que sigue son los borradores originales y el diagnóstico del sitio. **Esto
+no es asesoría legal**: falta la revisión de un abogado antes de considerar los
+textos definitivos.
 
 ## 1. Lo que el sitio hace hoy (medido, no supuesto)
 
@@ -32,16 +46,24 @@ publicarlos. No publicar con marcadores `{{ }}` sin completar.
   qué cookies hay. Hoy la respuesta honesta es "ninguna propia; solo las de
   terceros que ves al usar WhatsApp y las tipografías".
 
-## 3. Datos que faltan del propietario (bloquean la publicación)
+## 3. Datos del propietario
 
-1. **RUT** y **domicilio** de JMV Consultores SpA.
-2. **Plazo de conservación** de los datos que lleguen por WhatsApp o correo
-   (ej.: "mientras exista la relación comercial y 5 años después").
-3. **Responsable/encargado de datos** y correo para ejercer derechos
-   (¿`contacto@` o uno dedicado, ej. `privacidad@jmvconsultores.cl`?).
-4. Si el sitio pasará a tener **backend o analítica** (entonces cambia el texto:
-   IP registrada, cookies de medición, encargados de tratamiento).
-5. **Revisión legal** de los tres textos (obligatoria antes de publicar).
+### Resueltos y publicados
+
+1. **Responsable:** JMV Consultores SpA, representada por Johan Morales.
+2. **Domicilio:** Región Metropolitana, Chile.
+3. **Correo de privacidad:** `privacidad@jmvconsultores.cl` (publicado; el
+   buzón se habilita con Cloudflare Email Routing, ver `docs/CORREO-DOMINIO.md`).
+4. **Plazo de conservación:** 12 meses para consultas no convertidas y hasta 6
+   años para datos de servicios contratados (obligación tributaria).
+
+### Pendientes
+
+5. **RUT de la sociedad.** No se publica por ahora; los textos dicen que se
+   entrega a solicitud. Publicarlo es lo que exige el art. 28 de la Ley 19.496.
+6. **Revisión legal** de los tres textos por un abogado.
+7. **Fecha de vigencia de la Ley 21.719**: confirmar si se postergó del 1 de
+   diciembre de 2026 antes de fijar plazos internos.
 
 ## 4. Borradores
 
@@ -137,19 +159,20 @@ publicarlos. No publicar con marcadores `{{ }}` sin completar.
 >
 > **Ley aplicable.** Legislación chilena; tribunales de {{ciudad}}.
 
-## 5. Además, en el pie de página
+## 5. Pie de página
 
-Agregar, en las 9 páginas y en la 404: `JMV CONSULTORES SPA · RUT {{RUT}} ·
-{{domicilio}} · contacto@jmvconsultores.cl` y los enlaces a las tres páginas
-legales. Hoy el pie no individualiza a la empresa más allá de la razón social.
+Hecho. El pie muestra `JMV Consultores SpA · Johan Morales · Región
+Metropolitana, Chile` y una columna «Información legal» con las tres páginas.
+La 404 también lo lleva.
 
-## 6. Cuando estén los datos
+## 6. Cuando esté el RUT
 
 ```bash
-# 1. crear privacidad.html, cookies.html y terminos.html con el mismo chrome
-#    (barra, pie y css versionado del resto del sitio)
-# 2. enlazarlas en el pie de las 9 páginas y de la 404, y versionar:
+# 1. editar privacidad.html y terminos.html: reemplazar el aviso de
+#    «RUT a solicitud» por el número, y actualizar la fecha de revisión
+# 2. regenerar chrome y versionar:
+python3 deploy/actualizar-chrome.py
 python3 deploy/versionar.py
-# 3. sumarlas al sitemap y a los enlaces del pie, que T2 y T8 verifican:
+# 3. verificar (T18 cubre las páginas legales y los enlaces del pie):
 node --test tests/sitio.test.mjs
 ```

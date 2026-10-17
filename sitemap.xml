@@ -11,6 +11,21 @@
   <url><loc>https://jmvconsultores.cl/prevencion-riesgos.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://jmvconsultores.cl/soluciones-digitales.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://jmvconsultores.cl/preguntas-frecuentes.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-contabilidad.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-remuneraciones.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-acompanamiento.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-tributaria.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-pymes.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-respaldo.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/faq-prevencion.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://jmvconsultores.cl/blog.html</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jmvconsultores.cl/blog-iva-credito-fiscal.html</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://jmvconsultores.cl/blog-finiquito.html</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://jmvconsultores.cl/blog-ley-21719.html</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://jmvconsultores.cl/testimonios.html</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
   <url><loc>https://jmvconsultores.cl/nosotros.html</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
   <url><loc>https://jmvconsultores.cl/contacto.html</loc><changefreq>yearly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://jmvconsultores.cl/privacidad.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://jmvconsultores.cl/cookies.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://jmvconsultores.cl/terminos.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

@@ -34,9 +34,34 @@ PAGINAS = [
     ("prevencion-riesgos.html", "Servicios", "0.8", "monthly", "Prevención de riesgos"),
     ("soluciones-digitales.html", "Soluciones digitales", "0.8", "monthly", "Soluciones digitales"),
     ("preguntas-frecuentes.html", "Recursos", "0.8", "weekly", "Preguntas frecuentes"),
+    ("faq-contabilidad.html", "Recursos", "0.6", "monthly", "FAQ Contabilidad completa"),
+    ("faq-remuneraciones.html", "Recursos", "0.6", "monthly", "FAQ Remuneraciones"),
+    ("faq-acompanamiento.html", "Recursos", "0.6", "monthly", "FAQ Acompañamiento contable"),
+    ("faq-tributaria.html", "Recursos", "0.6", "monthly", "FAQ Asesoría tributaria"),
+    ("faq-pymes.html", "Recursos", "0.6", "monthly", "FAQ Emprendedores y Pymes"),
+    ("faq-respaldo.html", "Recursos", "0.6", "monthly", "FAQ Respaldo y confidencialidad"),
+    ("faq-prevencion.html", "Recursos", "0.6", "monthly", "FAQ Prevención de riesgos"),
+    ("blog.html", "Blog", "0.7", "weekly", "Blog"),
+    ("blog-iva-credito-fiscal.html", "Blog", "0.5", "monthly", "Cómo recuperar el IVA de crédito fiscal"),
+    ("blog-finiquito.html", "Blog", "0.5", "monthly", "Finiquito: qué debe incluir y cómo revisarlo"),
+    ("blog-ley-21719.html", "Blog", "0.5", "monthly", "Ley 21.719: qué cambia para tu pyme"),
+    ("testimonios.html", "Nosotros", "0.5", "yearly", "Testimonios"),
     ("nosotros.html", "Nosotros", "0.5", "yearly", "Nosotros"),
     ("contacto.html", "Contacto", "0.7", "yearly", "Contacto"),
+    ("privacidad.html", None, "0.3", "yearly", "Política de Privacidad"),
+    ("cookies.html", None, "0.3", "yearly", "Política de Cookies"),
+    ("terminos.html", None, "0.3", "yearly", "Términos y Condiciones"),
 ]
+
+# Páginas que traen sus propias migas y su propio BreadcrumbList (el generador
+# no debe imponerles la ruta «Inicio › Servicios»).
+MIGAS_PROPIAS = {
+    "preguntas-frecuentes.html", "blog.html", "testimonios.html",
+    "privacidad.html", "cookies.html", "terminos.html",
+    "blog-iva-credito-fiscal.html", "blog-finiquito.html", "blog-ley-21719.html",
+    "faq-contabilidad.html", "faq-remuneraciones.html", "faq-acompanamiento.html",
+    "faq-tributaria.html", "faq-pymes.html", "faq-respaldo.html", "faq-prevencion.html",
+}
 
 IDS = {
     "index.html": "inicio",
@@ -66,6 +91,7 @@ MENU = [
     ("/servicios.html", "Servicios", "servicios.html"),
     ("/soluciones-digitales.html", "Soluciones digitales", "soluciones-digitales.html"),
     ("/preguntas-frecuentes.html", "Recursos", "preguntas-frecuentes.html"),
+    ("/blog.html", "Blog", "blog.html"),
     ("/nosotros.html", "Nosotros", "nosotros.html"),
     ("/contacto.html", "Contacto", "contacto.html"),
 ]
@@ -113,6 +139,7 @@ def footer_html():
       <div class="site-foot__brand">
         <a href="/" aria-label="JMV Consultores — ir al inicio"><img src="/assets/logo-light.svg" alt="JMV Consultores" width="168" height="126" /></a>
         <p>Consultoría contable, tributaria y de remuneraciones para pymes chilenas. Atención 100%% en línea, con información clara y respaldos ordenados.</p>
+        <p class="site-foot__legal">JMV Consultores SpA · Johan Morales<br />Región Metropolitana, Chile</p>
         <a class="site-foot__mail" href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a>
       </div>
       <nav aria-label="Servicios">
@@ -125,9 +152,19 @@ def footer_html():
         <h2>Recursos</h2>
         <ul>
           <li><a href="/preguntas-frecuentes.html">Preguntas frecuentes</a></li>
+          <li><a href="/blog.html">Blog contable</a></li>
+          <li><a href="/testimonios.html">Testimonios</a></li>
           <li><a href="/servicios.html">Catálogo de servicios</a></li>
           <li><a href="/soluciones-digitales.html">Soluciones digitales</a></li>
           <li><a href="/nosotros.html">Nosotros</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Información legal">
+        <h2>Información legal</h2>
+        <ul>
+          <li><a href="/privacidad.html">Política de Privacidad</a></li>
+          <li><a href="/cookies.html">Política de Cookies</a></li>
+          <li><a href="/terminos.html">Términos y Condiciones</a></li>
         </ul>
       </nav>
       <div>
@@ -148,7 +185,7 @@ def footer_html():
     </div>
     <div class="container site-foot__bottom">
       <p>© <span id="year">2026</span> JMV Consultores SpA · jmvconsultores.cl</p>
-      <p>Chile · Atención en línea</p>
+      <p>Región Metropolitana, Chile · Atención en línea</p>
     </div>
   </footer>""" % servicios
 
@@ -156,7 +193,7 @@ def footer_html():
 def breadcrumb_html(archivo):
     """Migas para páginas hijas; None para las de primer nivel."""
     nombres = {a: n for a, _, _, _, n in PAGINAS}
-    if archivo not in nombres:
+    if archivo not in nombres or archivo in MIGAS_PROPIAS:
         return None
     if archivo in ("index.html", "servicios.html", "soluciones-digitales.html",
                    "nosotros.html", "contacto.html"):

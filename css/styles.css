@@ -825,6 +825,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .site-foot__brand img { height: 52px; width: auto; }
 .site-foot__brand p { margin-top: 14px; max-width: 320px; color: #b9c3d2; }
+.site-foot__legal { color: #93a1b6; font-size: 0.84rem; line-height: 1.5; }
 .site-foot__brand .site-foot__mail { display: inline-block; margin-top: 12px; font-weight: 600; }
 .site-foot h2 {
   font-family: var(--font-body);
@@ -908,7 +909,7 @@ tr:last-child td { border-bottom: 0; }
   .cta { padding: 64px 32px; }
   .wa-float { bottom: 24px; right: 24px; }
   .grid--3 { grid-template-columns: repeat(3, 1fr); }
-  .site-foot__grid { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
+  .site-foot__grid { grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; }
 }
 
 /* ══════════════════════════════════════════

@@ -385,3 +385,57 @@ test('T17: redes sociales solo si están configuradas', () => {
   // Lo configurado debe salir del mismo CONFIG: nada duplicado a mano en el pie.
   assert.doesNotMatch(leer('contacto.html'), /whatsapp\.com|api\.whatsapp/, 'no se repiten canales a mano')
 })
+
+/* ── T18 ──────────────────────────────────────────────────────────────────── */
+test('T18: páginas legales publicadas, enlazadas y sin marcadores vacíos', () => {
+  // La identificación del proveedor es obligatoria (Ley 19.496, art. 28): los
+  // datos que el propietario confirmó van publicados, y ninguno de los textos
+  // se sube con marcadores {{ }} sin completar.
+  for (const legal of ['privacidad.html', 'cookies.html', 'terminos.html']) {
+    assert.ok(paginas.includes(legal), `${legal}: falta la página`)
+    const html = leer(legal)
+    assert.match(html, /Johan Morales/, `${legal}: no individualiza al responsable`)
+    assert.match(html, /Regi[oó]n Metropolitana/, `${legal}: falta el domicilio`)
+    assert.match(html, /privacidad@jmvconsultores\.cl/, `${legal}: falta el correo de privacidad`)
+    // Solo la apertura: «}}» aparece legítimamente en el JSON-LD de la página.
+    assert.doesNotMatch(html, /\{\{/, `${legal}: quedan marcadores sin completar`)
+  }
+
+  // Toda página enlaza las tres, también la 404: el enlace legal no depende de
+  // la buena memoria de quien escribe una página nueva.
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+    for (const legal of ['/privacidad.html', '/cookies.html', '/terminos.html']) {
+      assert.ok(html.includes(`href="${legal}"`), `${f}: no enlaza ${legal}`)
+    }
+    assert.doesNotMatch(html, /\{\{/, `${f}: quedan marcadores sin completar`)
+  }
+})
+
+/* ── T19 ──────────────────────────────────────────────────────────────────── */
+test('T19: el centro de ayuda está troceado y no vuelve a ser un solo archivo', () => {
+  // La FAQ única pesaba ~290 KB: en móvil son varios segundos antes de la
+  // primera respuesta. Se exige un índice liviano y un bloque por tema, con la
+  // misma cantidad de preguntas que antes (350).
+  const indice = leer('preguntas-frecuentes.html')
+  assert.ok(Buffer.byteLength(indice) < 60 * 1024, `el índice pesa ${Buffer.byteLength(indice)} bytes`)
+
+  const bloques = paginas.filter((f) => f.startsWith('faq-'))
+  assert.equal(bloques.length, 7, `bloques FAQ: ${bloques.join(', ')}`)
+
+  let total = 0
+  for (const f of bloques) {
+    const html = leer(f)
+    const n = (html.match(/class="faq__item"/g) || []).length
+    assert.ok(n >= 40, `${f}: solo ${n} preguntas`)
+    assert.match(html, /"@type": "FAQPage"/, `${f}: sin FAQPage`)
+    assert.ok(html.includes('href="/preguntas-frecuentes.html"'), `${f}: no vuelve al índice`)
+    total += n
+  }
+  assert.equal(total, 350, `el centro de ayuda conserva las 350 preguntas (vio ${total})`)
+
+  // El índice enlaza los siete bloques y ninguna página repite el volcado completo.
+  for (const f of bloques) {
+    assert.ok(indice.includes(`href="/${f}"`) || indice.includes(`/${f}"`), `el índice no enlaza ${f}`)
+  }
+})
