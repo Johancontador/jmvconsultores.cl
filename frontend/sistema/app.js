@@ -54,7 +54,7 @@ function ultimosPeriodos(n, hasta = periodoActual()) {
 function chipEstado(estado) {
   const map = {
     PENDIENTE: 'pendiente', CLASIFICADO: 'clasificado', PROPUESTO: 'propuesto',
-    CONTABILIZADO: 'contabilizado', REVISIÓN: 'revision', ERROR: 'error', ANULADO: 'anulado',
+    CONTABILIZADO: 'contabilizado', REVISION: 'revision', REVISIÓN: 'revision', ERROR: 'error', ANULADO: 'anulado',
   }
   return `<span class="chip ${map[estado] || 'neutral'}">${esc(estado)}</span>`
 }

@@ -747,6 +747,140 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 /* ============================================================
+   BANDEJA DE DOCUMENTOS — piloto UX/UI (2026-10-17)
+   Tema claro por defecto, superficies blancas y densidad contable.
+   Solo tokens existentes; no altera otras vistas.
+   ============================================================ */
+
+/* `.sr-only` ya existe en css/app.css (se carga antes): no se duplica aquí. */
+
+/* Cabecera de contexto: empresa + período visibles sin salir de la vista. */
+.sys .doc-ctx {
+  display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); align-items: flex-end;
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.sys .doc-ctx-emp, .sys .doc-ctx-per { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sys .doc-ctx .frm-label { margin-bottom: 0; }
+.sys .doc-ctx b { font-family: var(--font-display); font-size: var(--fs-md); }
+.sys .doc-ctx-per b { font-family: var(--font-mono); }
+.sys .doc-ctx .hint { font-size: var(--fs-xs); color: var(--fg-muted); }
+
+/* Barra de acciones de la bandeja. */
+.sys .doc-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-bottom: var(--space-3); }
+.sys .doc-toolbar .spacer { flex: 1; }
+.sys .doc-nota { font-size: var(--fs-xs); color: var(--fg-muted); }
+
+/* Chips de estado con conteo real del servidor. */
+.sys .doc-estados { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.sys .doc-estados .btn { gap: 6px; }
+.sys .doc-chip-n { font-variant-numeric: tabular-nums; font-weight: var(--fw-semibold); }
+
+/* Filtros: solo parámetros que el endpoint ya soporta. */
+.sys .doc-filtros {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end;
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.sys .doc-f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sys .doc-f select, .sys .doc-f input { height: 32px; font-size: var(--fs-sm); min-width: 150px; }
+.sys .doc-f-busca input { min-width: 230px; }
+.sys .doc-f-rut input { min-width: 150px; font-family: var(--font-mono); }
+
+/* Resumen del filtro (aria-live): cantidad y sumas REALES del servidor. */
+.sys .doc-resumen { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--fg-secondary); }
+.sys .doc-resumen b { color: var(--fg-primary); }
+.sys .doc-resumen .mono { color: var(--fg-primary); }
+.sys .doc-resumen-nota { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--fg-muted); }
+
+/* Tabla: densidad contable (~40 px de fila), fila clicable y foco visible.
+   `nowrap` + elipsis evita que un texto largo envuelva y estire la fila: la
+   celda más alta manda en el alto de TODA la fila. */
+.sys #doc-tabla .tbl td, .sys #doc-tabla .tbl th { padding-left: 10px; padding-right: 10px; }
+.sys #doc-tabla .tbl td { padding-top: 6px; padding-bottom: 6px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys #doc-tabla .tbl tbody tr[data-doc] { cursor: pointer; }
+.sys #doc-tabla .tbl tbody tr[data-doc]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sys .doc-acciones { text-align: right; }
+.sys .doc-acciones .btn + .btn { margin-left: 4px; }
+.sys .doc-tipo-cel { max-width: 170px; }
+.sys .doc-contra-cel { max-width: 210px; }
+.sys .doc-rut-cel { max-width: 120px; }
+.sys .doc-cuenta-cel { max-width: 150px; }
+/* A 1280 px la rejilla no cabe entera: la tabla hace scroll DENTRO de
+   `.tbl-wrap` (igual que Libros) y la página nunca desborda. La cuenta sigue
+   además en el detalle y en la exportación. */
+
+/* Esqueleto de carga: misma rejilla, sin salto de layout. */
+.sys .doc-skel {
+  display: block; height: 10px; width: 100%; min-width: 40px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--border-subtle) 37%, var(--bg-elevated) 63%);
+  background-size: 400% 100%; animation: doc-skel 1.2s ease-in-out infinite;
+}
+@keyframes doc-skel { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .sys .doc-skel { animation: none; } }
+
+/* Menú flotante "Más acciones" (vive en <body>: el overflow de .tbl-wrap
+   recortaría un dropdown absoluto dentro de la tabla). */
+.doc-menu-back { position: fixed; inset: 0; z-index: 85; }
+.doc-menu {
+  position: fixed; min-width: 220px; max-width: 280px; padding: var(--space-1);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xl);
+}
+.doc-menu-item {
+  display: block; width: 100%; text-align: left; padding: 8px 12px;
+  border: 0; background: transparent; color: var(--fg-primary);
+  font: inherit; font-size: var(--fs-sm); border-radius: var(--radius-sm); cursor: pointer;
+}
+.doc-menu-item:hover, .doc-menu-item:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+.doc-menu-item.peligro { color: var(--danger); }
+.doc-menu-item.peligro:hover { background: var(--danger-soft); }
+
+/* Detalle lateral: lectura sin perder la lista de fondo. */
+.doc-drawer-back {
+  position: fixed; inset: 0; z-index: 82; background: rgba(2, 6, 23, 0.38);
+  display: flex; justify-content: flex-end;
+}
+.sys .doc-drawer {
+  width: min(480px, 100%); height: 100%; display: flex; flex-direction: column;
+  background: var(--bg-surface); border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-xl);
+}
+.sys .doc-drawer-head {
+  display: flex; justify-content: space-between; gap: var(--space-3); align-items: flex-start;
+  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border-subtle);
+}
+.sys .doc-drawer-kicker { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
+.sys .doc-drawer-head h2 { margin: 2px 0; font-family: var(--font-display); font-size: var(--fs-lg); }
+.sys .doc-drawer-head p { margin: 0; font-size: var(--fs-sm); }
+.sys .doc-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-6); }
+.sys .doc-drawer-body h3 {
+  margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--fg-muted);
+}
+.sys .doc-drawer-body h3:first-child { margin-top: 0; }
+.sys .doc-dl { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.sys .doc-dato {
+  display: flex; justify-content: space-between; gap: var(--space-4);
+  padding: 5px 0; border-bottom: 1px dashed var(--border-subtle); font-size: var(--fs-sm);
+}
+.sys .doc-dato dt { color: var(--fg-muted); }
+.sys .doc-dato dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.sys .doc-drawer-foot { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border-subtle); }
+.sys .doc-drawer-foot .spacer { flex: 1; }
+.sys .doc-json {
+  max-height: 180px; overflow: auto; font-size: var(--fs-xs);
+  background: var(--bg-elevated); padding: var(--space-2); border-radius: var(--radius-sm);
+}
+@media (max-width: 640px) {
+  .sys .doc-drawer { width: 100%; }
+  .sys .doc-f, .sys .doc-f select, .sys .doc-f input { width: 100%; min-width: 0; }
+  .sys .doc-filtros > .btn { width: 100%; }
+}
+
+/* ============================================================
    CRM COMERCIAL — pestañas, kanban, fichas (2026-10-15)
    Tokens del design system; sin azules dominantes; ok móvil.
    ============================================================ */

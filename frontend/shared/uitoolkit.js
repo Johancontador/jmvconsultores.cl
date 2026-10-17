@@ -66,11 +66,16 @@
     return { pagina: filas.slice((p - 1) * st.porPagina, p * st.porPagina), total: filas.length, paginas, actual: p }
   }
 
+  /** Columnas que van al archivo: `exportable: false` deja fuera las de pantalla
+   *  (p. ej. la columna de acciones), sin cambiar lo que se ve en la tabla. */
+  const columnasExportables = (st) => st.columnas.filter((c) => c.exportable !== false)
+
   function csvDescargar(st, filas) {
     const sep = ';'
     const celda = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [st.columnas.map((c) => celda(c.label)).join(sep)]
-    for (const f of filas) lines.push(st.columnas.map((c) => celda(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join(sep))
+    const cols = columnasExportables(st)
+    const lines = [cols.map((c) => celda(c.label)).join(sep)]
+    for (const f of filas) lines.push(cols.map((c) => celda(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join(sep))
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
     a.download = `${st.nombreArchivo}.csv`
@@ -82,8 +87,9 @@
   function excelDescargar(st, filas) {
     const sep = ';'
     const celda = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [st.columnas.map((c) => celda(c.label)).join(sep)]
-    for (const f of filas) lines.push(st.columnas.map((c) => celda(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join(sep))
+    const cols = columnasExportables(st)
+    const lines = [cols.map((c) => celda(c.label)).join(sep)]
+    for (const f of filas) lines.push(cols.map((c) => celda(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join(sep))
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'application/vnd.ms-excel;charset=utf-8' }))
     a.download = `${st.nombreArchivo}.xls`
@@ -92,8 +98,9 @@
   }
 
   function copiar(st, filas) {
-    const lines = [st.columnas.map((c) => c.label).join('\t')]
-    for (const f of filas) lines.push(st.columnas.map((c) => String(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join('\t'))
+    const cols = columnasExportables(st)
+    const lines = [cols.map((c) => c.label).join('\t')]
+    for (const f of filas) lines.push(cols.map((c) => String(c.crudo ? c.crudo(f) : (c.valor ? c.valor(f) : f[c.key]))).join('\t'))
     navigator.clipboard.writeText(lines.join('\n'))
       .then(() => window.showToast && showToast(`Copiadas ${filas.length} fila(s) al portapapeles`, 'success'))
       .catch(() => window.showToast && showToast('No se pudo copiar', 'error'))
@@ -115,6 +122,16 @@
       totalesHTML: opciones.totalesHTML || '',
       vacio: opciones.vacio || 'Sin datos',
       accionesExtra: opciones.accionesExtra || '',
+      // Paginación de SERVIDOR (opcional): la vista entrega solo la página
+      // cargada y aquí solo se pinta la navegación. `total`/`paginas` vienen
+      // del backend; nunca se infieren de las filas visibles.
+      servidor: opciones.servidor || null, // { total, pagina, paginas, onPagina }
+      caption: opciones.caption || '',
+      busqueda: opciones.busqueda !== false,
+      // Por defecto queda el placeholder histórico de todas las tablas; la
+      // vista que necesita otro texto lo pasa explícitamente.
+      placeholderBusqueda: opciones.placeholderBusqueda || 'Buscar…',
+      ariaBusqueda: opciones.placeholderBusqueda || 'Buscar en la tabla',
       // B3 (masterplan unificación): capacidades del datagrid integradas como
       // opciones de UITabla — agrupar por UNA clave con encabezado de grupo
       // colapsable + subtotal, y congelar la primera columna. La visibilidad
@@ -129,35 +146,38 @@
 
     const herramientas = `
       <div class="tbl-toolbar">
-        <input type="search" id="${id}-q" placeholder="Buscar…" value="${esc(st.q)}" aria-label="Buscar en la tabla">
+        ${st.busqueda ? `<input type="search" id="${id}-q" placeholder="${esc(st.placeholderBusqueda)}" value="${esc(st.q)}" aria-label="${esc(st.ariaBusqueda)}">` : ''}
         ${st.agrupar ? `<label class="dg-check" title="Agrupa las filas por ${esc(st.agrupar.label)} con subtotal por grupo">
           <input type="checkbox" id="${id}-agr" ${st.agrupado ? 'checked' : ''}>
           Agrupar por ${esc(st.agrupar.label)}
         </label>` : ''}
         <span class="spacer"></span>
         <span class="hint" id="${id}-info"></span>
-        <button class="btn btn-secondary btn-sm" id="${id}-csv" title="Descargar CSV">CSV</button>
-        <button class="btn btn-secondary btn-sm" id="${id}-xls" title="Descargar para Excel">Excel</button>
+        <button class="btn btn-secondary btn-sm" id="${id}-csv" title="${st.servidor ? 'Exportar esta página a CSV' : 'Descargar CSV'}">CSV</button>
+        <button class="btn btn-secondary btn-sm" id="${id}-xls" title="${st.servidor ? 'Exportar esta página para Excel' : 'Descargar para Excel'}">Excel</button>
         <button class="btn btn-secondary btn-sm" id="${id}-copiar" title="Copiar al portapapeles">Copiar</button>
         <button class="btn btn-secondary btn-sm" id="${id}-imprimir" title="Imprimir">Imprimir</button>
         ${st.accionesExtra}
       </div>`
 
-    const head = st.columnas.map((c) =>
-      `<th class="${c.num ? 'num' : ''} ${c.orden !== false ? 'th-sort' : ''}" data-k="${esc(c.key)}">${esc(c.label)}</th>`).join('')
+    const head = st.columnas.map((c) => {
+      const ordenable = c.orden !== false
+      return `<th class="${c.num ? 'num' : ''} ${ordenable ? 'th-sort' : ''}" data-k="${esc(c.key)}"${ordenable ? ' aria-sort="none"' : ''}>${esc(c.label)}</th>`
+    }).join('')
 
     st.mount.innerHTML = `
       ${herramientas}
       <div class="tbl-wrap">
         <table class="tbl ${st.congelar ? 'uit-congelar' : ''}">
+          ${st.caption ? `<caption class="sr-only">${esc(st.caption)}</caption>` : ''}
           <thead><tr>${head}</tr></thead>
           <tbody id="${id}-body"></tbody>
           ${st.totalesHTML ? `<tfoot id="${id}-foot"></tfoot>` : ''}
         </table>
       </div>
-      ${st.porPagina ? `<div class="flex" id="${id}-pag" style="justify-content:flex-end;margin-top:var(--space-3)"></div>` : ''}`
+      ${st.porPagina || st.servidor ? `<div class="flex" id="${id}-pag" style="justify-content:flex-end;margin-top:var(--space-3)"></div>` : ''}`
 
-    document.getElementById(`${id}-q`).addEventListener('input', (e) => {
+    document.getElementById(`${id}-q`)?.addEventListener('input', (e) => {
       st.q = e.target.value.trim()
       st.pagina = 1
       pintar()
@@ -179,6 +199,9 @@
       st.mount.querySelectorAll('th.th-sort').forEach((th) => {
         th.classList.toggle('asc', th.dataset.k === st.sortKey && st.sortDir === 'asc')
         th.classList.toggle('desc', th.dataset.k === st.sortKey && st.sortDir === 'desc')
+        // aria-sort refleja el estado real del ordenamiento por columna.
+        th.setAttribute?.('aria-sort', th.dataset.k === st.sortKey
+          ? (st.sortDir === 'asc' ? 'ascending' : 'descending') : 'none')
       })
       // B3: con la casilla de agrupar activa, la paginación se omite (las
       // listas objetivo caben) y CADA grupo conserva el orden del filtrado.
@@ -187,7 +210,15 @@
     }
 
     function pintarPlana(filas) {
-      const { pagina, total, paginas, actual } = paginar(st, filas)
+      // Con `servidor`, la lista ya ES la página: solo se pinta su navegación.
+      const { pagina, total, paginas, actual } = st.servidor
+        ? {
+            pagina: filas,
+            total: Number(st.servidor.total) || filas.length,
+            paginas: Math.max(1, Number(st.servidor.paginas) || 1),
+            actual: Math.max(1, Number(st.servidor.pagina) || 1),
+          }
+        : paginar(st, filas)
 
       const body = document.getElementById(`${id}-body`)
       body.innerHTML = pagina.map((f) => st.filaHTML(f, (t, col) => resaltar(t, st.q))).join('')
@@ -197,18 +228,31 @@
       if (foot) foot.innerHTML = typeof st.totalesHTML === 'function' ? st.totalesHTML(filas) : st.totalesHTML
 
       const info = document.getElementById(`${id}-info`)
-      if (info) info.textContent = st.q ? `${total} de ${st.filas.length} fila(s)` : `${st.filas.length} fila(s)`
+      if (info) {
+        if (st.servidor) info.textContent = st.q
+          ? `${pagina.length} de ${total} fila(s) (búsqueda en esta página)`
+          : `${total} fila(s) en el filtro`
+        else info.textContent = st.q ? `${total} de ${st.filas.length} fila(s)` : `${st.filas.length} fila(s)`
+      }
 
       const pag = document.getElementById(`${id}-pag`)
-      if (pag && st.porPagina) {
+      if (pag && (st.porPagina || st.servidor)) {
         pag.innerHTML = paginas > 1 ? `
-          <button class="btn btn-secondary btn-sm" id="${id}-prev" ${actual <= 1 ? 'disabled' : ''}>←</button>
+          <button class="btn btn-secondary btn-sm" id="${id}-prev" ${actual <= 1 ? 'disabled' : ''} aria-label="Página anterior">←</button>
           <span class="hint">Página ${actual} de ${paginas}</span>
-          <button class="btn btn-secondary btn-sm" id="${id}-next" ${actual >= paginas ? 'disabled' : ''}>→</button>` : ''
+          <button class="btn btn-secondary btn-sm" id="${id}-next" ${actual >= paginas ? 'disabled' : ''} aria-label="Página siguiente">→</button>` : ''
         const prev = document.getElementById(`${id}-prev`)
         const next = document.getElementById(`${id}-next`)
-        if (prev) prev.addEventListener('click', () => { st.pagina = Math.max(1, st.pagina - 1); pintar() })
-        if (next) next.addEventListener('click', () => { st.pagina = Math.min(paginas, st.pagina + 1); pintar() })
+        if (prev) prev.addEventListener('click', () => {
+          if (st.servidor) return st.servidor.onPagina(Math.max(1, actual - 1))
+          st.pagina = Math.max(1, st.pagina - 1)
+          pintar()
+        })
+        if (next) next.addEventListener('click', () => {
+          if (st.servidor) return st.servidor.onPagina(Math.min(paginas, actual + 1))
+          st.pagina = Math.min(paginas, st.pagina + 1)
+          pintar()
+        })
       }
     }
 
@@ -277,7 +321,18 @@
     }
   }
 
-  window.UITabla = { montar }
+  /**
+   * Exporta filas YA obtenidas por la vista (p. ej. el filtro completo con
+   * limit alto). Reutiliza el mismo formato CSV/Excel que los botones de la
+   * tabla, sin duplicar serialización en las vistas.
+   */
+  function exportar({ columnas, filas, nombre = 'exportacion', formato = 'csv' }) {
+    const st = { columnas, nombreArchivo: nombre }
+    if (formato === 'xls') excelDescargar(st, filas || [])
+    else csvDescargar(st, filas || [])
+  }
+
+  window.UITabla = { montar, exportar }
 
   /**
    * UIForms — validación en línea para formularios modales/vistas.

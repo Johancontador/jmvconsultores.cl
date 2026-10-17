@@ -348,93 +348,749 @@ async function sincronizarSII(periodo) {
 
 /* ============================ DOCUMENTOS ============================ */
 
+/* ------------------------- Bandeja de Documentos ------------------------- */
+
+const DOC_POR_PAGINA = 50
+const DOC_LIMITE_EXPORT = 1000
+// El backend usa REVISION (sin tilde) — core/documentos.js. El filtro con
+// "REVISIÓN" no calzaba con ningún documento: mostraba 0 y dejaba esos
+// documentos sin chip propio. La etiqueta visible sigue siendo "Revisión".
+const DOC_ADMITEN_CLASIFICACION = ['PENDIENTE', 'CLASIFICADO', 'REVISION']
+const DOC_ESTADOS_CHIP = [
+  { v: 'PENDIENTE', t: 'Pendientes' },
+  { v: 'CLASIFICADO', t: 'Clasificados' },
+  // PROPUESTO lo escribe el motor de propuestas (core/propuestas.js); sin chip
+  // propio solo se podía ver entrando a "Todos" y el conteo quedaba escondido.
+  { v: 'PROPUESTO', t: 'Propuestos' },
+  { v: 'CONTABILIZADO', t: 'Contabilizados' },
+  { v: 'REVISION', t: 'Revisión' },
+  { v: 'ANULADO', t: 'Anulados' },
+  { v: '', t: 'Todos' },
+]
+const DOC_TRATAMIENTOS = {
+  credito: 'Crédito fiscal (recuperable)',
+  debito: 'Débito fiscal',
+  exento: 'Exento / sin IVA',
+  comun: 'Uso común (sin crédito)',
+  no_recuperable: 'No recuperable (gasto total)',
+}
+// Columnas exportables (sin la columna de acciones, que es solo de pantalla).
+const DOC_COLUMNAS = [
+  { key: 'tipo_doc', label: 'Doc', valor: (d) => `${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc}` },
+  { key: 'folio', label: 'Folio' },
+  { key: 'fecha_docto', label: 'Fecha', valor: (d) => (d.fecha_docto || '').slice(0, 10) },
+  { key: 'razon_social', label: 'Contraparte' },
+  { key: 'rut_contraparte', label: 'RUT', valor: (d) => formatRut(d.rut_contraparte) },
+  { key: 'monto_neto', label: 'Neto', num: true, valor: (d) => fmtM(d.monto_neto), crudo: (d) => d.monto_neto },
+  { key: 'monto_iva', label: 'IVA', num: true, valor: (d) => fmtM(d.monto_iva), crudo: (d) => d.monto_iva },
+  { key: 'monto_total', label: 'Total', num: true, valor: (d) => fmtM(d.monto_total), crudo: (d) => d.monto_total },
+  { key: 'estado', label: 'Estado', orden: false },
+  { key: 'cuenta', label: 'Cuenta', orden: false, valor: (d) => (d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}`.trim() : '—') },
+]
+
+function docEstadoCanonico(estado) {
+  const v = String(estado ?? '')
+  return v === 'REVISIÓN' ? 'REVISION' : v
+}
+
+/** Filtros desde la URL (compartible/atrás) con `_docFiltros` como respaldo. */
+function docFiltrosDeURL() {
+  let q = new URLSearchParams()
+  try { q = new URLSearchParams(location.hash.split('?')[1] || '') } catch { /* hash raro */ }
+  const previo = window._docFiltros || {}
+  const dato = (k, base = '') => (q.has(k) ? q.get(k) : (previo[k] ?? base))
+  return {
+    estado: docEstadoCanonico(q.has('estado') ? q.get('estado') : (previo.estado ?? 'PENDIENTE')),
+    flujo: dato('flujo'),
+    tipo: dato('tipo'),
+    cuenta: dato('cuenta'),
+    texto: dato('texto'),
+    rut: dato('rut'),
+    pagina: (() => {
+      // ?p=abc no debe dejar la página en NaN (fetch con offset "NaN").
+      const n = Number(q.get('p') || 1)
+      return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    })(),
+  }
+}
+
+function docHash(f) {
+  const q = new URLSearchParams()
+  // `estado` va SIEMPRE (aunque esté vacío = Todos): si se omitiera, volver a
+  // la vista o recargar caería otra vez en PENDIENTE y se perdería el filtro.
+  q.set('estado', f.estado)
+  if (f.flujo) q.set('flujo', f.flujo)
+  if (f.tipo) q.set('tipo', f.tipo)
+  if (f.cuenta) q.set('cuenta', f.cuenta)
+  if (f.texto) q.set('texto', f.texto)
+  if (f.rut) q.set('rut', f.rut)
+  if (f.pagina > 1) q.set('p', String(f.pagina))
+  return `#documentos?${q.toString()}`
+}
+
+function docSincronizarURL(f) {
+  const hash = docHash(f)
+  if (location.hash === hash) return
+  try {
+    // replaceState: URL compartible sin hashchange (que re-renderizaría la
+    // vista y robaría el foco mientras se escribe en un filtro).
+    history.replaceState(null, '', hash)
+  } catch { location.hash = hash }
+}
+
+/** Parámetros reales del endpoint GET /documentos (los que ya soporta). */
+function docParametros(f, { limit = DOC_POR_PAGINA, offset = (Math.max(1, f.pagina) - 1) * DOC_POR_PAGINA } = {}) {
+  const qs = new URLSearchParams({ periodo: periodoGlobal(), limit: String(limit), offset: String(offset) })
+  if (f.estado) qs.set('estado', f.estado)
+  if (f.flujo) qs.set('tipo_flujo', f.flujo)
+  if (f.tipo) qs.set('tipo_doc', f.tipo)
+  if (f.cuenta) qs.set('cuenta_id', f.cuenta)
+  if (f.texto) qs.set('texto', f.texto)
+  if (f.rut) qs.set('rut', f.rut)
+  return qs
+}
+
+function docDescripcionFiltros(f) {
+  const partes = []
+  const chip = DOC_ESTADOS_CHIP.find((e) => e.v === f.estado)
+  partes.push(chip ? chip.t : (f.estado || 'Todos'))
+  if (f.flujo) partes.push(f.flujo === 'compra' ? 'Compras' : 'Ventas')
+  if (f.tipo) partes.push(NOMBRES_TIPO_DOC[f.tipo] || `Tipo ${f.tipo}`)
+  if (f.texto) partes.push(`texto «${f.texto}»`)
+  if (f.rut) partes.push(`RUT ${f.rut}`)
+  return partes.join(' · ')
+}
+
+function docSkeletonHTML() {
+  const celda = '<td><span class="doc-skel"></span></td>'
+  // Una celda por columna de la tabla real (DOC_COLUMNAS + acciones).
+  return `<div class="tbl-wrap"><table class="tbl" aria-hidden="true"><tbody>${`<tr>${celda.repeat(DOC_COLUMNAS.length + 1)}</tr>`.repeat(8)}</tbody></table></div>`
+}
+
+function docFilaDato(etiqueta, valorHTML) {
+  return `<div class="doc-dato"><dt>${esc(etiqueta)}</dt><dd>${valorHTML}</dd></div>`
+}
+
+function docCopiar(texto) {
+  if (!texto) return
+  const listo = () => showToast('Copiado al portapapeles', 'success')
+  const fallo = () => showToast('No se pudo copiar', 'error')
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(String(texto)).then(listo).catch(fallo)
+  else fallo()
+}
+
+function docCerrarMenu() {
+  document.getElementById('doc-menu-back')?.remove()
+}
+
+/**
+ * Menú flotante de acciones. Vive en <body> con position:fixed para que el
+ * scroll horizontal de `.tbl-wrap` no lo recorte.
+ */
+function docAbrirMenu(ancla, etiqueta, items) {
+  docCerrarMenu()
+  const back = document.createElement('div')
+  back.className = 'doc-menu-back'
+  back.id = 'doc-menu-back'
+  back.innerHTML = `<div class="doc-menu" role="menu" aria-label="${esc(etiqueta)}">${items.map((it, i) =>
+    `<button type="button" class="doc-menu-item${it.peligro ? ' peligro' : ''}" role="menuitem" data-i="${i}">${esc(it.label)}</button>`).join('')}</div>`
+  document.body.appendChild(back)
+  const menu = back.querySelector('.doc-menu')
+  const rect = ancla.getBoundingClientRect?.() || { bottom: 0, left: 0 }
+  const alto = menu.offsetHeight || (items.length * 36 + 12)
+  const anchoVista = window.innerWidth || 1280
+  const altoVista = window.innerHeight || 800
+  menu.style.top = `${Math.max(8, Math.min(rect.bottom + 6, altoVista - alto - 8))}px`
+  menu.style.left = `${Math.max(8, Math.min(rect.left, anchoVista - 288))}px`
+  ancla.setAttribute?.('aria-expanded', 'true')
+
+  const cerrar = () => {
+    ancla.setAttribute?.('aria-expanded', 'false')
+    back.remove()
+    document.removeEventListener('keydown', onKey)
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); cerrar(); ancla.focus?.() }
+  }
+  const botones = [...menu.querySelectorAll('.doc-menu-item')]
+  botones.forEach((b, i) => b.addEventListener('click', () => { cerrar(); items[i].onClick() }))
+  back.addEventListener('click', (e) => { if (e.target === back) cerrar() })
+  document.addEventListener('keydown', onKey)
+  botones[0]?.focus()
+  return cerrar
+}
+
+/** Acciones del documento en la fila (solo las que el backend aceptaría). */
+function docMenuFila(ancla, d) {
+  const puede = tiene('documentos:clasificar')
+  const items = [{ label: 'Ver detalle', onClick: () => abrirDetalleDocumento(d.id, ancla) }]
+  if (puede && DOC_ADMITEN_CLASIFICACION.includes(d.estado)) {
+    items.push({ label: 'Clasificar…', onClick: () => modalClasificar(d.id) })
+  }
+  if (puede && !['CONTABILIZADO', 'ANULADO'].includes(d.estado)) {
+    items.push({ label: 'Anular documento…', peligro: true, onClick: () => modalAnular(d) })
+  }
+  items.push({ label: 'Copiar folio', onClick: () => docCopiar(d.folio) })
+  items.push({ label: 'Copiar RUT', onClick: () => docCopiar(formatRut(d.rut_contraparte)) })
+  docAbrirMenu(ancla, `Acciones del documento ${d.folio}`, items)
+}
+
+function docFilaHTML(d, hl) {
+  const tipo = NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc
+  const flujo = d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'
+  const cuenta = d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}`.trim() : '—'
+  const clasificable = tiene('documentos:clasificar') && DOC_ADMITEN_CLASIFICACION.includes(d.estado)
+  const contraparte = d.razon_social || d.rut_contraparte || '—'
+  return `<tr tabindex="0" data-doc="${Number(d.id)}">
+    <td class="sub doc-tipo-cel" title="${esc(`${flujo} ${tipo}`)}">${hl(`${flujo} ${tipo}`)}</td>
+    <td class="mono">${hl(d.folio)}</td>
+    <td class="sub">${hl((d.fecha_docto || '—').slice(0, 10))}</td>
+    <td class="doc-contra-cel" title="${esc(contraparte)}">${hl(contraparte)}</td>
+    <td class="mono doc-rut-cel">${hl(formatRut(d.rut_contraparte) || '—')}</td>
+    <td class="num">${fmtM(d.monto_neto)}</td>
+    <td class="num">${fmtM(d.monto_iva)}</td>
+    <td class="num"><b>${fmtM(d.monto_total)}</b></td>
+    <td>${chipEstado(d.estado)}</td>
+    <td class="sub doc-cuenta-cel" title="${esc(cuenta)}">${hl(cuenta.slice(0, 22))}</td>
+    <td class="doc-acciones">
+      ${clasificable ? `<button class="btn btn-secondary btn-sm" type="button" data-clas="${Number(d.id)}">Clasificar</button>` : ''}
+      <button class="btn btn-secondary btn-sm" type="button" data-menu="${Number(d.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones para el folio ${esc(d.folio)}">⋮</button>
+    </td>
+  </tr>`
+}
+
+/**
+ * Estado vacío de la tabla. `sinDocsEnPeriodo` usa los conteos del servidor
+ * (que ignoran el filtro de estado) para distinguir un período SIN documentos
+ * de un filtro sin resultados: con el chip por defecto PENDIENTE, ambos casos
+ * devuelven 0 filas y antes se mostraba siempre "no coincide con los filtros".
+ */
+function docVacioHTML(sinDocsEnPeriodo) {
+  const ui = window.UIEstado
+  if (sinDocsEnPeriodo) {
+    const accion = tiene('documentos:ingestar') ? '<a class="btn btn-primary btn-sm" href="#libros">Ir a Libros a sincronizar</a>' : ''
+    return ui ? ui.vacio(`Aún no hay documentos en ${perDisplay(periodoGlobal())}`, 'El período está vacío: sincroniza el RCV desde Libros para traer compras y ventas.', accion)
+      : '<div class="empty">Sin documentos en el período.</div>'
+  }
+  return ui ? ui.vacio('Ningún documento coincide con estos filtros', 'Prueba con otro estado, flujo o término de búsqueda.',
+    '<button class="btn btn-secondary btn-sm" type="button" id="doc-vacio-limpiar">Limpiar filtros</button>')
+    : '<div class="empty">Sin resultados.</div>'
+}
+
+async function abrirDetalleDocumento(docId, disparador) {
+  try {
+    const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/documentos/${docId}`)
+    if (!r || !r.documento) return showToast('Documento no encontrado', 'error')
+    docAbrirDrawer(r.documento, disparador)
+  } catch (err) { showToast(err.message, 'error') }
+}
+
+/** Panel lateral de detalle: lectura + las acciones que correspondan. */
+function docAbrirDrawer(d, disparador) {
+  // Un solo panel a la vez: evita IDs duplicados si se abre otro documento
+  // mientras el anterior sigue montado.
+  document.getElementById('doc-drawer-back')?.remove()
+  const previo = disparador || (typeof document !== 'undefined' ? document.activeElement : null)
+  const tipo = NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}`
+  const flujo = d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'
+  const cuenta = d.cuenta_codigo ? `${d.cuenta_codigo} — ${d.cuenta_nombre || ''}` : '—'
+  const cc = d.cc_codigo ? `${d.cc_codigo} — ${d.cc_nombre || ''}` : '—'
+  const asiento = d.asiento_id ? `Folio ${d.asiento_folio ?? '—'} · ${d.asiento_anio ?? '—'}` : 'Sin asiento vinculado'
+
+  let detalle = '<p class="muted">Sin detalle SII registrado.</p>'
+  if (d.detalle_sii_json) {
+    try {
+      const obj = JSON.parse(d.detalle_sii_json)
+      const pares = Object.entries(obj || {}).filter(([, v]) => v !== null && v !== undefined && v !== '')
+      if (pares.length) {
+        detalle = `<dl class="doc-dl">${pares.slice(0, 24).map(([k, v]) =>
+          docFilaDato(k, esc(typeof v === 'object' ? JSON.stringify(v) : v))).join('')}</dl>`
+          + (pares.length > 24 ? `<p class="hint">Se muestran 24 de ${pares.length} campos del SII.</p>` : '')
+      }
+    } catch {
+      detalle = `<pre class="doc-json">${esc(String(d.detalle_sii_json).slice(0, 800))}</pre>`
+    }
+  }
+
+  const acciones = []
+  if (tiene('documentos:clasificar') && DOC_ADMITEN_CLASIFICACION.includes(d.estado)) {
+    acciones.push('<button class="btn btn-primary btn-sm" type="button" id="doc-det-clas">Clasificar</button>')
+  }
+  if (tiene('documentos:clasificar') && !['CONTABILIZADO', 'ANULADO'].includes(d.estado)) {
+    acciones.push('<button class="btn btn-secondary btn-sm" type="button" id="doc-det-anular">Anular…</button>')
+  }
+
+  const back = document.createElement('div')
+  back.className = 'doc-drawer-back'
+  back.id = 'doc-drawer-back'
+  back.innerHTML = `<aside class="doc-drawer" role="dialog" aria-modal="true" aria-labelledby="doc-det-t">
+    <div class="doc-drawer-head">
+      <div>
+        <p class="doc-drawer-kicker">${esc(flujo)} · ${esc(tipo)}</p>
+        <h2 id="doc-det-t">Folio ${esc(d.folio)}</h2>
+        <p class="muted">${esc(d.razon_social || d.rut_contraparte || 'Sin contraparte')} · ${esc(formatRut(d.rut_contraparte) || '—')}</p>
+      </div>
+      <div class="flex">${chipEstado(d.estado)}<button class="btn btn-secondary btn-sm" type="button" id="doc-det-cerrar" aria-label="Cerrar detalle">Cerrar</button></div>
+    </div>
+    <div class="doc-drawer-body">
+      <h3>Montos</h3>
+      <dl class="doc-dl doc-montos">
+        ${docFilaDato('Exento', `<span class="mono">${fmtM(d.monto_exento)}</span>`)}
+        ${docFilaDato('Neto', `<span class="mono">${fmtM(d.monto_neto)}</span>`)}
+        ${docFilaDato('IVA', `<span class="mono">${fmtM(d.monto_iva)}</span>`)}
+        ${docFilaDato('Total', `<b class="mono">${fmtM(d.monto_total)}</b>`)}
+      </dl>
+      <h3>Documento</h3>
+      <dl class="doc-dl">
+        ${docFilaDato('Fecha del documento', esc((d.fecha_docto || '—').slice(0, 10)))}
+        ${d.fecha_reclamo ? docFilaDato('Fecha de reclamo', esc(String(d.fecha_reclamo).slice(0, 10))) : ''}
+        ${docFilaDato('Período de ingesta', esc(perDisplay(d.periodo_ingesta) || '—'))}
+        ${docFilaDato('Origen', esc(d.origen || '—'))}
+      </dl>
+      <h3>Clasificación</h3>
+      <dl class="doc-dl">
+        ${docFilaDato('Cuenta', esc(cuenta))}
+        ${docFilaDato('Centro de costo', esc(cc))}
+        ${docFilaDato('Tratamiento IVA', esc(DOC_TRATAMIENTOS[d.tratamiento_iva] || d.tratamiento_iva || '—'))}
+        ${docFilaDato('Regla aplicada', esc(d.regla_nombre || 'Manual / sin regla'))}
+      </dl>
+      <h3>Contabilidad</h3>
+      <dl class="doc-dl">${docFilaDato('Asiento', esc(asiento))}</dl>
+      <h3>Detalle SII</h3>
+      ${detalle}
+    </div>
+    <div class="doc-drawer-foot">
+      ${acciones.join('')}<span class="spacer"></span>
+      <button class="btn btn-secondary btn-sm" type="button" id="doc-det-cerrar-2">Cerrar</button>
+    </div>
+  </aside>`
+  document.body.appendChild(back)
+
+  const cerrar = () => {
+    back.remove()
+    document.removeEventListener('keydown', onKey)
+    window.removeEventListener?.('hashchange', cerrar)
+    previo?.focus?.()
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); cerrar(); return }
+    if (e.key !== 'Tab') return
+    const focos = [...back.querySelectorAll('button, [href], input, select, textarea')].filter((x) => !x.disabled)
+    if (!focos.length) return
+    const i = focos.indexOf(document.activeElement)
+    if (e.shiftKey && i <= 0) { e.preventDefault(); focos[focos.length - 1].focus() }
+    else if (!e.shiftKey && (i === -1 || i === focos.length - 1)) { e.preventDefault(); focos[0].focus() }
+  }
+  document.addEventListener('keydown', onKey)
+  // Navegar a otra vista cierra el panel (vive en <body>, fuera del shell).
+  window.addEventListener?.('hashchange', cerrar, { once: true })
+  back.addEventListener('click', (e) => { if (e.target === back) cerrar() })
+  document.getElementById('doc-det-cerrar')?.addEventListener('click', cerrar)
+  document.getElementById('doc-det-cerrar-2')?.addEventListener('click', cerrar)
+  document.getElementById('doc-det-clas')?.addEventListener('click', () => { cerrar(); modalClasificar(d.id) })
+  document.getElementById('doc-det-anular')?.addEventListener('click', () => { cerrar(); modalAnular(d) })
+  document.getElementById('doc-det-cerrar')?.focus()
+}
+
+/** Anulación: motivo obligatorio + confirmación explícita (backend lo exige). */
+function modalAnular(d) {
+  const tipo = NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}`
+  openModal(`
+    <h3>Anular documento</h3>
+    <p class="sub">${esc(d.tipo_flujo === 'compra' ? 'Compra' : 'Venta')} ${esc(tipo)} folio ${esc(d.folio)} · ${esc(d.razon_social || d.rut_contraparte || '')} · ${fmtM(d.monto_total)}</p>
+    <div class="form-group">
+      <label class="form-label" for="an-motivo">Motivo de la anulación (obligatorio)</label>
+      <textarea id="an-motivo" class="form-input" rows="3" maxlength="500" placeholder="Ej.: documento duplicado en el RCV"></textarea>
+      <small class="hint">Queda auditado con tu usuario y no se puede deshacer.</small>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-danger" id="an-ok" disabled>Anular documento</button>
+    </div>`)
+  const motivo = document.getElementById('an-motivo')
+  const ok = document.getElementById('an-ok')
+  if (!motivo || !ok) return
+  motivo.addEventListener('input', () => { ok.disabled = !motivo.value.trim() })
+  motivo.focus()
+  ok.addEventListener('click', async () => {
+    ok.disabled = true
+    try {
+      await apiPost(`/api/contable/empresas/${S.empresa.id}/documentos/${d.id}/anular`, { motivo: motivo.value.trim() })
+      cerrarModal()
+      showToast('Documento anulado', 'success')
+      refrescarPillDocs()
+      renderRoute()
+    } catch (err) {
+      ok.disabled = false
+      showToast(err.message, 'error')
+    }
+  })
+}
+
+/** Clasificación automática: empresa, período y alcance ANTES de ejecutar. */
+async function modalAutoClasificar(f) {
+  const periodo = periodoGlobal()
+  let alcance = null
+  try {
+    const qs = new URLSearchParams({ periodo, limit: '1' })
+    if (f.flujo) qs.set('tipo_flujo', f.flujo)
+    const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/documentos?${qs}`)
+    const m = Object.fromEntries((r.estados || []).map((e) => [e.estado, Number(e.n) || 0]))
+    // Mismo universo que evalúa el endpoint: PENDIENTE + REVISION del período.
+    alcance = (m.PENDIENTE || 0) + (m.REVISION || 0)
+  } catch { alcance = null }
+
+  openModal(`
+    <h3>Clasificar automáticamente</h3>
+    <p class="sub">Revisa el alcance antes de ejecutar. Se aplican las reglas contables vigentes y no se pisa una clasificación manual.</p>
+    <dl class="doc-dl">
+      ${docFilaDato('Empresa', esc(S.empresa.nombre))}
+      ${docFilaDato('Período', esc(perDisplay(periodo)))}
+      ${docFilaDato('Flujo', esc(f.flujo ? (f.flujo === 'compra' ? 'Solo compras' : 'Solo ventas') : 'Compras y ventas'))}
+      ${docFilaDato('Documentos a evaluar', alcance === null ? '—' : `<b class="mono">${alcance}</b> (PENDIENTE + REVISIÓN)`)}
+    </dl>
+    <p class="hint">Los documentos sin regla que calce quedan como están y se informan al final.</p>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="doc-auto-ok"${alcance === 0 ? ' disabled' : ''}>Clasificar${alcance ? ` ${alcance}` : ''}</button>
+    </div>`)
+
+  document.getElementById('doc-auto-ok')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    try {
+      const res = await apiPost(`/api/contable/empresas/${S.empresa.id}/documentos/clasificar-automatico`, {
+        periodo,
+        tipo_flujo: f.flujo || null,
+      })
+      const sinRegla = (res.sin_regla || []).length
+      showToast(`Clasificación automática: ${res.clasificados ?? 0} de ${res.evaluados ?? 0} documento(s)${sinRegla ? ` · ${sinRegla} sin regla` : ''}`, 'success')
+      cerrarModal()
+      refrescarPillDocs()
+      renderRoute()
+    } catch (err) {
+      btn.disabled = false
+      showToast(err.message, 'error')
+    }
+  })
+}
+
+/** Exportación del FILTRO COMPLETO (hasta el tope real del endpoint). */
+async function modalExportar(f) {
+  const periodo = periodoGlobal()
+  let r
+  try {
+    r = await apiGet(`/api/contable/empresas/${S.empresa.id}/documentos?${docParametros(f, { limit: DOC_LIMITE_EXPORT, offset: 0 })}`)
+  } catch (err) { return showToast(err.message, 'error') }
+
+  const total = Number(r.total) || 0
+  const filas = Array.isArray(r.documentos) ? r.documentos : []
+  const truncado = total > filas.length
+  const nombre = `documentos-${periodo}-${f.estado || 'todos'}`
+
+  openModal(`
+    <h3>Exportar documentos</h3>
+    <p class="sub">${esc(perDisplay(periodo))} · ${esc(docDescripcionFiltros(f))}</p>
+    <p>El filtro tiene <b class="mono">${total}</b> documento(s). ${truncado
+      ? `El servidor entrega hasta <b>${DOC_LIMITE_EXPORT}</b>: el archivo incluirá los <b>primeros ${filas.length}</b>, no el total. Para el resto, acota por período, flujo o estado.`
+      : `Se exportarán los <b>${filas.length}</b> documentos del filtro.`}</p>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-secondary" id="doc-exp-xls"${filas.length ? '' : ' disabled'}>Excel</button>
+      <button class="btn btn-primary" id="doc-exp-csv"${filas.length ? '' : ' disabled'}>Exportar CSV</button>
+    </div>`)
+
+  let aviso = false
+  for (const [id, formato] of [['doc-exp-csv', 'csv'], ['doc-exp-xls', 'xls']]) {
+    document.getElementById(id)?.addEventListener('click', () => {
+      UITabla.exportar({ columnas: DOC_COLUMNAS, filas, nombre, formato })
+      cerrarModal()
+      if (!aviso) {
+        aviso = true
+        showToast(truncado ? `${filas.length} de ${total} documento(s) exportados (tope ${DOC_LIMITE_EXPORT})` : `${filas.length} documento(s) exportados`, 'success')
+      }
+    })
+  }
+}
+
 VIEWS.documentos = {
   titulo: 'Documentos',
   async render(cont) {
-    const filtros = window._docFiltros || { estado: 'PENDIENTE', texto: '', flujo: '' }
     const eid = S.empresa.id
-    const qs = new URLSearchParams({ limit: 300 })
-    if (filtros.estado) qs.set('estado', filtros.estado)
-    if (filtros.texto) qs.set('texto', filtros.texto)
-    if (filtros.flujo) qs.set('tipo_flujo', filtros.flujo)
-
-    const r = await apiGet(`/api/contable/empresas/${eid}/documentos?${qs}`)
-    const estadosMap = Object.fromEntries((r.estados || []).map((e) => [e.estado, e.n]))
+    const f = docFiltrosDeURL()
+    window._docFiltros = { ...f }
+    const puedeClasificar = tiene('documentos:clasificar')
+    const periodo = periodoGlobal()
+    let porId = new Map()
+    let seq = 0
 
     cont.innerHTML = `
-     <div class="frm-row mb">
-       <button class="btn ${filtros.estado === 'PENDIENTE' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="PENDIENTE">Pendientes <b class="mono">${estadosMap.PENDIENTE || 0}</b></button>
-       <button class="btn ${filtros.estado === 'CLASIFICADO' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="CLASIFICADO">Clasificados <b class="mono">${estadosMap.CLASIFICADO || 0}</b></button>
-       <button class="btn ${filtros.estado === 'CONTABILIZADO' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="CONTABILIZADO">Contabilizados <b class="mono">${estadosMap.CONTABILIZADO || 0}</b></button>
-       <button class="btn ${filtros.estado === 'REVISIÓN' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="REVISIÓN">Revisión <b class="mono">${estadosMap['REVISIÓN'] || 0}</b></button>
-       <button class="btn ${filtros.estado === '' ? 'btn-primary' : 'btn-secondary'} btn-sm" data-est="">Todos</button>
-       <span class="spacer"></span>
-       ${tiene('documentos:clasificar') ? `<button class="btn btn-primary btn-sm" id="doc-auto">Clasificar automático</button>` : ''}
-       <button class="btn btn-secondary btn-sm" id="doc-reglas">Reglas</button>
+     <div class="doc-ctx">
+       <div class="doc-ctx-emp">
+         <span class="frm-label">Empresa</span>
+         <b>${esc(S.empresa.nombre)}</b>
+         <span class="muted mono">${esc(formatRut(S.empresa.rut))}</span>
+       </div>
+       <div class="doc-ctx-per">
+         <span class="frm-label">Período</span>
+         <b>${esc(perDisplay(periodo))}</b>
+         <span class="hint">Se cambia en la cabecera del sistema</span>
+       </div>
      </div>
-     <div id="doc-tabla"></div>`
 
-    UITabla.montar({
-      mount: document.getElementById('doc-tabla'),
-      // B3: la bandeja agrupa por flujo (Compras/Ventas) con subtotal del
-      // grupo y congela la columna Doc — la casilla vive en la toolbar.
-      congelar: true,
-      agrupar: {
-        key: 'tipo_flujo',
-        label: 'compras/ventas',
-        nombreGrupo: (v) => (v === 'compra' ? 'Compras' : 'Ventas'),
-        subtotal: (fs) => `total ${fmtM(fs.reduce((a, d) => a + (d.monto_total || 0), 0))} · neto ${fmtM(fs.reduce((a, d) => a + (d.monto_neto || 0), 0))} · IVA ${fmtM(fs.reduce((a, d) => a + (d.monto_iva || 0), 0))}`,
-      },
-      agrupadoPorDefecto: true,
-      columnas: [
-        { key: 'tipo_doc', label: 'Doc', valor: (d) => `${d.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc}` },
-        { key: 'folio', label: 'Folio' },
-        { key: 'razon_social', label: 'Contraparte' },
-        { key: 'rut_contraparte', label: 'RUT', valor: (d) => formatRut(d.rut_contraparte) },
-        { key: 'monto_total', label: 'Total', num: true, valor: (d) => fmtM(d.monto_total), crudo: (d) => d.monto_total },
-        { key: 'estado', label: 'Estado', orden: false },
-        { key: 'cuenta', label: 'Cuenta', valor: (d) => (d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}` : '—') },
-      ],
-      filas: r.documentos || [],
-      nombreArchivo: `documentos-${filtros.estado || 'todos'}`,
-      porPagina: 100,
-      vacio: 'Sin documentos con estos filtros.',
-      filaHTML: (d, hl) => `<tr>
-        <td class="sub">${hl(d.tipo_flujo === 'compra' ? 'Compra' : 'Venta')} ${hl(NOMBRES_TIPO_DOC[d.tipo_doc] || d.tipo_doc)}</td>
-        <td class="mono">${hl(d.folio)}</td>
-        <td>${hl((d.razon_social || '—').slice(0, 38))}<div class="sub mono">${hl(formatRut(d.rut_contraparte))}</div></td>
-        <td class="num"><b>${fmtM(d.monto_total)}</b></td>
-        <td>${chipEstado(d.estado)}</td>
-        <td class="sub">${hl(d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}` : '—')}</td>
-        <td>${tiene('documentos:clasificar') && !['CONTABILIZADO', 'ANULADO'].includes(d.estado)
-          ? `<button class="btn btn-secondary btn-sm" data-clas="${d.id}">Clasificar</button>` : ''}</td>
-      </tr>`,
-      totalesHTML: (filas) => `<tr><td colspan="4">Sumas de lo filtrado (${filas.length} docs)</td>
-        <td class="num">${fmtM(filas.reduce((a, d) => a + (d.monto_total || 0), 0))}</td>
-        <td colspan="2" class="sub">neto ${fmtM(filas.reduce((a, d) => a + (d.monto_neto || 0), 0))} · IVA ${fmtM(filas.reduce((a, d) => a + (d.monto_iva || 0), 0))}</td>
-      </tr>`,
-      accionesExtra: '',
-    })
+     <div class="doc-toolbar">
+       ${puedeClasificar ? '<button class="btn btn-primary btn-sm" id="doc-auto" type="button">Clasificar automático</button>' : ''}
+       ${tiene('reglas:ver') ? '<button class="btn btn-secondary btn-sm" id="doc-reglas" type="button">Reglas</button>' : ''}
+       <button class="btn btn-secondary btn-sm" id="doc-mas" type="button" aria-haspopup="menu" aria-expanded="false">Más acciones</button>
+       <span class="spacer"></span>
+       <span class="doc-nota">${puedeClasificar ? 'Clasificar y anular exigen permiso de escritura.' : 'Tu rol es de solo lectura en esta bandeja.'}</span>
+     </div>
 
-    cont.querySelectorAll('[data-est]').forEach((b) => b.addEventListener('click', () => {
-      window._docFiltros = { ...filtros, estado: b.dataset.est }
-      renderRoute()
-    }))
-    // Delegación: UITabla re-renderiza el tbody al paginar/ordenar.
-    document.getElementById('doc-tabla').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-clas]')
-      if (b) modalClasificar(Number(b.dataset.clas))
-    })
-    document.getElementById('doc-reglas').addEventListener('click', modalReglas)
-    const auto = document.getElementById('doc-auto')
-    if (auto) auto.addEventListener('click', async () => {
+     <div class="doc-estados" id="doc-estados" role="group" aria-label="Filtrar por estado">
+       ${DOC_ESTADOS_CHIP.map((e) =>
+         `<button class="btn btn-secondary btn-sm" type="button" data-est="${e.v}" aria-pressed="false">${e.t} <b class="mono doc-chip-n" data-n="${e.v}">—</b></button>`).join('')}
+     </div>
+
+     <div class="doc-filtros">
+       <div class="doc-f">
+         <label class="frm-label" for="doc-flujo">Flujo</label>
+         <select id="doc-flujo" class="form-input">
+           <option value="">Compras y ventas</option>
+           <option value="compra">Compras</option>
+           <option value="venta">Ventas</option>
+         </select>
+       </div>
+       <div class="doc-f">
+         <label class="frm-label" for="doc-tipo">Tipo de documento</label>
+         <select id="doc-tipo" class="form-input">
+           <option value="">Todos</option>
+           ${Object.entries(NOMBRES_TIPO_DOC).sort((a, b) => Number(a[0]) - Number(b[0]))
+             .map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}
+         </select>
+       </div>
+       ${tiene('cuentas:ver') ? `<div class="doc-f">
+         <label class="frm-label" for="doc-cuenta">Cuenta contable</label>
+         <select id="doc-cuenta" class="form-input"><option value="">Todas</option></select>
+       </div>` : ''}
+       <div class="doc-f doc-f-busca">
+         <label class="frm-label" for="doc-buscar">Buscar</label>
+         <input id="doc-buscar" class="form-input" type="search" placeholder="Razón social o folio" value="${esc(f.texto)}">
+       </div>
+       <div class="doc-f doc-f-rut">
+         <label class="frm-label" for="doc-rut">RUT contraparte</label>
+         <input id="doc-rut" class="form-input" type="text" inputmode="numeric" placeholder="12345678-9" value="${esc(f.rut)}">
+       </div>
+       <button class="btn btn-secondary btn-sm" id="doc-limpiar" type="button">Limpiar filtros</button>
+     </div>
+
+     <p class="doc-resumen" id="doc-resumen" role="status" aria-live="polite">Cargando documentos…</p>
+     <div id="doc-tabla" aria-busy="true">${docSkeletonHTML()}</div>`
+
+    const setValor = (id, v) => { const el = document.getElementById(id); if (el) el.value = v }
+    setValor('doc-flujo', f.flujo)
+    setValor('doc-tipo', f.tipo)
+    setValor('doc-buscar', f.texto)
+    setValor('doc-rut', f.rut)
+
+    function pintarChips() {
+      document.querySelectorAll('[data-est]').forEach((b) => {
+        const on = docEstadoCanonico(b.dataset.est) === f.estado
+        b.classList.toggle('btn-on', on)
+        b.setAttribute?.('aria-pressed', on ? 'true' : 'false')
+      })
+    }
+
+    function pintarConteos(r) {
+      const m = Object.fromEntries((r.estados || []).map((e) => [e.estado, Number(e.n) || 0]))
+      // El backend calcula `estados` SIN el filtro de estado: los conteos de
+      // cada chip (y "Todos") son comparables entre sí.
+      const conEstado = Object.values(m).reduce((a, b) => a + b, 0)
+      document.querySelectorAll('.doc-chip-n').forEach((n) => {
+        const clave = docEstadoCanonico(n.dataset.n)
+        n.textContent = String(clave === '' ? (conEstado || Number(r.total) || 0) : (m[clave] ?? 0))
+      })
+    }
+
+    function pintarResumen(el, total, sumas, mostradas) {
+      const s = sumas || {}
+      el.innerHTML = `<b>${total}</b> documento(s) en <b>${esc(perDisplay(periodoGlobal()))}</b>`
+        + ` · neto <b class="mono">${fmtM(s.neto)}</b>`
+        + ` · IVA <b class="mono">${fmtM(s.iva)}</b>`
+        + ` · total <b class="mono">${fmtM(s.total)}</b>`
+        // Sin documentos no hay tabla: la nota de totales/orden sobra.
+        + (total ? `<span class="doc-resumen-nota">Totales calculados por el servidor sobre el filtro completo${total > mostradas ? ` · la tabla muestra ${mostradas}` : ''} · ordenar por columna reordena solo esta página</span>` : '')
+    }
+
+    function montarTabla(mount, total, paginas, filas, sumas) {
+      const s = sumas || {}
+      UITabla.montar({
+        mount,
+        congelar: true,
+        caption: `Documentos de ${perDisplay(periodo)} — ${total} en el filtro`,
+        placeholderBusqueda: 'Filtrar en esta página…',
+        columnas: [...DOC_COLUMNAS, { key: 'acciones', label: 'Acciones', orden: false, buscar: false, exportable: false, valor: () => '' }],
+        filas,
+        nombreArchivo: `documentos-${periodo}-${f.estado || 'todos'}`,
+        servidor: {
+          total,
+          pagina: f.pagina,
+          paginas,
+          onPagina: (n) => { f.pagina = n; docSincronizarURL(f); cargar() },
+        },
+        vacio: 'Sin documentos en esta página.',
+        filaHTML: (d, hl) => docFilaHTML(d, hl),
+        // 5 celdas de contexto (Doc…RUT) + neto/IVA/total + 3 de cierre = 11
+        // columnas: el pie queda alineado con la cabecera y con cada fila.
+        totalesHTML: () => `<tr>
+          <td colspan="5">Totales del filtro · <b>${total}</b> documento(s)</td>
+          <td class="num">${fmtM(s.neto)}</td>
+          <td class="num">${fmtM(s.iva)}</td>
+          <td class="num">${fmtM(s.total)}</td>
+          <td colspan="3" class="sub">Servidor · las NC restan · no es la suma de esta página</td>
+        </tr>`,
+      })
+    }
+
+    async function cargar() {
+      const tablaEl = document.getElementById('doc-tabla')
+      const resumen = document.getElementById('doc-resumen')
+      if (!tablaEl) return
+      const mio = ++seq
+      if (!tablaEl.querySelector?.('table')) tablaEl.innerHTML = docSkeletonHTML()
+      tablaEl.setAttribute?.('aria-busy', 'true')
+      if (resumen) resumen.textContent = 'Actualizando…'
       try {
-        const res = await apiPost(`/api/contable/empresas/${eid}/documentos/clasificar-automatico`, { periodo: null })
-        showToast(`Clasificación automática: ${res.clasificados ?? 0} documento(s)`, 'success')
-        refrescarPillDocs()
-        renderRoute()
-      } catch (err) { showToast(err.message, 'error') }
+        const r = await apiGet(`/api/contable/empresas/${eid}/documentos?${docParametros(f)}`)
+        if (mio !== seq) return
+        const total = Number(r.total) || 0
+        const filas = Array.isArray(r.documentos) ? r.documentos : []
+        const paginas = Math.max(1, Math.ceil(total / DOC_POR_PAGINA))
+        // Si la página pedida quedó fuera de rango (cambió el filtro), volver a la última.
+        if (!filas.length && total > 0 && f.pagina > paginas) {
+          f.pagina = paginas
+          docSincronizarURL(f)
+          return cargar()
+        }
+        porId = new Map(filas.map((d) => [Number(d.id), d]))
+        pintarChips()
+        pintarConteos(r)
+        if (resumen) pintarResumen(resumen, total, r.sumas, filas.length)
+        if (!total) {
+          // `estados` viene sin el filtro de estado: si además no hay filtros de
+          // tabla y suma 0, el período completo está vacío (no es el filtro).
+          const filtrosDeTabla = !!(f.flujo || f.tipo || f.cuenta || f.texto || f.rut)
+          const enPeriodo = (r.estados || []).reduce((a, e) => a + (Number(e.n) || 0), 0)
+          tablaEl.innerHTML = docVacioHTML(!filtrosDeTabla && enPeriodo === 0)
+          document.getElementById('doc-vacio-limpiar')?.addEventListener('click', () => document.getElementById('doc-limpiar')?.click())
+          return
+        }
+        montarTabla(tablaEl, total, paginas, filas, r.sumas)
+      } catch (err) {
+        if (mio !== seq) return
+        if (resumen) resumen.textContent = 'No se pudieron cargar los documentos.'
+        const reintento = '<button class="btn btn-secondary btn-sm" id="doc-reintentar" type="button">Reintentar</button>'
+        tablaEl.innerHTML = window.UIEstado
+          ? UIEstado.error(err.message, reintento)
+          : `<div class="ui-error"><b>Error</b><p class="muted">${esc(err.message)}</p>${reintento}</div>`
+        document.getElementById('doc-reintentar')?.addEventListener('click', () => cargar())
+      } finally {
+        if (mio === seq) tablaEl.removeAttribute?.('aria-busy')
+      }
+    }
+
+    // --- filtros ---
+    document.querySelectorAll('[data-est]').forEach((b) => b.addEventListener('click', () => {
+      f.estado = docEstadoCanonico(b.dataset.est)
+      f.pagina = 1
+      window._docFiltros = { ...f }
+      pintarChips()
+      docSincronizarURL(f)
+      cargar()
+    }))
+
+    const conectarSelect = (id, campo) => document.getElementById(id)?.addEventListener('change', (e) => {
+      f[campo] = e.target.value
+      f.pagina = 1
+      window._docFiltros = { ...f }
+      docSincronizarURL(f)
+      cargar()
     })
+    conectarSelect('doc-flujo', 'flujo')
+    conectarSelect('doc-tipo', 'tipo')
+    conectarSelect('doc-cuenta', 'cuenta')
+
+    // Búsqueda de servidor con debounce (no re-renderiza: conserva el foco).
+    let temporizador = null
+    const conectarBusqueda = (id, campo) => document.getElementById(id)?.addEventListener('input', (e) => {
+      const valor = e.target.value.trim()
+      clearTimeout(temporizador)
+      temporizador = setTimeout(() => {
+        f[campo] = valor
+        f.pagina = 1
+        window._docFiltros = { ...f }
+        docSincronizarURL(f)
+        cargar()
+      }, 300)
+    })
+    conectarBusqueda('doc-buscar', 'texto')
+    conectarBusqueda('doc-rut', 'rut')
+
+    document.getElementById('doc-limpiar')?.addEventListener('click', () => {
+      Object.assign(f, { estado: '', flujo: '', tipo: '', cuenta: '', texto: '', rut: '', pagina: 1 })
+      window._docFiltros = { ...f }
+      for (const [id, v] of [['doc-flujo', ''], ['doc-tipo', ''], ['doc-cuenta', ''], ['doc-buscar', ''], ['doc-rut', '']]) setValor(id, v)
+      pintarChips()
+      docSincronizarURL(f)
+      cargar()
+    })
+
+    // --- acciones de la bandeja ---
+    document.getElementById('doc-reglas')?.addEventListener('click', modalReglas)
+    document.getElementById('doc-auto')?.addEventListener('click', () => modalAutoClasificar(f))
+    document.getElementById('doc-mas')?.addEventListener('click', (e) => {
+      const items = [
+        { label: 'Exportar el filtro completo…', onClick: () => modalExportar(f) },
+        ...(tiene('documentos:ingestar') ? [{ label: 'Ingestar documentos (Libros)', onClick: () => { location.hash = '#libros' } }] : []),
+        { label: 'Actualizar', onClick: () => cargar() },
+      ]
+      docAbrirMenu(e.currentTarget, 'Más acciones de la bandeja', items)
+    })
+
+    // --- tabla: delegación (UITabla re-renderiza el tbody al ordenar/filtrar) ---
+    const tabla = document.getElementById('doc-tabla')
+    tabla.addEventListener('click', (e) => {
+      const clas = e.target.closest?.('[data-clas]')
+      if (clas) { e.stopPropagation(); return modalClasificar(Number(clas.dataset.clas)) }
+      const botonMenu = e.target.closest?.('[data-menu]')
+      if (botonMenu) {
+        e.stopPropagation()
+        const d = porId.get(Number(botonMenu.dataset.menu))
+        if (d) docMenuFila(botonMenu, d)
+        return
+      }
+      const tr = e.target.closest?.('tr[data-doc]')
+      if (tr) abrirDetalleDocumento(Number(tr.dataset.doc), tr)
+    })
+    tabla.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return
+      const tr = e.target.closest?.('tr[data-doc]')
+      if (tr && e.target === tr) { e.preventDefault(); abrirDetalleDocumento(Number(tr.dataset.doc), tr) }
+    })
+
+    // Cuentas imputables: catálogo ya cacheado por el modal de clasificación.
+    pintarChips()
+
+    if (tiene('cuentas:ver')) {
+      getCuentasImputables().then((cuentas) => {
+        const sel = document.getElementById('doc-cuenta')
+        if (!sel || !Array.isArray(cuentas)) return
+        sel.innerHTML = '<option value="">Todas</option>'
+          + cuentas.map((c) => `<option value="${esc(c.id)}">${esc(c.codigo)} — ${esc(c.nombre)}</option>`).join('')
+        sel.value = f.cuenta
+      }).catch(() => { document.getElementById('doc-cuenta')?.closest?.('.doc-f')?.remove() })
+    }
+
+    await cargar()
   },
 }
 
