@@ -27,7 +27,7 @@
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap"></noscript>
-  <link rel="stylesheet" href="/css/sitio.css?v=3fc0f66c">
+  <link rel="stylesheet" href="/css/sitio.css?v=526b2bb3">
 </head>
 <body class="pv">
   <a class="pv-skip" href="#contenido">Saltar al contenido</a>
@@ -41,9 +41,9 @@
         </a>
 
         <nav class="pv-nav" aria-label="Secciones del sitio">
-          <a href="#servicios">Servicios</a>
+          <a href="/servicios/">Servicios</a>
+          <a href="/nosotros/">Nosotros</a>
           <a href="#plataforma">Plataforma</a>
-          <a href="#metodologia">Cómo trabajamos</a>
           <a href="#faq">Preguntas frecuentes</a>
           <a href="#contacto">Contacto</a>
         </nav>
@@ -59,12 +59,12 @@
       </div>
 
       <div class="pv-drawer" id="pv-drawer">
-        <a href="#servicios">Servicios</a>
+        <a href="/servicios/">Servicios</a>
+        <a href="/nosotros/">Nosotros</a>
         <a href="#plataforma">Plataforma</a>
-        <a href="#metodologia">Cómo trabajamos</a>
         <a href="#faq">Preguntas frecuentes</a>
         <a href="#contacto">Contacto</a>
-        <a href="#acceso">Ingresar al sistema</a>
+        <a href="/login.html">Ingresar al sistema</a>
         <a href="/registro.html" class="pv-btn pv-btn--primary">Crear cuenta</a>
       </div>
     </div>
@@ -435,18 +435,54 @@
     </section>
   </main>
 
-  <footer class="pv-legal">
+  <footer class="pv-foot">
     <div class="pv-wrap">
-      <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
-      <div class="pv-legal__links">
-        <a href="https://jmvconsultores.cl/" target="_blank" rel="noopener">Sitio institucional</a>
-        <a href="#servicios">Servicios</a>
-        <a href="#plataforma">Plataforma</a>
-        <a href="#acceso">Acceso clientes</a>
-        <a href="#contacto">Contacto</a>
-        <a href="/registro.html">Crear cuenta</a>
+      <div class="pv-foot__cols">
+        <div class="pv-foot__brand">
+          <a class="pv-brand" href="/">
+            <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="34" height="26">
+            <span>Sistema Contable<small>JMV Consultores</small></span>
+          </a>
+          <p>Consultoría contable, tributaria y de gestión para empresas chilenas, con una plataforma conectada al SII.</p>
+        </div>
+        <div>
+          <h2>Servicios</h2>
+          <ul>
+            <li><a href="/servicios/contabilidad/">Contabilidad</a></li>
+            <li><a href="/servicios/remuneraciones/">Remuneraciones</a></li>
+            <li><a href="/servicios/cumplimiento-tributario/">Tributario</a></li>
+            <li><a href="/servicios/asesoria/">Asesoría</a></li>
+            <li><a href="/servicios/emprendedores-pymes/">Pymes</a></li>
+            <li><a href="/servicios/prevencion-de-riesgos/">Prevención de riesgos</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Plataforma</h2>
+          <ul>
+            <li><a href="#plataforma">Cómo funciona</a></li>
+            <li><a href="/login.html">Ingreso de clientes</a></li>
+            <li><a href="/registro.html">Crear cuenta</a></li>
+            <li><a href="#faq">Preguntas frecuentes</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Contacto</h2>
+          <ul>
+            <li><a href="https://wa.me/56975752213" target="_blank" rel="noopener">WhatsApp +56 9 7575 2213</a></li>
+            <li><a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></li>
+            <li><a href="#contacto">Agendar diagnóstico</a></li>
+          </ul>
+          <div class="pv-foot__social" data-social hidden></div>
+        </div>
       </div>
-      <p class="pv-aviso">Los cálculos y reportes de la plataforma son referenciales y no reemplazan la declaración oficial en sii.cl.</p>
+      <div class="pv-foot__bottom">
+        <span>© <span data-anio>2026</span> JMV Consultores</span>
+        <span>
+          <a href="/privacidad/">Privacidad</a> ·
+          <a href="/cookies/">Cookies</a> ·
+          <a href="/terminos/">Términos</a>
+        </span>
+      </div>
     </div>
   </footer>
 
@@ -469,27 +505,7 @@
   <script src="/shared/api.js?v=80d2c456"></script>
   <script src="/shared/login-auth.js?v=8d3d6fa7"></script>
   <script>
-    // ── Menú móvil (accesible: aria-expanded + cierre al navegar y con Escape) ──
-    ;(function menuMovil() {
-      const burger = document.getElementById('pv-burger')
-      const drawer = document.getElementById('pv-drawer')
-      if (!burger || !drawer) return
-      const cerrar = () => {
-        drawer.dataset.open = 'false'
-        burger.setAttribute('aria-expanded', 'false')
-        burger.setAttribute('aria-label', 'Abrir menú')
-        burger.firstElementChild.textContent = '☰'
-      }
-      burger.addEventListener('click', () => {
-        const abierto = drawer.dataset.open !== 'true'
-        drawer.dataset.open = String(abierto)
-        burger.setAttribute('aria-expanded', String(abierto))
-        burger.setAttribute('aria-label', abierto ? 'Cerrar menú' : 'Abrir menú')
-        burger.firstElementChild.textContent = abierto ? '✕' : '☰'
-      })
-      drawer.addEventListener('click', (e) => { if (e.target.closest('a')) cerrar() })
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar() })
-    })()
+
 
     // ── Movimiento: revelado progresivo, inclinación y parallax del escenario ──
     // Se activa solo si el usuario no pidió menos movimiento; sin JS todo visible.
@@ -623,5 +639,7 @@
       if (d.autenticado) avisar('Ya tienes sesión activa — entra directo desde «Acceso clientes»')
     }).catch(() => {})
   </script>
+  <script src="/shared/sitio-nav.js?v=f7162f83"></script>
+  <script src="/shared/sitio-social.js?v=b3b600f2"></script>
 </body>
 </html>

@@ -30,15 +30,24 @@ const ROOT = path.join(__dirname, '..')
  * cambio de /css/sitio.css seguiría sirviéndose desde el navegador 4 horas.
  * Solo se versionan .css/.js (las imágenes van con su propio nombre).
  */
-const PAGINAS = [
-  path.join(ROOT, 'frontend', 'sistema', 'index.html'),
-  path.join(ROOT, 'frontend', 'landing.html'),
-  path.join(ROOT, 'frontend', 'login.html'),
-  path.join(ROOT, 'frontend', 'registro.html'),
-  // La 404 es una página pública más: si se agrega acá, su referencia a
-  // /css/sitio.css queda versionada por contenido como el resto.
-  path.join(ROOT, 'frontend', '404.html'),
-]
+/**
+ * Páginas con referencias versionadas por contenido. Se DESCUBREN recorriendo
+ * frontend/: antes era una lista fija y cada página nueva quedaba sin
+ * anti-caché hasta que alguien se acordaba de agregarla (el nginx del VPS fija
+ * max-age=14400 a los .css/.js de todo el sitio, así que eso significa servir
+ * CSS viejo durante 4 horas).
+ */
+function paginasHtml(dir) {
+  const salida = []
+  for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
+    const ruta = path.join(dir, entrada.name)
+    if (entrada.isDirectory()) salida.push(...paginasHtml(ruta))
+    else if (entrada.isFile() && entrada.name.endsWith('.html')) salida.push(ruta)
+  }
+  return salida
+}
+
+const PAGINAS = paginasHtml(path.join(ROOT, 'frontend'))
 
 // El ?v= es OPCIONAL: también versiona referencias que aún no lo traen (una
 // página nueva no puede quedar sin anti-caché solo por no tener la query).

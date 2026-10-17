@@ -30,8 +30,18 @@ const leer = (p) => fs.readFileSync(path.join(FRONT, p), 'utf8')
 const existe = (p) => fs.existsSync(path.join(FRONT, p))
 
 const DOMINIO = 'https://jmvconsultores.cl'
-/** URL pública → archivo que la sirve. Al crear una página hay que sumarla acá. */
-const RUTA_A_ARCHIVO = { '/': 'landing.html' }
+/**
+ * URL pública → archivo que la sirve, por convención del servidor de estáticos:
+ * `/` es la landing y cada ruta con barra final es una carpeta con index.html
+ * (`/servicios/contabilidad/` → frontend/servicios/contabilidad/index.html).
+ * Así, agregar una página nueva al sitemap no requiere tocar el test: si el
+ * archivo no existe, falla.
+ */
+const archivoDe = (ruta) => {
+  if (ruta === '/') return path.join(FRONT, 'landing.html')
+  const rel = ruta.replace(/^\//, '').replace(/\/$/, '')
+  return path.join(FRONT, ...rel.split('/'), 'index.html')
+}
 /** Pantallas que NUNCA deben indexarse (internas o de acceso). */
 const PRIVADAS = [
   'login.html', 'registro.html', 'index.html', 'dashboard.html',
@@ -73,9 +83,9 @@ test('T2: sitemap.xml es XML válido y lista solo páginas que existen', () => {
   for (const u of urls) {
     assert.ok(u.startsWith(`${DOMINIO}/`), `${u} usa el dominio canónico https`)
     const ruta = u.slice(DOMINIO.length) || '/'
-    const archivo = RUTA_A_ARCHIVO[ruta]
-    assert.ok(archivo, `${u} está en el mapa de rutas del test (agrégalo si creaste la página)`)
-    assert.ok(existe(archivo), `${u} → frontend/${archivo} existe`)
+    const archivo = archivoDe(ruta)
+    assert.ok(fs.existsSync(archivo), `${u} → ${path.relative(FRONT, archivo)} existe`)
+    assert.ok(/\/$/.test(ruta), `${u} usa la forma con barra final (la que sirve la carpeta)`)
   }
 })
 
@@ -83,7 +93,7 @@ test('T2: sitemap.xml es XML válido y lista solo páginas que existen', () => {
 test('T3: cada URL del sitemap tiene title, description, canonical y OG propios', () => {
   for (const u of locs()) {
     const ruta = u.slice(DOMINIO.length) || '/'
-    const html = leer(RUTA_A_ARCHIVO[ruta])
+    const html = fs.readFileSync(archivoDe(ruta), 'utf8')
 
     const title = (html.match(/<title>([^<]+)<\/title>/) || [])[1]
     assert.ok(title && title.trim().length > 15, `${ruta}: título propio y descriptivo («${title || 'sin title'}»)`)
@@ -172,4 +182,38 @@ test('T7: backend/index.js monta el 404 después de las rutas y antes del error'
   assert.ok(src.indexOf('app.use(express.static') < pos404, 'va después de los estáticos (si no, taparía archivos reales)')
   assert.ok(src.lastIndexOf("app.use('/api/") < pos404, 'va después de todos los routers de la API')
   assert.ok(src.indexOf('app.use((err, req, res, next)') > pos404, 'va antes del manejador de errores')
+})
+
+/* ------------- T8 chrome compartido entre las páginas públicas ------------- */
+test('T8: todas las páginas públicas comparten navegación, pie y menú móvil', () => {
+  for (const u of locs()) {
+    const ruta = u.slice(DOMINIO.length) || '/'
+    const html = fs.readFileSync(archivoDe(ruta), 'utf8')
+    assert.ok(html.includes('id="pv-burger"'), `${ruta}: botón de menú móvil`)
+    // A ≤980 px el CSS oculta la nav horizontal: sin drawer no hay navegación.
+    assert.ok(html.includes('id="pv-drawer"'), `${ruta}: drawer del menú móvil`)
+    assert.ok(html.includes('/shared/sitio-nav.js'), `${ruta}: carga el menú compartido (no lo duplica inline)`)
+    assert.ok(html.includes('href="/servicios/"') && html.includes('href="/nosotros/"'), `${ruta}: enlaza servicios y nosotros`)
+    assert.ok(/href="(\/)?#contacto"/.test(html), `${ruta}: llega al contacto`)
+    assert.ok(html.includes('href="/login.html"'), `${ruta}: acceso de clientes`)
+    assert.ok(html.includes('class="pv-skip"'), `${ruta}: enlace para saltar al contenido`)
+    assert.ok(html.includes('pv-foot'), `${ruta}: pie editorial`)
+    for (const legal of ['/privacidad/', '/cookies/', '/terminos/']) {
+      assert.ok(html.includes(`href="${legal}"`), `${ruta}: enlaza ${legal}`)
+    }
+  }
+})
+
+/* ---------- T9 anti-caché en TODAS las páginas (no solo las 3) ----------- */
+test('T9: toda referencia local .css/.js de las páginas públicas va versionada', () => {
+  let revisadas = 0
+  for (const u of locs()) {
+    const ruta = u.slice(DOMINIO.length) || '/'
+    const html = fs.readFileSync(archivoDe(ruta), 'utf8')
+    for (const m of html.matchAll(/(?:href|src)="(\/(?:css|shared|sistema|assets)\/[^"?]+\.(?:css|js))(\?v=[a-f0-9]{8})?"/g)) {
+      assert.ok(m[2], `${ruta}: ${m[1]} sin ?v=<sha1> — corre «npm run seed:v»`)
+      revisadas++
+    }
+  }
+  assert.ok(revisadas >= 10, `se revisaron ${revisadas} referencias`)
 })

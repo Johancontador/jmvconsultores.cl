@@ -458,6 +458,63 @@ ul { margin: 0; }
   :root { --pv-ink-2: #37322b; --pv-ink-3: #5c554b; --pv-line: #c9bfae; --pv-line-2: #a99d89; }
 }
 @media print {
-  .pv-bar, .pv-toast, .pv-hero__cta, .pv-legal { display: none; }
+  .pv-bar, .pv-toast, .pv-hero__cta, .pv-legal, .pv-foot { display: none; }
   body.pv { background: #fff; color: #000; }
 }
+
+/* ── 17. PÁGINAS INTERNAS (encabezado, prosa y pie editorial) ──────────────
+   Componentes del sitio multipágina (/servicios/, /nosotros/, legales). Se
+   apoyan en los tokens de arriba: nada nuevo en color ni tipografía. Se
+   agregan al final para no reordenar las secciones existentes (las reglas de
+   prefers-reduced-motion de §16 siguen aplicando: acá no hay movimiento). */
+
+/* Encabezado de página interna con migas de pan */
+.pv-page-head {
+  padding: var(--pv-s8) 0 var(--pv-s7);
+  background: var(--pv-surface); border-bottom: 1px solid var(--pv-line);
+}
+.pv-crumbs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--pv-s2);
+  font-size: var(--pv-fs-xs); color: var(--pv-ink-3); margin-bottom: var(--pv-s4);
+}
+.pv-crumbs a { color: var(--pv-ink-2); }
+.pv-crumbs a:hover { color: var(--pv-accent); }
+.pv-crumbs [aria-hidden] { color: var(--pv-line-2); }
+.pv-crumbs [aria-current] { color: var(--pv-ink); font-weight: 600; }
+.pv-page-head h1 { font-size: var(--pv-fs-3xl); max-width: 24ch; }
+.pv-page-head p { margin-top: var(--pv-s4); max-width: 62ch; color: var(--pv-ink-2); font-size: var(--pv-fs-lg); }
+
+/* Prosa larga (legales, artículos): longitud de línea controlada */
+.pv-prose { max-width: 72ch; }
+.pv-prose h2 { font-size: var(--pv-fs-xl); margin: var(--pv-s7) 0 var(--pv-s3); }
+.pv-prose h3 { font-size: var(--pv-fs-lg); margin: var(--pv-s5) 0 var(--pv-s2); }
+.pv-prose p { margin-top: var(--pv-s3); color: var(--pv-ink-2); }
+.pv-prose ul, .pv-prose ol { margin-top: var(--pv-s3); padding-left: var(--pv-s5); display: grid; gap: var(--pv-s2); color: var(--pv-ink-2); }
+.pv-prose a { color: var(--pv-accent); text-decoration: underline; text-underline-offset: 2px; }
+.pv-prose strong { color: var(--pv-ink); }
+.pv-prose__fecha { font-size: var(--pv-fs-xs); color: var(--pv-ink-3); margin-top: var(--pv-s3); }
+
+/* Pie de página editorial en columnas (reemplaza la franja mínima) */
+.pv-foot { background: var(--pv-elevated); border-top: 1px solid var(--pv-line); padding: var(--pv-s8) 0 var(--pv-s5); }
+.pv-foot__cols { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: var(--pv-s6); }
+.pv-foot h2 {
+  font-family: var(--pv-font); font-size: var(--pv-fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--pv-ink-3);
+  margin: 0 0 var(--pv-s3);
+}
+.pv-foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--pv-s2); }
+.pv-foot a { color: var(--pv-ink-2); font-size: var(--pv-fs-sm); }
+.pv-foot a:hover { color: var(--pv-accent); }
+.pv-foot__brand img { width: 34px; height: 26px; }
+.pv-foot__brand p { margin-top: var(--pv-s3); font-size: var(--pv-fs-sm); color: var(--pv-ink-3); max-width: 36ch; }
+.pv-foot__bottom {
+  margin-top: var(--pv-s6); padding-top: var(--pv-s4); border-top: 1px solid var(--pv-line);
+  display: flex; flex-wrap: wrap; gap: var(--pv-s3) var(--pv-s5); justify-content: space-between;
+  font-size: var(--pv-fs-xs); color: var(--pv-ink-3);
+}
+.pv-foot__bottom a { font-size: var(--pv-fs-xs); }
+.pv-foot__social { display: flex; flex-wrap: wrap; gap: var(--pv-s4); }
+.pv-foot__social a { display: inline-flex; align-items: center; gap: 6px; }
+
+@media (max-width: 900px) { .pv-foot__cols { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .pv-foot__cols { grid-template-columns: 1fr; } }

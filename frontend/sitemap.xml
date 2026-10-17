@@ -14,8 +14,74 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://jmvconsultores.cl/</loc>
-    <lastmod>2026-10-16</lastmod>
+    <lastmod>2026-10-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/contabilidad/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/remuneraciones/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/cumplimiento-tributario/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/asesoria/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/emprendedores-pymes/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/servicios/prevencion-de-riesgos/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/nosotros/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/privacidad/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/cookies/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://jmvconsultores.cl/terminos/</loc>
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>
