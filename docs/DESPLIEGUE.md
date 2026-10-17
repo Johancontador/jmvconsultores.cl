@@ -89,18 +89,34 @@ En el `.env` del VPS **son obligatorias** estas variables nuevas:
 SECRETOS_MASTER_KEY=<64-hex>
 ```
 
-**Backups diarios** (la contabilidad es irremplazable — programar en cron del VPS):
+**Tareas programadas en el VPS** (`crontab -e`) — las DOS corren dentro del
+contenedor: es la única copia con las dependencias instaladas, y el árbol del
+host no tiene `node_modules` propios.
 
 ```bash
-# crontab -e
-0 3 * * * cd /home/johan/iva-mensual && /usr/bin/node scripts/backup-db.js >> logs-backup.log 2>&1
+# Backups (03:00) — la contabilidad es irremplazable
+0 3 * * * /usr/bin/docker exec iva-mensual node scripts/backup-db.js >> /home/johan/apps/iva-mensual/logs-backup.log 2>&1
+# Sync diaria RCV (07:30)
+30 7 * * * /usr/bin/docker exec iva-mensual node scripts/sync-diaria.js >> /home/johan/apps/iva-mensual/logs-sync.log 2>&1
 ```
 
 - `scripts/backup-db.js` usa el backup online de better-sqlite3 (seguro con el
   servidor en marcha y WAL activo), escribe en `data/backups/` y aplica retención
   configurable (`BACKUP_RETENCION`, default 30 copias).
+- `scripts/sync-diaria.js` baja el RCV del mes en curso de todas las empresas
+  activas con clave SII (idempotente, reanudable, techo `SII_MAX_EMPRESAS`). La
+  auditoría se firma con el admin semilla e `ip = 'script:sync-diaria'` — sin
+  usuario explícito (`--usuario`) la corrida abortaba al cerrar por auditoría:
+  el cron fallaba todos los días después de haber sincronizado.
 - Restaurar: detener servidor → copiar el `.db` elegido a `data/iva_mensual.db` → arrancar.
 - Probar el restore una vez al mes: un backup que nunca se restauró no es un backup.
+
+> ⚠️ **El volumen `./data` debe pertenecer al uid 1000** (el contenedor corre
+> como `USER node`): `sudo chown -R 1000:1000 ./data`. Si `data/backups` queda de
+> root, el contenedor arranca sano y **el backup del cron falla en silencio**
+> («unable to open database file»). Ocurrió del 2026-10-10 al 16 (7 noches sin
+> backup, detectado al revisar el log). `ops/deploy.sh` ahora comprueba la
+> escritura de `/app/data` y `/app/data/backups` al terminar cada despliegue.
 
 ## Opción B — PaaS (Render / Railway / Fly.io)
 
