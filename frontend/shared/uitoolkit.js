@@ -153,9 +153,9 @@
         </label>` : ''}
         <span class="spacer"></span>
         <span class="hint" id="${id}-info"></span>
-        <button class="btn btn-secondary btn-sm" id="${id}-csv" title="${st.servidor ? 'Exportar esta página a CSV' : 'Descargar CSV'}">CSV</button>
-        <button class="btn btn-secondary btn-sm" id="${id}-xls" title="${st.servidor ? 'Exportar esta página para Excel' : 'Descargar para Excel'}">Excel</button>
-        <button class="btn btn-secondary btn-sm" id="${id}-copiar" title="Copiar al portapapeles">Copiar</button>
+        <button class="btn btn-secondary btn-sm" id="${id}-csv" title="${st.servidor ? 'Exportar SOLO esta página a CSV (el filtro completo se exporta desde la barra de la vista)' : 'Descargar CSV'}" aria-label="${st.servidor ? 'Exportar esta página a CSV' : 'Descargar CSV'}">CSV${st.servidor ? ' (página)' : ''}</button>
+        <button class="btn btn-secondary btn-sm" id="${id}-xls" title="${st.servidor ? 'Exportar SOLO esta página para Excel (el filtro completo se exporta desde la barra de la vista)' : 'Descargar para Excel'}" aria-label="${st.servidor ? 'Exportar esta página para Excel' : 'Descargar para Excel'}">Excel${st.servidor ? ' (página)' : ''}</button>
+        <button class="btn btn-secondary btn-sm" id="${id}-copiar" title="${st.servidor ? 'Copiar esta página al portapapeles' : 'Copiar al portapapeles'}">Copiar</button>
         <button class="btn btn-secondary btn-sm" id="${id}-imprimir" title="Imprimir">Imprimir</button>
         ${st.accionesExtra}
       </div>`
@@ -244,8 +244,8 @@
       const info = document.getElementById(`${id}-info`)
       if (info) {
         if (st.servidor) info.textContent = st.q
-          ? `${pagina.length} de ${total} fila(s) (búsqueda en esta página)`
-          : `${total} fila(s) en el filtro`
+          ? `${pagina.length} de ${total} fila(s) · búsqueda aplicada solo a esta página`
+          : `Página ${actual} de ${paginas} · ${total} fila(s) en el filtro`
         else info.textContent = st.q ? `${total} de ${st.filas.length} fila(s)` : `${st.filas.length} fila(s)`
       }
 

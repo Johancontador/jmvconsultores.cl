@@ -241,12 +241,19 @@ function ingestarBatch(db, { empresaId, usuarioId, tipoFlujo, periodo, documento
  */
 /**
  * Columnas ordenables de la bandeja (LISTA BLANCA: el nombre nunca llega al
- * SQL — un `orden` desconocido cae al orden por id). El folio se castea porque
- * es TEXT y "101" ordenaría antes que "9".
+ * SQL — un `orden` desconocido cae al orden por id).
+ *
+ * El folio es TEXT: "101" ordenaría antes que "9", así que los folios
+ * numéricos se ordenan por valor con relleno de ceros. Los folios no
+ * numéricos ("S/N", "A-12") NO se castean a 0: quedan después de los
+ * numéricos y ordenados alfabéticamente. La expresión devuelve una única
+ * clave de texto, de modo que el mismo `ASC`/`DESC` del ORDER BY la invierte.
  */
 const ORDEN_BANDEJA = {
   tipo_doc: 'd.tipo_doc',
-  folio: 'CAST(d.folio AS INTEGER)',
+  folio: `CASE WHEN d.folio <> '' AND d.folio NOT GLOB '*[^0-9]*'
+          THEN printf('%012d', CAST(d.folio AS INTEGER))
+          ELSE 'z' || d.folio END`,
   fecha_docto: 'd.fecha_docto',
   razon_social: 'd.razon_social',
   rut_contraparte: 'd.rut_contraparte',

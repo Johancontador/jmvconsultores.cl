@@ -380,3 +380,16 @@ test('bandeja: orden de servidor por lista blanca abarca el filtro completo', ()
   assert.deepStrictEqual(malo.documentos.map((d) => d.id), base.documentos.map((d) => d.id).sort((a, b) => a - b))
   assert.ok(db.prepare(`SELECT COUNT(*) AS n FROM documentos`).get().n > 0, 'la tabla sigue existiendo')
 })
+
+test('bandeja: folio no numérico no se castea a 0 (va después de los numéricos)', () => {
+  documentos.ingestarBatch(db, {
+    empresaId: EMP2.id, usuarioId: adminId, tipoFlujo: 'compra', periodo: '202610',
+    documentos: [docCompra('9'), docCompra('101'), docCompra('S/N'), docCompra('A-12')],
+  })
+  const asc = documentos.listar(db, { empresaId: EMP2.id, periodo: '202610', orden: 'folio', dir: 'asc', limit: 100 })
+  assert.deepStrictEqual(asc.documentos.map((d) => d.folio), ['9', '101', 'A-12', 'S/N'],
+    'numéricos por valor y no numéricos al final')
+  const desc = documentos.listar(db, { empresaId: EMP2.id, periodo: '202610', orden: 'folio', dir: 'desc', limit: 100 })
+  assert.deepStrictEqual(desc.documentos.map((d) => d.folio), ['S/N', 'A-12', '101', '9'],
+    'DESC invierte la misma clave, no reagrupa')
+})

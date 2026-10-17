@@ -65,6 +65,7 @@ function crearSandbox({ permisos = ['documentos:ver', 'documentos:clasificar', '
   const htmls = []
   const urls = []
   const reemplazos = []
+  const empujes = []
   const el = () => {
     let html = ''
     let texto = ''
@@ -119,7 +120,7 @@ function crearSandbox({ permisos = ['documentos:ver', 'documentos:clasificar', '
     navigator: { userAgent: 'test', language: 'es-CL', clipboard: { writeText: async () => {} } },
     localStorage: store, sessionStorage: store,
     history: {
-      pushState() {},
+      pushState(_a, _b, url) { empujes.push(url); location.hash = url },
       replaceState(_a, _b, url) { reemplazos.push(url); location.hash = url },
       back() {},
     },
@@ -171,7 +172,7 @@ function crearSandbox({ permisos = ['documentos:ver', 'documentos:clasificar', '
   ].join('\n')
   new vm.Script(bundle).runInContext(sandbox)
 
-  return { sandbox, htmls, urls, reemplazos, location, el }
+  return { sandbox, htmls, urls, reemplazos, empujes, location, el }
 }
 
 const urlDocs = (env, ultima = false) => {
@@ -197,8 +198,11 @@ test('B1: pide el período global con limit/offset de servidor y refleja filtros
   assert.match(url, /estado=PENDIENTE/, 'filtro por defecto conservado')
   assert.ok(!/limit=300/.test(fuenteVista), 'eliminado el límite fijo de 300')
 
-  // Cambiar de filtro empuja la URL (replaceState) sin recargar la vista.
+  // Cambiar de filtro sincroniza la URL (replaceState/pushState, sin recargar
+  // la vista). El hash es la fuente: el filtro llega por URL, no solo por
+  // `_docFiltros` (que es respaldo para una URL sin query).
   env.sandbox.window._docFiltros = { estado: '', flujo: 'venta', tipo: '61', texto: '', rut: '', pagina: 1 }
+  env.location.hash = '#documentos?estado=&flujo=venta&tipo=61'
   await render(env)
   const url2 = urlDocs(env, true)
   assert.match(url2, /tipo_flujo=venta/)
@@ -213,7 +217,7 @@ test('B1: pide el período global con limit/offset de servidor y refleja filtros
   assert.match(hash, /p=2/)
   assert.match(hash, /(^|[?&])estado=/, 'el estado vacío también se serializa')
   env.sandbox.docSincronizarURL({ estado: 'REVISION', flujo: '', tipo: '', cuenta: '', texto: '', rut: '', pagina: 1 })
-  assert.strictEqual(env.reemplazos[0], env.location.hash, 'replaceState deja la URL sincronizada')
+  assert.strictEqual(env.reemplazos.at(-1), env.location.hash, 'replaceState deja la URL sincronizada')
   assert.match(env.location.hash, /estado=REVISION/)
 
   // ?p= ilegible no debe dejar la página en NaN (el fetch saldría con offset NaN).
@@ -299,6 +303,15 @@ test('B3c: cabecera, filas y pie cubren las mismas columnas (RUT incluido)', asy
   assert.ok(fragmentoHead, 'la tabla pinta cabecera')
   const thead = fragmentoHead.slice(fragmentoHead.indexOf('<thead>'), fragmentoHead.indexOf('</thead>'))
   const ths = (thead.match(/<th\b/g) || []).length
+
+  // El esqueleto de carga usa una celda por columna real: sin saltos de
+  // layout y sin columnas de menos mientras se consulta.
+  const fragmentoSkel = env.htmls.find((h) => h.includes('doc-skel'))
+  assert.ok(fragmentoSkel, 'el esqueleto se pinta en la primera carga')
+  const filaSkel = fragmentoSkel.match(/<tr>([\s\S]*?)<\/tr>/)
+  assert.ok(filaSkel, 'el esqueleto tiene filas')
+  const tdsSkel = (filaSkel[1].match(/<td\b/g) || []).length
+  assert.strictEqual(tdsSkel, ths, `el esqueleto debe traer ${ths} celdas (trae ${tdsSkel})`)
 
   const fragmentoCuerpo = env.htmls.find((h) => h.includes('data-doc="11"'))
   assert.ok(fragmentoCuerpo, 'la fila del documento se renderiza')
@@ -570,4 +583,76 @@ test('B10b: UITabla sigue igual para las demás vistas (opciones aditivas)', () 
     vacio: 'sin datos',
   })
   assert.ok(!sinBusqueda.innerHTML.includes('type="search"'), 'se puede omitir la búsqueda local')
+})
+
+// ---------- B12: alcance de exportación, título y doble envío ----------
+test('B12: el alcance de la exportación y el título de la pantalla son inequívocos', () => {
+  const env = crearSandbox()
+  const mount = env.el()
+  env.sandbox.UITabla.montar({
+    mount,
+    columnas: [{ key: 'a', label: 'A' }],
+    filas: [{ a: 1 }],
+    filaHTML: (f) => `<tr><td>${f.a}</td></tr>`,
+    servidor: { total: 128, pagina: 1, paginas: 3, onPagina() {}, onOrden() {} },
+  })
+  assert.match(mount.innerHTML, />CSV \(página\)</, 'la tabla dice que exporta SOLO la página')
+  assert.match(mount.innerHTML, />Excel \(página\)</)
+  assert.match(mount.innerHTML, /Exportar esta página a CSV/, 'etiqueta accesible del alcance')
+  // El filtro completo se exporta desde la barra de la vista, con su tope.
+  assert.match(fuenteVista, /Exportar el filtro completo/)
+  assert.match(fuenteVista, /titulo: 'Bandeja de Documentos'/, 'título de la pantalla, no solo del menú')
+})
+
+test('B12b: doble envío y respuestas viejas del detalle quedan cubiertos', () => {
+  assert.match(fuenteVista, /guardar\.disabled = true/, 'clasificar no se envía dos veces')
+  assert.match(fuenteVista, /ok\.disabled = true/, 'anular no se envía dos veces')
+  assert.match(fuenteVista, /btn\.disabled = true/, 'clasificar automático no se envía dos veces')
+  assert.match(fuenteVista, /mio !== docDetalleSeq/, 'una respuesta vieja del detalle no pisa la nueva')
+})
+
+// ---------- B13: historial (Atrás/Adelante) y búsqueda sin resultados ----------
+test('B13: la URL se normaliza al entrar y los cambios discretos dejan historial', async () => {
+  const env = crearSandbox()
+  env.location.hash = '#documentos'
+  await render(env)
+  // Entrar con #documentos pelado deja una entrada autodescriptiva: Atrás
+  // tiene a qué volver y Adelante no cae en un filtro indefinido.
+  assert.strictEqual(env.reemplazos.at(-1), '#documentos?estado=PENDIENTE')
+  assert.strictEqual(env.empujes.length, 0, 'entrar a la vista no ensucia el historial')
+
+  // Cambio discreto (chip/select/orden/página) empuja una entrada nueva.
+  const f = { estado: 'REVISION', flujo: '', tipo: '', cuenta: '', texto: '', rut: '', orden: '', dir: '', pagina: 1 }
+  env.sandbox.docSincronizarURL(f, { historial: true })
+  assert.strictEqual(env.empujes.length, 1)
+  assert.match(env.empujes[0], /estado=REVISION/)
+  assert.match(fuenteVista, /docSincronizarURL\(f, \{ historial: true \}\)/, 'chips, selects, orden, página y limpiar dejan historial')
+
+  // Escribir en el buscador solo reemplaza: no crea una entrada por pulsación.
+  env.sandbox.docSincronizarURL({ ...f, texto: 'proveedora' })
+  assert.strictEqual(env.empujes.length, 1, 'escribir no inunda el historial')
+  assert.match(env.reemplazos.at(-1), /texto=proveedora/)
+
+  // Volver a una URL anterior restaura ESE filtro (el hash es la fuente).
+  env.location.hash = env.empujes[0]
+  assert.strictEqual(env.sandbox.docFiltrosDeURL().estado, 'REVISION')
+
+  // Regresión: si la URL describe el filtro, `_docFiltros` viejo NO completa
+  // las claves ausentes. Antes, volver a #documentos?estado=CONTABILIZADO
+  // heredaba flujo=venta y reescribía la entrada de historial recién abierta.
+  env.sandbox.window._docFiltros = { estado: 'CONTABILIZADO', flujo: 'venta', tipo: '', cuenta: '', texto: '', rut: '', pagina: 1 }
+  env.location.hash = '#documentos?estado=CONTABILIZADO'
+  const atras = env.sandbox.docFiltrosDeURL()
+  assert.strictEqual(atras.estado, 'CONTABILIZADO')
+  assert.strictEqual(atras.flujo, '', 'clave ausente en la URL vale vacío, no el filtro abandonado')
+})
+
+test('B13b: la búsqueda sin resultados se explica como búsqueda, no como filtro', async () => {
+  const sinResultados = crearSandbox({ fixture: () => ({ ok: true, total: 0, sumas: { n: 0, neto: 0, iva: 0, total: 0 }, estados: [{ estado: 'CONTABILIZADO', n: 3 }], documentos: [] }) })
+  sinResultados.sandbox.window._docFiltros = { estado: 'PENDIENTE', flujo: '', tipo: '', cuenta: '', texto: 'zzz', rut: '', pagina: 1 }
+  await render(sinResultados)
+  const html = sinResultados.htmls.join('')
+  assert.match(html, /La búsqueda no encontró documentos/)
+  assert.match(html, /Limpiar búsqueda/)
+  assert.ok(!html.includes('Ningún documento coincide con estos filtros'), 'no confunde búsqueda con filtro')
 })

@@ -403,9 +403,15 @@ function docFiltrosDeURL() {
   let q = new URLSearchParams()
   try { q = new URLSearchParams(location.hash.split('?')[1] || '') } catch { /* hash raro */ }
   const previo = window._docFiltros || {}
-  const dato = (k, base = '') => (q.has(k) ? q.get(k) : (previo[k] ?? base))
+  // Si la URL trae alguna de nuestras claves, DESCRIBE el filtro completo y
+  // manda ella: una clave ausente vale vacío. Colgar del `_docFiltros` viejo
+  // (Atrás del navegador) reescribiría la entrada de historial con el filtro
+  // que se acaba de abandonar. El respaldo aplica solo a `#documentos` pelado.
+  const CLAVES_URL = ['estado', 'flujo', 'tipo', 'cuenta', 'texto', 'rut', 'orden', 'dir', 'p']
+  const describe = CLAVES_URL.some((k) => q.has(k))
+  const dato = (k, base = '') => (describe ? (q.get(k) ?? base) : (previo[k] ?? base))
   return {
-    estado: docEstadoCanonico(q.has('estado') ? q.get('estado') : (previo.estado ?? 'PENDIENTE')),
+    estado: docEstadoCanonico(describe ? (q.get('estado') ?? 'PENDIENTE') : (previo.estado ?? 'PENDIENTE')),
     flujo: dato('flujo'),
     tipo: dato('tipo'),
     cuenta: dato('cuenta'),
@@ -438,13 +444,19 @@ function docHash(f) {
   return `#documentos?${q.toString()}`
 }
 
-function docSincronizarURL(f) {
+/**
+ * Sincroniza la URL con los filtros. `pushState` no dispara hashchange, así
+ * que no re-renderiza ni roba el foco; crea una entrada de historial para los
+ * cambios discretos (chip, select, orden, página) y así el botón Atrás/Adelante
+ * del navegador restaura el filtro anterior. El texto/RUT, que cambia en cada
+ * pulsación, solo reemplaza la entrada (no inunda el historial).
+ */
+function docSincronizarURL(f, { historial = false } = {}) {
   const hash = docHash(f)
   if (location.hash === hash) return
   try {
-    // replaceState: URL compartible sin hashchange (que re-renderizaría la
-    // vista y robaría el foco mientras se escribe en un filtro).
-    history.replaceState(null, '', hash)
+    if (historial) history.pushState(null, '', hash)
+    else history.replaceState(null, '', hash)
   } catch { location.hash = hash }
 }
 
@@ -576,24 +588,39 @@ function docFilaHTML(d, hl) {
  * de un filtro sin resultados: con el chip por defecto PENDIENTE, ambos casos
  * devuelven 0 filas y antes se mostraba siempre "no coincide con los filtros".
  */
-function docVacioHTML(sinDocsEnPeriodo) {
+function docVacioHTML(sinDocsEnPeriodo, soloBusqueda = false) {
   const ui = window.UIEstado
   if (sinDocsEnPeriodo) {
     const accion = tiene('documentos:ingestar') ? '<a class="btn btn-primary btn-sm" href="#libros">Ir a Libros a sincronizar</a>' : ''
     return ui ? ui.vacio(`Aún no hay documentos en ${perDisplay(periodoGlobal())}`, 'El período está vacío: sincroniza el RCV desde Libros para traer compras y ventas.', accion)
       : '<div class="empty">Sin documentos en el período.</div>'
   }
+  // La búsqueda sin resultados no es lo mismo que un filtro sin coincidencias:
+  // el usuario necesita saber que el término es lo que no calzó.
+  if (soloBusqueda) {
+    return ui ? ui.vacio('La búsqueda no encontró documentos', 'Se busca por razón social y folio; el RUT contraparte tiene su propio campo. Revisa el término o límpialo.',
+      '<button class="btn btn-secondary btn-sm" type="button" id="doc-vacio-limpiar">Limpiar búsqueda</button>')
+      : '<div class="empty">La búsqueda no encontró documentos.</div>'
+  }
   return ui ? ui.vacio('Ningún documento coincide con estos filtros', 'Prueba con otro estado, flujo o término de búsqueda.',
     '<button class="btn btn-secondary btn-sm" type="button" id="doc-vacio-limpiar">Limpiar filtros</button>')
     : '<div class="empty">Sin resultados.</div>'
 }
 
+/** Última apertura pedida: si el usuario abre otro documento mientras el
+ *  anterior viaja, la respuesta vieja no debe pintarse encima de la nueva. */
+let docDetalleSeq = 0
+
 async function abrirDetalleDocumento(docId, disparador) {
+  const mio = ++docDetalleSeq
   try {
     const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/documentos/${docId}`)
+    if (mio !== docDetalleSeq) return
     if (!r || !r.documento) return showToast('Documento no encontrado', 'error')
     docAbrirDrawer(r.documento, disparador)
-  } catch (err) { showToast(err.message, 'error') }
+  } catch (err) {
+    if (mio === docDetalleSeq) showToast(err.message, 'error')
+  }
 }
 
 /** Panel lateral de detalle: lectura + las acciones que correspondan. */
@@ -825,11 +852,14 @@ async function modalExportar(f) {
 }
 
 VIEWS.documentos = {
-  titulo: 'Documentos',
+  titulo: 'Bandeja de Documentos',
   async render(cont) {
     const eid = S.empresa.id
     const f = docFiltrosDeURL()
     window._docFiltros = { ...f }
+    // La entrada de historial actual debe describir el filtro completo: si
+    // entramos con #documentos pelado, Atrás no tendría a qué volver.
+    docSincronizarURL(f)
     const puedeClasificar = tiene('documentos:clasificar')
     const periodo = periodoGlobal()
     let porId = new Map()
@@ -956,10 +986,10 @@ VIEWS.documentos = {
             f.dir = d
             f.pagina = 1
             window._docFiltros = { ...f }
-            docSincronizarURL(f)
+            docSincronizarURL(f, { historial: true })
             cargar()
           },
-          onPagina: (n) => { f.pagina = n; docSincronizarURL(f); cargar() },
+          onPagina: (n) => { f.pagina = n; docSincronizarURL(f, { historial: true }); cargar() },
         },
         vacio: 'Sin documentos en esta página.',
         filaHTML: (d, hl) => docFilaHTML(d, hl),
@@ -1003,8 +1033,9 @@ VIEWS.documentos = {
           // `estados` viene sin el filtro de estado: si además no hay filtros de
           // tabla y suma 0, el período completo está vacío (no es el filtro).
           const filtrosDeTabla = !!(f.flujo || f.tipo || f.cuenta || f.texto || f.rut)
+          const soloBusqueda = !!(f.texto || f.rut) && !f.flujo && !f.tipo && !f.cuenta
           const enPeriodo = (r.estados || []).reduce((a, e) => a + (Number(e.n) || 0), 0)
-          tablaEl.innerHTML = docVacioHTML(!filtrosDeTabla && enPeriodo === 0)
+          tablaEl.innerHTML = docVacioHTML(!filtrosDeTabla && enPeriodo === 0, soloBusqueda)
           document.getElementById('doc-vacio-limpiar')?.addEventListener('click', () => document.getElementById('doc-limpiar')?.click())
           return
         }
@@ -1028,7 +1059,7 @@ VIEWS.documentos = {
       f.pagina = 1
       window._docFiltros = { ...f }
       pintarChips()
-      docSincronizarURL(f)
+      docSincronizarURL(f, { historial: true })
       cargar()
     }))
 
@@ -1036,7 +1067,7 @@ VIEWS.documentos = {
       f[campo] = e.target.value
       f.pagina = 1
       window._docFiltros = { ...f }
-      docSincronizarURL(f)
+      docSincronizarURL(f, { historial: true })
       cargar()
     })
     conectarSelect('doc-flujo', 'flujo')
@@ -1064,7 +1095,7 @@ VIEWS.documentos = {
       window._docFiltros = { ...f }
       for (const [id, v] of [['doc-flujo', ''], ['doc-tipo', ''], ['doc-cuenta', ''], ['doc-buscar', ''], ['doc-rut', '']]) setValor(id, v)
       pintarChips()
-      docSincronizarURL(f)
+      docSincronizarURL(f, { historial: true })
       cargar()
     })
 
@@ -1160,7 +1191,10 @@ async function modalClasificar(docId) {
        <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
        <button class="btn btn-primary" id="cl-save">Guardar clasificación</button>
      </div>`)
-    document.getElementById('cl-save').addEventListener('click', async () => {
+    const guardar = document.getElementById('cl-save')
+    guardar.addEventListener('click', async () => {
+      // Doble clic no debe enviar dos clasificaciones.
+      guardar.disabled = true
       try {
         await apiPost(`/api/contable/empresas/${S.empresa.id}/documentos/${docId}/clasificar`, {
           cuenta_id: Number(document.getElementById('cl-cuenta').value),
@@ -1178,7 +1212,10 @@ async function modalClasificar(docId) {
         cerrarModal()
         refrescarPillDocs()
         renderRoute()
-      } catch (err) { showToast(err.message, 'error') }
+      } catch (err) {
+        guardar.disabled = false
+        showToast(err.message, 'error')
+      }
     })
   } catch (err) { showToast(err.message, 'error') }
 }
