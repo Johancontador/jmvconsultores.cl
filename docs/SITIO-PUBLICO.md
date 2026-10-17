@@ -199,13 +199,38 @@ Nota de caché: Cloudflare sigue sirviendo `.css`/`.js` con `max-age=14400`
 garantiza que un cambio de estilos se vea al instante. El HTML queda `DYNAMIC`
 (sin caché de borde).
 
-### 9.3 Riesgo residual
+### 9.3 Publicado en GitHub y conectores limpiados (2026-10-17)
+
+- **Push hecho.** GitHub ya tenía el commit `8ac80fe` con *el mismo contenido*
+  del trabajo pendiente que apareció en el VPS (`git diff 59a73cd 8ac80fe`
+  vacío): alguien lo había commiteado antes desde otra máquina. En vez de crear
+  una historia paralela, los 2 commits propios se reaplicaron sobre `8ac80fe`
+  (`e51ffe2`, `a01d7bd`) y se publicaron. `main` en GitHub, `origin/main` en el
+  VPS y el `HEAD` del sitio son **el mismo commit**: `b46af65`.
+- **`.gitattributes` con `* text=auto eol=lf`.** El `?v=<sha1>` se calcula sobre
+  los bytes desplegados; un checkout en Windows (`core.autocrlf=true`) los
+  convertía a CRLF y hacía fallar T12 sin que nada estuviera roto. Fijado en el
+  repo para que no vuelva a pasar.
+- **Conectores duplicados apagados.** Además del `jmv-tunnel.service` del
+  sistema (el que sirve el sitio), corrían dos unidades de usuario con el mismo
+  objetivo: un `cloudflared` con el token viejo y un *quick tunnel* apuntando a
+  `127.0.0.1:3500` (una URL pública temporal del app). Ambas **detenidas y
+  deshabilitadas**; `jmvconsultores.cl`, `www` y `app` siguen en 200.
+
+### 9.4 Riesgo residual
 
 - **Copia obsoleta** en `/var/www/jmvconsultores.cl` (la dejaba un bloque de
-  nginx en el 8081, hoy inactivo). El sitio vivo es `/home/johan/jmv-www`. No
-  editarla: si algún día se reactiva nginx, serviría contenido viejo.
-- **Dos túneles** `cloudflared` activos (`cloudflared.service` y
-  `jmv-tunnel.service`); el del sitio es `jmv-tunnel`. Conviene apagar el otro si
-  no tiene un uso concreto.
-- El repo `jmv-www` tiene **3 commits locales sin push** a GitHub: se commiteó en
-  el VPS para no perder el trabajo, no se publicó.
+  nginx en el 8081, hoy inactivo): borrarla necesita `sudo`. El sitio vivo es
+  `/home/johan/jmv-www`. No editarla: si algún día se reactiva nginx, serviría
+  contenido viejo.
+- **`cloudflared.service`** (servicio de sistema, con un token de túnel
+  distinto) sigue activo junto al `jmv-tunnel.service`. No se tocó porque
+  detenerlo y reiniciarlo requiere root, y sin acceso al panel de Cloudflare no
+  se puede confirmar qué ingress atiende: si resulta ser el del app, apagarlo
+  dejaría `app.jmvconsultores.cl` fuera hasta tener root para volver a
+  levantarlo.
+- **Legal pendiente** (bloquea publicar): el sitio no tiene privacidad, cookies
+  ni términos y el pie no lleva RUT ni domicilio. Diagnóstico, hechos medidos y
+  borradores en `jmv-www:docs/LEGAL-PENDIENTE.md`. Ojo con el plazo: la
+  **Ley 21.719 rige desde el 1 de diciembre de 2026** (hay discusión pública
+  sobre una posible postergación; conviene confirmarlo).
