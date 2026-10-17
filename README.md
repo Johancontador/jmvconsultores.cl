@@ -185,3 +185,18 @@ cambia SSL/TLS en Cloudflare a **Full (strict)**.
 - Sección de testimonios de clientes
 - Blog de noticias tributarias (excelente para SEO)
 - Google Business Profile vinculado al dominio
+
+---
+
+## 🛠 Cómo se publica (servicio, 404, tests)
+
+El sitio lo sirve `deploy/serve.py` (servicio `jmv-www` en el puerto 8090), no
+`python3 -m http.server`: aplica allowlist (el repo no se publica), 404 propia,
+URLs limpias con 301 a la canónica y headers de seguridad.
+
+```bash
+npm test        # 11 tests de consistencia contra el servidor real
+npm run serve   # levantar el sitio en local (PORT=8090 por defecto)
+```
+
+Detalle completo en [`docs/SITIO-TECNICO.md`](docs/SITIO-TECNICO.md).

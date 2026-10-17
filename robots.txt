@@ -1,4 +1,12 @@
 User-agent: *
 Allow: /
 
+# Rutas que no son del sitio (no existen para el visitante y no deben indexarse).
+# El servidor ya responde 404 en ellas; esto es la segunda capa.
+Disallow: /deploy/
+Disallow: /docs/
+Disallow: /data/
+Disallow: /tests/
+Disallow: /gen_
+
 Sitemap: https://jmvconsultores.cl/sitemap.xml

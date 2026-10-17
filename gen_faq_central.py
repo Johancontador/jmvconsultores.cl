@@ -102,6 +102,15 @@ TEMPLATE = """<!DOCTYPE html>
   <meta property="og:description" content="Respuestas claras sobre contabilidad, remuneraciones, finiquitos, impuestos y prevención de riesgos para pymes chilenas." />
   <meta property="og:url" content="https://jmvconsultores.cl/preguntas-frecuentes.html" />
   <meta property="og:locale" content="es_CL" />
+  <meta property="og:site_name" content="JMV Consultores" />
+  <meta property="og:image" content="https://jmvconsultores.cl/assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="JMV Consultores — contabilidad, remuneraciones y asesoría tributaria en Chile" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{total} preguntas frecuentes — JMV Consultores" />
+  <meta name="twitter:description" content="Respuestas claras sobre contabilidad, remuneraciones, finiquitos, impuestos y prevención de riesgos para pymes chilenas." />
+  <meta name="twitter:image" content="https://jmvconsultores.cl/assets/og-image.png" />
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -123,6 +132,7 @@ TEMPLATE = """<!DOCTYPE html>
   <header class="topbar">
     <div class="container topbar__inner">
       <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
+      <a href="https://app.jmvconsultores.cl" class="btn btn--ghost btn--sm" id="btnSistema">Iniciar sesión</a>
       <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
     </div>
   </header>
@@ -175,6 +185,7 @@ TEMPLATE = """<!DOCTYPE html>
       <p class="footer__legal">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
       <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · <a class="footer__faq-link" href="index.html">Inicio</a></p>
     </div>
+    <div class="footer__access" style="margin-top:14px"><a id="btnSistemaFooter" href="https://app.jmvconsultores.cl" style="color:inherit;text-decoration:underline">Acceso clientes al Software →</a></div>
   </footer>
 
   <a class="wa-float" href="https://wa.me/{wa}?text=Hola%2C%20tengo%20una%20consulta" target="_blank" rel="noopener">

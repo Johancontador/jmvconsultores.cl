@@ -1,0 +1,18 @@
+[Unit]
+Description=Sitio estatico jmvconsultores.cl (repo github) en :8090
+After=network.target
+
+[Service]
+Type=simple
+User=johan
+WorkingDirectory=/home/johan/jmv-www
+# deploy/serve.py: allowlist (el repo no se publica), 404 propia,
+# URLs limpias con 301 a la canonica y headers de seguridad.
+ExecStart=/usr/bin/python3 /home/johan/jmv-www/deploy/serve.py
+Environment=PORT=8090
+Environment=HOST=0.0.0.0
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
