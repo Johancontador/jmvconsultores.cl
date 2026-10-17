@@ -1,0 +1,7 @@
+# Los scripts de `ops/` se ejecutan en el VPS (Linux): si el checkout los
+# dejara en CRLF, bash fallaría con «pipefail\r: invalid option name» y el
+# despliegue quedaría a medias. No se usa `* text=auto` a propósito: forzar
+# la renormación de todo el repo reescribiría blobs ya desplegados sin
+# necesidad. Solo se protege lo que corre en el servidor.
+*.sh text eol=lf
+ops/post-receive text eol=lf
