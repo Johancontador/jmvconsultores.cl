@@ -136,19 +136,65 @@ Decisiones tomadas para no romper nada:
 3. El repo `jmv-www` **no se tocó** (tenía cambios sin commitear de una sesión
    anterior; reemplazarlo habría sido destructivo).
 
-**Decisión pendiente del propietario (bloquea el SEO del sitio de marca):**
+**Decisión tomada: A — consolidar en el dominio de marca** (autorizada 2026-10-17).
 
-- **A. Consolidar en el dominio de marca** (recomendado): llevar a `jmv-www` los
-  arreglos técnicos de este trabajo (404 propia, política de robots/sitemap,
-  `noindex` en pantallas internas, tests de consistencia, pie/nav compartidos) y
-  definir ahí las URLs definitivas de servicios. Requiere revisar antes el trabajo
-  sin commitear que existe en ese repo.
-- **B. Mover el sitio corporativo a este repo** y apuntar `jmvconsultores.cl` al
-  contenedor (cambio de infraestructura: un solo sitio que mantener, pero hay que
-  migrar el contenido de las 9 páginas y su FAQ).
-- **C. Dejar ambos** (no recomendado): duplicación de contenido temático entre dos
-  hosts; la única forma sana es mantener `noindex` en uno, que es el estado actual.
+El sitio corporativo sigue en su repo (`jmv-www`), que es el canónico; este repo
+mantiene la app y sus páginas públicas como vista previa `noindex` (§2).
 
-Mientras no se decida, `app.jmvconsultores.cl` sigue siendo la superficie de la
-app y las páginas de §2 quedan como **vista previa no indexable** (útiles para
-revisar el diseño y la estructura antes de migrar).
+### 9.1 Lo hecho en `jmv-www` (3 commits, 2026-10-17)
+
+| Commit | Qué |
+|---|---|
+| `59a73cd` | Se commitea el trabajo pendiente que existía en el servidor: acceso a clientes (`app.jmvconsultores.cl`) en la barra y el pie de las 9 páginas. Antes vivía solo en el disco del VPS. |
+| `50c9dd4` | `deploy/serve.py` reemplaza a `python3 -m http.server`; `404.html` propia; 301 de URLs limpias a la canónica; headers de seguridad; tarjeta social `og-image.png` (1200×630); `tests/sitio.test.mjs`. |
+| `812e4c4` | Arreglo del fondo 3D con `prefers-reduced-motion` y versionado `?v=<sha1>` de css/js. |
+
+Hallazgos que justificaron el cambio:
+
+- **El repositorio se publicaba.** `/.git/config` (con la URL del remoto),
+  `gen_servicios.py`, `docs/`, `deploy/` y `data/` respondían **200** en
+  producción.
+- **La 404 era la del módulo**, sin marca ni enlaces de recuperación.
+- **Los arreglos se perdían al regenerar**: el trabajo pendiente estaba editado
+  a mano sobre HTML generado por `gen_servicios.py` / `gen_faq_central.py`. Ahora
+  el acceso a la app y los metadatos viven en los generadores (verificado: los
+  generadores reproducen los HTML byte a byte).
+- **`bg3d.js` fallaba con `prefers-reduced-motion`**: `resize()` corría antes de
+  inicializar `parts`/`mx` (ReferenceError), y el fondo quedaba en blanco justo
+  para quien pide menos animación.
+- **Cloudflare cachea `.css`/`.js` 4 h** y el navegador por heurística: se vio en
+  vivo (Chrome sirvió un `bg3d.js` viejo). De ahí el `?v=<sha1>`.
+
+Reglas fijadas por `tests/sitio.test.mjs` (12 tests, `npm test`): sitemap↔disco,
+canonical/OG únicos, 404 propia, repo no público, URLs limpias, headers, enlaces
+internos, tarjeta social, acceso a la app, sin listado de directorios y
+versionado de estáticos. Detalle en `jmv-www:docs/SITIO-TECNICO.md`.
+
+### 9.2 Pendiente (requiere root en el VPS)
+
+El servicio sigue arrancando `python3 -m http.server`, así que **en producción**
+todavía no se ven el 404 propio, el allowlist ni los headers: el archivo
+`deploy/jmv-www.service` está versionado y listo, pero copiarlo a
+`/etc/systemd/system/` y reiniciar requiere `sudo`:
+
+```bash
+sudo install -m 644 /home/johan/jmv-www/deploy/jmv-www.service /etc/systemd/system/jmv-www.service
+sudo systemctl daemon-reload && sudo systemctl restart jmv-www
+curl -s -o /dev/null -w "%{http_code}\n" https://jmvconsultores.cl/no-existe   # 404
+```
+
+Ya está en producción (sin necesidad de reinicio): acceso a clientes, tarjeta
+social, `robots.txt` con las rutas no públicas, el fondo 3D arreglado y los
+estáticos versionados. Después del cambio de servicio, `/deploy/`, `/docs/`,
+`/data/` y `/.git/` dejan de responder.
+
+### 9.3 Riesgo residual
+
+- **Copia obsoleta** en `/var/www/jmvconsultores.cl` (la dejaba un bloque de
+  nginx en el 8081, hoy inactivo). El sitio vivo es `/home/johan/jmv-www`. No
+  editarla: si algún día se reactiva nginx, serviría contenido viejo.
+- **Dos túneles** `cloudflared` activos (`cloudflared.service` y
+  `jmv-tunnel.service`); el del sitio es `jmv-tunnel`. Conviene apagar el otro si
+  no tiene un uso concreto.
+- El repo `jmv-www` tiene **3 commits locales sin push** a GitHub: se commiteó en
+  el VPS para no perder el trabajo, no se publicó.
