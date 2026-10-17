@@ -1,24 +1,30 @@
-# JMV Consultores — robots.txt
+# robots.txt — portal de la aplicación (app.jmvconsultores.cl)
 #
-# El sitio corporativo (landing, páginas de servicio, contenido público) es
-# indexable. Esto es HIGIENE de rastreo, NO seguridad: el acceso real a los
-# datos lo impone el servidor (sesión + permisos por empresa) — ver la sección
-# de seguridad de docs/DESPLIEGUE.md.
+# IMPORTANTE: el sitio corporativo canónico es https://jmvconsultores.cl, que se
+# sirve desde OTRO host y tiene su propio robots.txt y sitemap. Este archivo
+# gobierna solo lo que sirve el contenedor de la app.
+#
+# Estas reglas son higiene de rastreo, NO seguridad: el acceso real a los datos
+# lo impone el servidor (sesión + permisos por empresa).
 
 User-agent: *
-# Sitio público
+# La landing se sirve acá (su canonical apunta al dominio de marca).
 Allow: /
 
 # Aplicación privada de clientes y API: fuera del índice.
-# (La app además exige sesión; aquí solo se evita que el rastreador entre.)
 Disallow: /sistema/
 Disallow: /api/
 
-# Nota deliberada: /login.html, /registro.html y las pantallas heredadas
-# (/index.html, /dashboard.html, /informe.html, /libro.html, /proceso.html,
-# /configuracion.html, /exportacion-masiva.html) NO se desautorizan aquí
-# porque llevan <meta name="robots" content="noindex"> en su propio HTML. Si se
-# bloqueara el rastreo, el buscador nunca leería ese noindex: una URL
-# desautorizada pero enlazada puede seguir apareciendo sin contenido.
+# Vistas previas del sitio corporativo: duplican contenido del dominio de marca,
+# así que ni se rastrean ni se indexan (además llevan noindex en su HTML).
+Disallow: /servicios/
+Disallow: /nosotros/
+Disallow: /privacidad/
+Disallow: /cookies/
+Disallow: /terminos/
 
-Sitemap: https://jmvconsultores.cl/sitemap.xml
+# Nota deliberada: /login.html, /registro.html y las pantallas heredadas NO se
+# desautorizan porque llevan <meta name="robots" content="noindex">: si se
+# bloqueara el rastreo, el buscador nunca leería ese noindex.
+
+Sitemap: https://app.jmvconsultores.cl/sitemap.xml

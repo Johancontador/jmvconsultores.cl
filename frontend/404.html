@@ -25,8 +25,9 @@
           <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="38" height="29">
           <span>Sistema Contable<small>JMV Consultores</small></span>
         </a>
-        <nav class="pv-nav" aria-label="Accesos">
-          <a href="/#servicios">Servicios</a>
+        <nav class="pv-nav" aria-label="Secciones del sitio">
+          <a href="/servicios/">Servicios</a>
+          <a href="/nosotros/">Nosotros</a>
           <a href="/#plataforma">Plataforma</a>
           <a href="/#contacto">Contacto</a>
         </nav>
@@ -34,6 +35,17 @@
           <a href="/login.html" class="pv-btn pv-btn--ghost pv-btn--sm">Ingresar al sistema</a>
           <a href="/#contacto" class="pv-btn pv-btn--primary pv-btn--sm">Solicitar asesoría</a>
         </div>
+        <button class="pv-burger" id="pv-burger" aria-expanded="false" aria-controls="pv-drawer" aria-label="Abrir menú">
+          <span aria-hidden="true">☰</span>
+        </button>
+      </div>
+      <div class="pv-drawer" id="pv-drawer">
+        <a href="/servicios/">Servicios</a>
+        <a href="/nosotros/">Nosotros</a>
+        <a href="/#plataforma">Plataforma</a>
+        <a href="/#contacto">Contacto</a>
+        <a href="/login.html">Ingresar al sistema</a>
+        <a href="/registro.html" class="pv-btn pv-btn--primary">Crear cuenta</a>
       </div>
     </div>
   </header>
@@ -56,17 +68,17 @@
 
         <div class="pv-grid pv-grid--3" style="margin-top:var(--pv-s8)">
           <article class="pv-card">
-            <h3 class="pv-h3">Servicios</h3>
+            <h2 class="pv-h3">Servicios</h2>
             <p>Contabilidad, remuneraciones, cumplimiento tributario y acompañamiento mensual para tu empresa.</p>
-            <a class="pv-card__link" href="/#servicios">Ver los servicios →</a>
+            <a class="pv-card__link" href="/servicios/">Ver los servicios →</a>
           </article>
           <article class="pv-card">
-            <h3 class="pv-h3">La plataforma</h3>
+            <h2 class="pv-h3">La plataforma</h2>
             <p>Cómo el RCV del SII se convierte en libros, asientos, reportes y períodos cerrados con auditoría.</p>
             <a class="pv-card__link" href="/#plataforma">Conocer la plataforma →</a>
           </article>
           <article class="pv-card">
-            <h3 class="pv-h3">Ingreso de clientes</h3>
+            <h2 class="pv-h3">Ingreso de clientes</h2>
             <p>Si ya eres cliente, entra con tu usuario. Si no, crea tu cuenta con tu RUT y tu clave SII.</p>
             <a class="pv-card__link" href="/login.html">Ingresar al sistema →</a>
           </article>
@@ -75,17 +87,58 @@
     </section>
   </main>
 
-  <footer class="pv-legal">
+  <footer class="pv-foot">
     <div class="pv-wrap">
-      <div><b>JMV Consultores</b> — Contabilidad, tributación y gestión empresarial</div>
-      <div class="pv-legal__links">
-        <a href="/">Inicio</a>
-        <a href="/#servicios">Servicios</a>
-        <a href="/#plataforma">Plataforma</a>
-        <a href="/#contacto">Contacto</a>
-        <a href="/login.html">Ingreso clientes</a>
+      <div class="pv-foot__cols">
+        <div class="pv-foot__brand">
+          <a class="pv-brand" href="/">
+            <img src="/assets/logo-ink.svg" alt="JMV Consultores" width="34" height="26">
+            <span>Sistema Contable<small>JMV Consultores</small></span>
+          </a>
+          <p>Consultoría contable, tributaria y de gestión para empresas chilenas, con una plataforma conectada al SII.</p>
+        </div>
+        <div>
+          <h2>Servicios</h2>
+          <ul>
+            <li><a href="/servicios/contabilidad/">Contabilidad</a></li>
+            <li><a href="/servicios/remuneraciones/">Remuneraciones</a></li>
+            <li><a href="/servicios/cumplimiento-tributario/">Tributario</a></li>
+            <li><a href="/servicios/asesoria/">Asesoría</a></li>
+            <li><a href="/servicios/emprendedores-pymes/">Pymes</a></li>
+            <li><a href="/servicios/prevencion-de-riesgos/">Prevención de riesgos</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Plataforma</h2>
+          <ul>
+            <li><a href="/#plataforma">Cómo funciona</a></li>
+            <li><a href="/login.html">Ingreso de clientes</a></li>
+            <li><a href="/registro.html">Crear cuenta</a></li>
+            <li><a href="/#faq">Preguntas frecuentes</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Contacto</h2>
+          <ul>
+            <li><a href="https://wa.me/56975752213" target="_blank" rel="noopener">WhatsApp +56 9 7575 2213</a></li>
+            <li><a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></li>
+            <li><a href="/#contacto">Agendar diagnóstico</a></li>
+          </ul>
+          <div class="pv-foot__social" data-social hidden></div>
+        </div>
+      </div>
+      <div class="pv-foot__bottom">
+        <span>© <span data-anio>2026</span> JMV Consultores</span>
+        <span>
+          <a href="/privacidad/">Privacidad</a> ·
+          <a href="/cookies/">Cookies</a> ·
+          <a href="/terminos/">Términos</a>
+        </span>
       </div>
     </div>
   </footer>
+
+  <script src="/shared/sitio-nav.js?v=f7162f83"></script>
+  <script src="/shared/sitio-social.js?v=b3b600f2"></script>
 </body>
 </html>

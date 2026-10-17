@@ -29,7 +29,10 @@ const FRONT = path.resolve(__dirname, '../frontend')
 const leer = (p) => fs.readFileSync(path.join(FRONT, p), 'utf8')
 const existe = (p) => fs.existsSync(path.join(FRONT, p))
 
-const DOMINIO = 'https://jmvconsultores.cl'
+// Este host sirve la app + la landing + vistas previas. El sitio corporativo
+// canónico es otro host (https://jmvconsultores.cl) con su propio robots/sitemap:
+// por eso las vistas previas de acá van con noindex y no se listan.
+const DOMINIO = 'https://app.jmvconsultores.cl'
 /**
  * URL pública → archivo que la sirve, por convención del servidor de estáticos:
  * `/` es la landing y cada ruta con barra final es una carpeta con index.html
@@ -52,6 +55,31 @@ const PRIVADAS = [
 const robots = () => leer('robots.txt')
 const locs = () => [...leer('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])
 
+/** Etiqueta legible de un archivo del sitio (`/servicios/` para su index.html). */
+const etiqueta = (archivo) => {
+  const rel = path.relative(FRONT, archivo).replace(/\\/g, '/')
+  return '/' + rel.replace(/(^|\/)index\.html$/, '$1').replace(/404\.html$/, '404.html')
+}
+
+/**
+ * Todas las páginas que sirve este host con el chrome del sitio: la landing, la
+ * 404 y cada carpeta con index.html (las pantallas heredadas sueltas y
+ * /sistema/ quedan fuera: no forman parte del sitio).
+ */
+const paginasDelSitio = () => {
+  const salida = [path.join(FRONT, 'landing.html'), path.join(FRONT, '404.html')]
+  const recorrer = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!e.isDirectory() || e.name === 'sistema') continue
+      const p = path.join(dir, e.name)
+      if (fs.existsSync(path.join(p, 'index.html'))) salida.push(path.join(p, 'index.html'))
+      recorrer(p)
+    }
+  }
+  recorrer(FRONT)
+  return salida
+}
+
 /* ------------------------------ T1 robots.txt ----------------------------- */
 test('T1: robots.txt abre el sitio público y cierra la app y la API', () => {
   const r = robots()
@@ -60,7 +88,10 @@ test('T1: robots.txt abre el sitio público y cierra la app y la API', () => {
   assert.ok(!/^Disallow: \/$/m.test(r), 'CONTROL: no desautoriza el sitio completo')
   assert.match(r, /^Disallow: \/sistema\/$/m, 'la aplicación privada queda fuera')
   assert.match(r, /^Disallow: \/api\/$/m, 'la API queda fuera del rastreo')
-  assert.match(r, /^Sitemap: https:\/\/jmvconsultores\.cl\/sitemap\.xml$/m, 'apunta al sitemap absoluto')
+  assert.match(r, /^Sitemap: https:\/\/app\.jmvconsultores\.cl\/sitemap\.xml$/m, 'apunta al sitemap absoluto de este host')
+  for (const vista of ['/servicios/', '/nosotros/', '/privacidad/', '/cookies/', '/terminos/']) {
+    assert.ok(r.includes(`Disallow: ${vista}`), `las vistas previas ${vista} no se rastrean`)
+  }
   // Las de acceso llevan noindex en su propio HTML: si además se desautorizaran,
   // el buscador no podría leer ese noindex.
   for (const p of ['login.html', 'registro.html']) {
@@ -99,11 +130,18 @@ test('T3: cada URL del sitemap tiene title, description, canonical y OG propios'
     assert.ok(title && title.trim().length > 15, `${ruta}: título propio y descriptivo («${title || 'sin title'}»)`)
     assert.match(html, /<meta name="description" content="[^"]{50,}"/, `${ruta}: meta description con contenido`)
     assert.ok(!/name="robots" content="noindex/.test(html), `${ruta}: NO está marcada como noindex`)
-    assert.ok(html.includes(`<link rel="canonical" href="${u}">`), `${ruta}: canonical que coincide con el sitemap`)
+    const canonical = (html.match(/<link rel="canonical" href="([^"]+)">/) || [])[1]
+    assert.ok(/^https:\/\//.test(canonical || ''), `${ruta}: canonical absoluto`)
+    // La portada canonicaliza al dominio de marca (decisión previa a este trabajo);
+    // el resto de lo listado se canoniza a sí mismo.
+    if (ruta !== '/') assert.strictEqual(canonical, u, `${ruta}: canonical = ${u}`)
     for (const prop of ['og:title', 'og:description', 'og:url']) {
       assert.ok(html.includes(`property="${prop}"`), `${ruta}: Open Graph ${prop}`)
     }
-    assert.ok(html.includes(`<meta property="og:url" content="${u}">`), `${ruta}: og:url = ${u}`)
+    const ogUrl = (html.match(/<meta property="og:url" content="([^"]+)">/) || [])[1]
+    assert.ok(/^https:\/\//.test(ogUrl || ''), `${ruta}: og:url absoluto`)
+    // Misma excepción que el canonical: la portada se comparte con la URL de marca.
+    if (ruta !== '/') assert.strictEqual(ogUrl, u, `${ruta}: og:url = ${u}`)
     assert.match(html, /<meta name="viewport" content="[^"]*width=device-width/, `${ruta}: viewport móvil`)
   }
 })
@@ -169,7 +207,7 @@ test('T6: la 404 comparte identidad, no se indexa y ofrece salidas reales', () =
   assert.match(html, /href="\/css\/sitio\.css\?v=[a-f0-9]{8}"/, 'el CSS va versionado por contenido')
   assert.ok(html.includes('/assets/logo-ink.svg'), 'usa el logo del sitio')
   assert.ok(!locs().includes(`${DOMINIO}/404.html`), 'no se lista en el sitemap')
-  for (const salida of ['href="/"', 'href="/#contacto"', 'href="/#servicios"', 'href="/login.html"']) {
+  for (const salida of ['href="/"', 'href="/#contacto"', 'href="/servicios/"', 'href="/login.html"']) {
     assert.ok(html.includes(salida), `ofrece la salida ${salida}`)
   }
 })
@@ -185,10 +223,10 @@ test('T7: backend/index.js monta el 404 después de las rutas y antes del error'
 })
 
 /* ------------- T8 chrome compartido entre las páginas públicas ------------- */
-test('T8: todas las páginas públicas comparten navegación, pie y menú móvil', () => {
-  for (const u of locs()) {
-    const ruta = u.slice(DOMINIO.length) || '/'
-    const html = fs.readFileSync(archivoDe(ruta), 'utf8')
+test('T8: todas las páginas del sitio comparten navegación, pie y menú móvil', () => {
+  for (const archivo of paginasDelSitio()) {
+    const ruta = etiqueta(archivo)
+    const html = fs.readFileSync(archivo, 'utf8')
     assert.ok(html.includes('id="pv-burger"'), `${ruta}: botón de menú móvil`)
     // A ≤980 px el CSS oculta la nav horizontal: sin drawer no hay navegación.
     assert.ok(html.includes('id="pv-drawer"'), `${ruta}: drawer del menú móvil`)
@@ -205,15 +243,32 @@ test('T8: todas las páginas públicas comparten navegación, pie y menú móvil
 })
 
 /* ---------- T9 anti-caché en TODAS las páginas (no solo las 3) ----------- */
-test('T9: toda referencia local .css/.js de las páginas públicas va versionada', () => {
+test('T9: toda referencia local .css/.js de las páginas del sitio va versionada', () => {
   let revisadas = 0
-  for (const u of locs()) {
-    const ruta = u.slice(DOMINIO.length) || '/'
-    const html = fs.readFileSync(archivoDe(ruta), 'utf8')
+  for (const archivo of paginasDelSitio()) {
+    const ruta = etiqueta(archivo)
+    const html = fs.readFileSync(archivo, 'utf8')
     for (const m of html.matchAll(/(?:href|src)="(\/(?:css|shared|sistema|assets)\/[^"?]+\.(?:css|js))(\?v=[a-f0-9]{8})?"/g)) {
       assert.ok(m[2], `${ruta}: ${m[1]} sin ?v=<sha1> — corre «npm run seed:v»`)
       revisadas++
     }
   }
   assert.ok(revisadas >= 10, `se revisaron ${revisadas} referencias`)
+})
+
+/* --------- T10 las vistas previas no compiten con el sitio canónico -------- */
+test('T10: las vistas previas del sitio corporativo son noindex y no se listan', () => {
+  const urls = locs()
+  const vistas = paginasDelSitio().filter((a) => !a.endsWith('landing.html') && !a.endsWith('404.html'))
+  assert.ok(vistas.length >= 10, `hay ${vistas.length} vistas previas`)
+  for (const archivo of vistas) {
+    const ruta = etiqueta(archivo)
+    const html = fs.readFileSync(archivo, 'utf8')
+    assert.match(html, /<meta name="robots" content="noindex[^"]*">/, `${ruta}: noindex (no compite con jmvconsultores.cl)`)
+    assert.ok(!urls.some((u) => u.endsWith(ruta)), `${ruta}: no está en el sitemap`)
+    // El canonical no puede apuntar a una ruta que en ese host no existe: se
+    // declara la URL real que sirve la página.
+    const canonical = (html.match(/<link rel="canonical" href="([^"]+)">/) || [])[1]
+    assert.strictEqual(canonical, `${DOMINIO}${ruta}`, `${ruta}: canonical al host que la sirve`)
+  }
 })

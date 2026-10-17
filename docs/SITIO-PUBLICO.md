@@ -1,8 +1,12 @@
 # Sitio público — arquitectura, URLs y pendientes
 
-> Estado: **implementado y verificado** (2026-10-17). Este documento explica cómo
-> está armado el sitio corporativo, qué decisiones se tomaron y qué falta por
-> completar. El sitio privado (`/sistema/`) no se toca desde acá.
+> Estado: **implementado y desplegado** (2026-10-17). Este documento explica cómo
+> está armado el sitio, qué decisiones se tomaron y qué falta por completar. El
+> sitio privado (`/sistema/`) no se toca desde acá.
+>
+> ⚠️ **Leer §9 primero: hay DOS sitios.** El corporativo canónico
+> (`https://jmvconsultores.cl`) lo sirve otro host y ya existía; lo de este repo
+> se publica en `https://app.jmvconsultores.cl` y va `noindex`.
 
 ## 1. Decisiones de arquitectura
 
@@ -101,16 +105,50 @@ todas las páginas** (antes era una lista fija y las nuevas quedaban sin versió
   todas las páginas apuntan ahí. Si se quiere `/contacto/`, hay que mover el JS
   del formulario a un archivo compartido.
 
-## 8. Validación en producción (cuando se autorice el despliegue)
+## 8. Validación en producción
 
 ```bash
-npm run seed:v && npm test          # 491 tests
-git push vps master                  # hook → build desacoplado
-# luego, contra el dominio:
-curl -sI https://jmvconsultores.cl/servicios/ | head -1
-curl -s  https://jmvconsultores.cl/sitemap.xml | grep -c '<loc>'
-curl -s  https://jmvconsultores.cl/robots.txt
+npm run seed:v && npm test           # suite completa
+git push vps master                   # hook → build desacoplado
+# contra el host que sirve este repo:
+curl -sI https://app.jmvconsultores.cl/servicios/ | head -1
+curl -s  https://app.jmvconsultores.cl/sitemap.xml | grep -c '<loc>'
+curl -s  https://app.jmvconsultores.cl/robots.txt
 ```
 
-Después, en Search Console: verificar la propiedad del dominio y enviar
-`sitemap.xml`. La indexación no es inmediata ni está garantizada.
+## 9. Dos sitios: hallazgo del despliegue (2026-10-17)
+
+Al desplegar se verificó que **el dominio de marca no lo sirve este repo**:
+
+| Host | Quién sirve | Qué publica |
+|---|---|---|
+| `https://jmvconsultores.cl` | servicio `jmv-www` (`python3 -m http.server`, dir `/home/johan/jmv-www`, repo **propio** con el remoto de GitHub) | Sitio corporativo con 9 páginas (`index`, `contabilidad-completa`, `remuneraciones`, `acompanamiento-contable`, `asesoria-tributaria`, `emprendedores-pymes`, `respaldo-confidencialidad`, `prevencion-riesgos`, `preguntas-frecuentes`), su propio `robots.txt` y `sitemap.xml` |
+| `https://app.jmvconsultores.cl` | este repo (contenedor `iva-mensual`) | La app + la landing + las 11 páginas de este trabajo |
+
+Decisiones tomadas para no romper nada:
+
+1. Las 11 páginas de este repo llevan **`noindex, nofollow`** y su `canonical`
+   apunta a la URL real que las sirve (`app.jmvconsultores.cl`). Antes declaraban
+   canónicos a `jmvconsultores.cl/servicios/…`, que en ese host **no existen** (404):
+   eso se corrigió en el mismo despliegue.
+2. `robots.txt` de este host desautoriza esas rutas y su `sitemap.xml` lista solo
+   la portada: así no se compite ni se duplica el sitio de marca.
+3. El repo `jmv-www` **no se tocó** (tenía cambios sin commitear de una sesión
+   anterior; reemplazarlo habría sido destructivo).
+
+**Decisión pendiente del propietario (bloquea el SEO del sitio de marca):**
+
+- **A. Consolidar en el dominio de marca** (recomendado): llevar a `jmv-www` los
+  arreglos técnicos de este trabajo (404 propia, política de robots/sitemap,
+  `noindex` en pantallas internas, tests de consistencia, pie/nav compartidos) y
+  definir ahí las URLs definitivas de servicios. Requiere revisar antes el trabajo
+  sin commitear que existe en ese repo.
+- **B. Mover el sitio corporativo a este repo** y apuntar `jmvconsultores.cl` al
+  contenedor (cambio de infraestructura: un solo sitio que mantener, pero hay que
+  migrar el contenido de las 9 páginas y su FAQ).
+- **C. Dejar ambos** (no recomendado): duplicación de contenido temático entre dos
+  hosts; la única forma sana es mantener `noindex` en uno, que es el estado actual.
+
+Mientras no se decida, `app.jmvconsultores.cl` sigue siendo la superficie de la
+app y las páginas de §2 quedan como **vista previa no indexable** (útiles para
+revisar el diseño y la estructura antes de migrar).
