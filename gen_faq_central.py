@@ -14,6 +14,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dat
 import faq_contabilidad, faq_remuneraciones, faq_acompanamiento
 import faq_tributaria, faq_pymes, faq_respaldo, faq_prevencion
 
+# Versionado anti-caché: css/js se referencian con ?v=<sha1 del contenido>.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from deploy.assets import versionar_html
+
 WA = "56975752213"
 
 SECCIONES = [
@@ -244,7 +248,7 @@ def build():
         wa=WA,
     )
     with open("preguntas-frecuentes.html", "w", encoding="utf-8") as f:
-        f.write(html_out)
+        f.write(versionar_html(html_out))
     print(f"OK preguntas-frecuentes.html — {TOTAL} FAQ ({len(DESTACADAS)} destacadas)")
 if __name__ == "__main__":
     build()

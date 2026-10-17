@@ -23,8 +23,9 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     if (reduced) drawStatic();
   }
-  resize();
-  window.addEventListener("resize", resize);
+  // resize() NO se llama acá: drawStatic → drawScene usa `parts`, `figs` y `N`,
+  // que se declaran más abajo (zona muerta temporal → ReferenceError con
+  // prefers-reduced-motion). Se arranca después de inicializarlos.
 
   /* ── Colores de la marca (logo JMV: celestes y azul marino) ── */
   const COLORS = ["143, 199, 238", "46, 134, 200", "70, 105, 180"];
@@ -199,6 +200,12 @@
       startLoop();
     }
   });
+
+  // Arranque del canvas DESPUÉS de declarar todo lo que usa drawStatic:
+  // parts, figs, N, mx/my/t. Con prefers-reduced-motion se dibuja un frame
+  // estático acá; antes lanzaba ReferenceError y el fondo quedaba vacío.
+  resize();
+  window.addEventListener("resize", resize);
 
   startLoop();
 })();

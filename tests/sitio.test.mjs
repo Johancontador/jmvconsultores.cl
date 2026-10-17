@@ -236,3 +236,41 @@ test('T11: sin listado de directorios', async () => {
   const raiz = await pedir('/')
   assert.doesNotMatch(await raiz.text(), /Directory listing for/, 'la raíz sirve index.html')
 })
+
+/* ── T12 ──────────────────────────────────────────────────────────────────── */
+test('T12: css/js versionados con el sha1 del contenido', async () => {
+  const { createHash } = await import('node:crypto')
+  const versionables = ['css/styles.css', 'js/main.js', 'js/bg3d.js']
+  const hashes = {}
+  for (const rel of versionables) {
+    hashes[rel] = createHash('sha1').update(fs.readFileSync(path.join(ROOT, rel))).digest('hex').slice(0, 8)
+  }
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+    // Toda página usa el CSS y main.js; la 404 no carga el canvas 3D.
+    for (const obligatorio of ['css/styles.css', 'js/main.js']) {
+      assert.ok(html.includes(obligatorio), `${f} no referencia ${obligatorio}`)
+    }
+    for (const rel of versionables) {
+      // Acepta css/styles.css?v=… y /css/styles.css?v=… (la 404 usa rutas absolutas).
+      const marca = rel + '?v='
+      let desde = 0
+      let referencias = 0
+      while (true) {
+        const pos = html.indexOf(rel, desde)
+        if (pos === -1) break
+        desde = pos + rel.length
+        // solo cuenta si es una referencia de href/src
+        if (!/(href|src)="\/?$/.test(html.slice(Math.max(0, pos - 12), pos))) continue
+        referencias++
+        const sufijo = html.slice(pos, pos + marca.length)
+        assert.equal(sufijo, marca, `${f}: ${rel} debe llevar ?v=<sha1> (corre deploy/versionar.py)`)
+        assert.equal(html.slice(pos + marca.length, pos + marca.length + 8), hashes[rel],
+          `${f}: el ?v= de ${rel} está desactualizado (corre deploy/versionar.py)`)
+      }
+      if (referencias === 0) assert.equal(rel, 'js/bg3d.js', `${f} no referencia ${rel}`)
+    }
+  }
+  const r = await pedir('/css/styles.css?v=' + hashes['css/styles.css'])
+  assert.equal(r.status, 200, 'el CSS con ?v= se sirve')
+})

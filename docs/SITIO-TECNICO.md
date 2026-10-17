@@ -58,6 +58,7 @@ Levanta el servidor real en un puerto efímero y le pide cada página por HTTP:
 | T9 | `og:image` real (PNG 1200×630) + `twitter:card` en todas las páginas |
 | T10 | todas las páginas llevan a la app (`app.jmvconsultores.cl`) |
 | T11 | sin listado de directorios |
+| T12 | `css`/`js` referenciados con `?v=<sha1>` del contenido |
 
 ## Generadores
 
@@ -85,6 +86,23 @@ google-chrome --headless --hide-scrollbars --force-device-scale-factor=1 \
 T9 comprueba que el PNG existe, mide 1200×630 y que todas las páginas lo
 declaran en `og:image`.
 
+## Anti-caché de css/js (obligatorio)
+
+Cloudflare cachea `.css` y `.js` durante **4 horas** y el navegador los reutiliza
+por heurística. Un cambio de estilos puede convivir con HTML nuevo y romper el
+layout durante horas (pasó al verificar este mismo despliegue: Chrome sirvió un
+`bg3d.js` viejo y el fondo 3D fallaba).
+
+Solución: cada referencia lleva `?v=<sha1 del contenido>`. Cambia el archivo,
+cambia la URL, se descarga de nuevo.
+
+```bash
+python3 deploy/versionar.py     # reescribe ?v= en todos los .html
+```
+
+Los generadores aplican el mismo helper al escribir, así que regenerar nunca
+pierde el versionado. T12 falla si se toca el CSS/JS y no se corre el script.
+
 ## Desplegar
 
 El sitio se sirve desde el working tree del repo: no hay build.
@@ -100,6 +118,13 @@ curl -sI https://jmvconsultores.cl/ | head -5
 
 El 404, los headers y los redirects no necesitan reload de nginx: los aplica
 el proceso del sitio.
+
+## Revisión en navegador real
+
+La suite es HTTP, no de navegador. Para verificar layout y consola se usó Chrome
+headless (CDP) sobre el servidor local, en 390 px y 1366 px: sin desbordes, sin
+errores de consola y con el canvas de fondo pintando tanto con movimiento normal
+como con `prefers-reduced-motion`.
 
 ## Nota sobre la copia antigua en `/var/www/jmvconsultores.cl`
 

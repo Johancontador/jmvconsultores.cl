@@ -16,6 +16,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "dat
 import faq_contabilidad, faq_remuneraciones, faq_acompanamiento
 import faq_tributaria, faq_pymes, faq_respaldo, faq_prevencion
 
+# Versionado anti-caché: css/js se referencian con ?v=<sha1 del contenido>.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from deploy.assets import versionar_html
+
 FAQ_DATA = {
     "contabilidad-completa": faq_contabilidad.FAQS,
     "remuneraciones": faq_remuneraciones.FAQS,
@@ -858,7 +862,7 @@ def build():
         )
         fname = page["file"] if page["file"].endswith(".html") else page["file"] + ".html"
         with open(fname, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(versionar_html(content))
         print(f"OK {fname} — {len(page['services'])} servicios")
 
 if __name__ == "__main__":
