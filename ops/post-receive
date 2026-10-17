@@ -1,0 +1,55 @@
+#!/bin/bash
+# post-receive — despliegue de iva-mensual (Docker).
+#
+# Instalación (en el VPS):
+#   install -m 755 ops/post-receive /home/johan/repos/iva-mensual.git/hooks/post-receive
+#
+# Qué hace y por qué:
+#   1. `git checkout -f master` sobre el árbol de trabajo del contenedor
+#      (GIT_WORK_TREE=/home/johan/apps/iva-mensual — ese árbol NO es un repo).
+#   2. Reconstruye SOLO si el push toca código: un commit de solo documentación
+#      no tiene por qué reiniciar el contenedor.
+#   3. Lanza el build DESACOPLADO (setsid). El hook anterior construía en primer
+#      plano con su stdout en el pipe de la sesión SSH: si el cliente
+#      desaparecía a mitad del build, el proceso quedaba colgado escribiendo a
+#      un pipe muerto, el contenedor no se recreaba y la imagen quedaba vieja,
+#      en silencio. Ocurrió el 2026-10-16.
+#
+# El log es la fuente de verdad:
+#   /home/johan/deploy-hook.log    qué decidió el hook en cada push
+#   /home/johan/deploy-build.log   build, arranque y verificación de salud
+
+set -uo pipefail
+
+export GIT_DIR=/home/johan/repos/iva-mensual.git
+export GIT_WORK_TREE=/home/johan/apps/iva-mensual
+LOG=/home/johan/deploy-hook.log
+BUILD=/home/johan/deploy-build.log
+ROLLBACK=/home/johan/rollback-target.txt
+
+# El push entrega "<old> <new> <ref>" por stdin (solo interesa master).
+OLD=
+NEW=
+while read -r old new ref; do
+  [ "$ref" = "refs/heads/master" ] && { OLD=$old; NEW=$new; }
+done
+[ -n "${NEW:-}" ] || exit 0
+
+{
+  echo "===== $(date -Is) push → $(git rev-parse --short "$NEW") (antes $(git rev-parse --short "$OLD"))"
+} >>"$LOG" 2>&1
+
+if ! git checkout -f master >>"$LOG" 2>&1; then
+  echo "FALLO: el checkout -f no se pudo aplicar; el contenedor queda como estaba" >>"$LOG"
+  exit 0
+fi
+
+if git diff --name-only "$OLD" "$NEW" | grep -qvE '^(docs/|.*\.md$)'; then
+  echo "código nuevo → rebuild desacoplado (detalle en $BUILD)" >>"$LOG"
+  echo "$OLD" >"$ROLLBACK"
+  setsid nohup bash "$GIT_WORK_TREE/ops/deploy.sh" >>"$BUILD" 2>&1 </dev/null &
+else
+  echo "solo documentación → NO se reconstruye el contenedor" >>"$LOG"
+fi
+
+exit 0
