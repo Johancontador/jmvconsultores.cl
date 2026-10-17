@@ -12,8 +12,12 @@ process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] Promesa rechazada sin capturar:', reason)
 })
 
+// La instancia se guarda: la reanudación de trabajos del arranque la necesita
+// como parámetro (antes solo se requería el módulo por su efecto de migración).
+let db
+
 try {
-  require('./db')
+  db = require('./db')
 } catch (err) {
   console.error('No se pudo inicializar la base de datos:', err.message)
   console.error(err.stack)
@@ -110,7 +114,11 @@ app.listen(PORT, () => {
   })
   // BLOQUE 5 (riesgos): reanudación de la sincronización diaria pendiente del
   // día (crash a mitad). Idempotente; sin pendientes no hace nada.
-  require('./core/sync-diaria').reanudarSyncDiaria().catch((err) => {
+  // Durante meses se llamó SIN la BD: la función espera `db` como primer
+  // argumento, así que reventaba siempre en `jobsP.listar(db, …)` con
+  // «Cannot read properties of undefined (reading 'prepare')» y el `.catch`
+  // lo disfrazaba de aviso no fatal — la reanudación nunca ocurrió.
+  require('./core/sync-diaria').reanudarSyncDiaria(db).catch((err) => {
     console.error('[JOBS] reanudación sync-diaria falló (no fatalo):', err.message)
   })
 })

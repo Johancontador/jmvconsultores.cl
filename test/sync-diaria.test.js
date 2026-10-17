@@ -196,3 +196,26 @@ test('T4: MAX_EMPRESAS — empresas sobrantes quedan para la próxima corrida', 
   assert.ok(r.procesadas <= 3, 'procesa sin romper')
   sync.MAX_EMPRESAS = previo
 })
+
+// ========== T5: el arranque reanuda CON la BD (regresión del arg ausente) ==========
+
+/**
+ * El `.catch` del arranque etiqueta el fallo como «no fatal», así que un call
+ * site mal formado no se nota nunca: durante meses se llamó
+ * `reanudarSyncDiaria()` sin argumentos, la función espera `db` primero y
+ * reventaba siempre en `jobsP.listar(db, …)` («Cannot read properties of
+ * undefined (reading 'prepare')») → **la reanudación jamás ocurrió** y quedó
+ * tapada por el aviso. Los tests T1–T4 no podían verlo porque llaman a la
+ * función directamente, con la BD. Este test falla si el arranque vuelve a
+ * llamarla sin la BD (se comprobó que falla con el código anterior).
+ */
+test('T5: el arranque pasa la BD a reanudarSyncDiaria', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../backend/index.js'), 'utf8')
+  const llamada = src.match(/\.reanudarSyncDiaria\(([^)]*)\)/)
+  assert.ok(llamada, 'el arranque llama a reanudarSyncDiaria')
+  const args = llamada[1].trim()
+  assert.ok(args.length > 0, `debe pasar la BD como primer argumento (recibido: «${args}»)`)
+  assert.ok(!args.startsWith('{'), 'el primer argumento es la BD, no las opciones')
+  assert.ok(/require\(['"]\.\/db['"]\)/.test(src), 'la BD se obtiene del módulo ./db')
+  assert.ok(/^\s*(let|const|var)\s+db\b/m.test(src), 'la instancia de la BD se guarda en una variable')
+})
