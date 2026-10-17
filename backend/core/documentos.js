@@ -239,7 +239,23 @@ function ingestarBatch(db, { empresaId, usuarioId, tipoFlujo, periodo, documento
  * Devuelve página + total + sumas del filtro completo + conteo por estado
  * (mismos filtros salvo el estado) para las pestañas de la UI.
  */
-function listar(db, { empresaId, periodo = null, tipoFlujo = null, estado = null, tipoDoc = null, rut = null, texto = null, cuentaId = null, limit = 200, offset = 0 }) {
+/**
+ * Columnas ordenables de la bandeja (LISTA BLANCA: el nombre nunca llega al
+ * SQL — un `orden` desconocido cae al orden por id). El folio se castea porque
+ * es TEXT y "101" ordenaría antes que "9".
+ */
+const ORDEN_BANDEJA = {
+  tipo_doc: 'd.tipo_doc',
+  folio: 'CAST(d.folio AS INTEGER)',
+  fecha_docto: 'd.fecha_docto',
+  razon_social: 'd.razon_social',
+  rut_contraparte: 'd.rut_contraparte',
+  monto_neto: 'd.monto_neto',
+  monto_iva: 'd.monto_iva',
+  monto_total: 'd.monto_total',
+}
+
+function listar(db, { empresaId, periodo = null, tipoFlujo = null, estado = null, tipoDoc = null, rut = null, texto = null, cuentaId = null, orden = null, dir = null, limit = 200, offset = 0 }) {
   const where = ['d.empresa_id = ?']
   const params = [empresaId]
   if (periodo) { where.push('d.periodo_ingesta = ?'); params.push(periodo) }
@@ -270,9 +286,13 @@ function listar(db, { empresaId, periodo = null, tipoFlujo = null, estado = null
   `).get(...params)
 
   const total = sumas.n
+  // Orden de servidor: abarca TODO el filtro (no solo la página) y usa
+  // desempate por id para que la paginación sea estable entre páginas.
+  const columnaOrden = ORDEN_BANDEJA[orden] || 'd.id'
+  const sentido = String(dir || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC'
   const documentos = db.prepare(`
     ${SELECT_BASE} WHERE ${whereSql}
-    ORDER BY d.id DESC
+    ORDER BY ${columnaOrden} ${sentido}, d.id DESC
     LIMIT ? OFFSET ?
   `).all(...params, Math.min(Number(limit) || 200, 1000), Number(offset) || 0)
 

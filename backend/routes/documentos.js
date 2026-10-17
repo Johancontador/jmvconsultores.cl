@@ -43,6 +43,8 @@ router.get('/empresas/:empresaId/documentos', requirePermiso('documentos:ver'), 
       rut: req.query.rut || null,
       texto: req.query.texto || null,
       cuentaId: req.query.cuenta_id ? Number(req.query.cuenta_id) : null,
+      orden: req.query.orden || null,
+      dir: req.query.dir || null,
       limit: req.query.limit,
       offset: req.query.offset,
     })

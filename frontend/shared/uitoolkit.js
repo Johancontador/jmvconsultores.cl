@@ -162,10 +162,7 @@
 
     const head = st.columnas.map((c) => {
       const ordenable = c.orden !== false
-      // En modo servidor la vista solo trae una página: el clique reordena esa
-      // página, no el filtro completo, así que el título lo dice y aria-sort
-      // no anuncia un orden global que no existe.
-      const extra = ordenable ? (st.servidor ? ' aria-sort="none" title="Ordenar solo esta página"' : ' aria-sort="none"') : ''
+      const extra = ordenable ? ' aria-sort="none"' : ''
       return `<th class="${c.num ? 'num' : ''} ${ordenable ? 'th-sort' : ''}" data-k="${esc(c.key)}"${extra}>${esc(c.label)}</th>`
     }).join('')
 
@@ -193,6 +190,12 @@
 
     st.mount.querySelectorAll('th.th-sort').forEach((th) => th.addEventListener('click', () => {
       const k = th.dataset.k
+      // Con paginación de servidor el orden NO se aplica en el cliente: se pide
+      // al backend (así el orden abarca todo el filtro y no solo la página).
+      if (st.servidor && typeof st.servidor.onOrden === 'function') {
+        const mismo = st.servidor.orden === k
+        return st.servidor.onOrden(k, mismo && st.servidor.dir === 'asc' ? 'desc' : 'asc')
+      }
       if (st.sortKey === k) st.sortDir = st.sortDir === 'asc' ? 'desc' : 'asc'
       else { st.sortKey = k; st.sortDir = 'asc' }
       pintar()
@@ -200,14 +203,19 @@
 
     function pintar() {
       const filas = filtrar(st)
+      // El orden vigente: el que pidió la vista (servidor, vía onOrden) o el
+      // local del cliente. Sin `onOrden` el modo servidor sigue ordenando en
+      // el cliente, así que aria-sort debe reflejar ese orden y no ninguno.
+      const conOrdenServidor = !!(st.servidor && typeof st.servidor.onOrden === 'function')
+      const claveOrden = conOrdenServidor ? st.servidor.orden : st.sortKey
+      const sentidoOrden = conOrdenServidor ? st.servidor.dir : st.sortDir
       st.mount.querySelectorAll('th.th-sort').forEach((th) => {
-        th.classList.toggle('asc', th.dataset.k === st.sortKey && st.sortDir === 'asc')
-        th.classList.toggle('desc', th.dataset.k === st.sortKey && st.sortDir === 'desc')
-        // Fuera del modo servidor, aria-sort refleja el orden real del conjunto.
-        // Con paginación de servidor el orden es solo de la página visible: se
-        // deja "none" para no anunciar un orden que el filtro completo no tiene.
-        th.setAttribute?.('aria-sort', !st.servidor && th.dataset.k === st.sortKey
-          ? (st.sortDir === 'asc' ? 'ascending' : 'descending') : 'none')
+        const activa = !!claveOrden && th.dataset.k === claveOrden
+        th.classList.toggle('asc', activa && sentidoOrden === 'asc')
+        th.classList.toggle('desc', activa && sentidoOrden === 'desc')
+      // Con orden de servidor el orden abarca todo el filtro (desempate por id
+      // en el backend), así que aria-sort puede anunciarlo sin mentir.
+        th.setAttribute?.('aria-sort', activa ? (sentidoOrden === 'asc' ? 'ascending' : 'descending') : 'none')
       })
       // B3: con la casilla de agrupar activa, la paginación se omite (las
       // listas objetivo caben) y CADA grupo conserva el orden del filtrado.

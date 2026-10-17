@@ -388,6 +388,11 @@ const DOC_COLUMNAS = [
   { key: 'cuenta', label: 'Cuenta', orden: false, valor: (d) => (d.cuenta_codigo ? `${d.cuenta_codigo} ${d.cuenta_nombre || ''}`.trim() : '—') },
 ]
 
+/** Etiqueta legible de la columna de orden (la key del backend no va al usuario). */
+function docEtiquetaOrden(clave) {
+  return (DOC_COLUMNAS.find((c) => c.key === clave) || {}).label || clave
+}
+
 function docEstadoCanonico(estado) {
   const v = String(estado ?? '')
   return v === 'REVISIÓN' ? 'REVISION' : v
@@ -406,6 +411,10 @@ function docFiltrosDeURL() {
     cuenta: dato('cuenta'),
     texto: dato('texto'),
     rut: dato('rut'),
+    // Orden de servidor (columna + sentido): vacío = orden por id descendente.
+    // Una columna que no existe en la tabla se descarta (la URL es libre).
+    orden: DOC_COLUMNAS.some((c) => c.key === dato('orden') && c.orden !== false) ? dato('orden') : '',
+    dir: dato('dir') === 'asc' ? 'asc' : (dato('dir') === 'desc' ? 'desc' : ''),
     pagina: (() => {
       // ?p=abc no debe dejar la página en NaN (fetch con offset "NaN").
       const n = Number(q.get('p') || 1)
@@ -424,6 +433,7 @@ function docHash(f) {
   if (f.cuenta) q.set('cuenta', f.cuenta)
   if (f.texto) q.set('texto', f.texto)
   if (f.rut) q.set('rut', f.rut)
+  if (f.orden) { q.set('orden', f.orden); q.set('dir', f.dir || 'asc') }
   if (f.pagina > 1) q.set('p', String(f.pagina))
   return `#documentos?${q.toString()}`
 }
@@ -447,6 +457,7 @@ function docParametros(f, { limit = DOC_POR_PAGINA, offset = (Math.max(1, f.pagi
   if (f.cuenta) qs.set('cuenta_id', f.cuenta)
   if (f.texto) qs.set('texto', f.texto)
   if (f.rut) qs.set('rut', f.rut)
+  if (f.orden) { qs.set('orden', f.orden); qs.set('dir', f.dir || 'asc') }
   return qs
 }
 
@@ -918,7 +929,7 @@ VIEWS.documentos = {
         + ` · IVA <b class="mono">${fmtM(s.iva)}</b>`
         + ` · total <b class="mono">${fmtM(s.total)}</b>`
         // Sin documentos no hay tabla: la nota de totales/orden sobra.
-        + (total ? `<span class="doc-resumen-nota">Totales calculados por el servidor sobre el filtro completo${total > mostradas ? ` · la tabla muestra ${mostradas}` : ''} · ordenar por columna reordena solo esta página</span>` : '')
+        + (total ? `<span class="doc-resumen-nota">Totales calculados por el servidor sobre el filtro completo${total > mostradas ? ` · la tabla muestra ${mostradas}` : ''} · el orden abarca todo el filtro${f.orden ? ` (${esc(docEtiquetaOrden(f.orden))} ${f.dir === 'desc' ? '↓' : '↑'})` : ''}</span>` : '')
     }
 
     function montarTabla(mount, total, paginas, filas, sumas) {
@@ -935,6 +946,19 @@ VIEWS.documentos = {
           total,
           pagina: f.pagina,
           paginas,
+          // Orden de SERVIDOR: UITabla no reordena la página, pide otro orden
+          // (con el desempate por id de core/documentos.js la paginación es
+          // estable, así que aria-sort puede anunciar el orden real).
+          orden: f.orden || null,
+          dir: f.dir || null,
+          onOrden: (k, d) => {
+            f.orden = k
+            f.dir = d
+            f.pagina = 1
+            window._docFiltros = { ...f }
+            docSincronizarURL(f)
+            cargar()
+          },
           onPagina: (n) => { f.pagina = n; docSincronizarURL(f); cargar() },
         },
         vacio: 'Sin documentos en esta página.',
@@ -1036,7 +1060,7 @@ VIEWS.documentos = {
     conectarBusqueda('doc-rut', 'rut')
 
     document.getElementById('doc-limpiar')?.addEventListener('click', () => {
-      Object.assign(f, { estado: '', flujo: '', tipo: '', cuenta: '', texto: '', rut: '', pagina: 1 })
+      Object.assign(f, { estado: '', flujo: '', tipo: '', cuenta: '', texto: '', rut: '', orden: '', dir: '', pagina: 1 })
       window._docFiltros = { ...f }
       for (const [id, v] of [['doc-flujo', ''], ['doc-tipo', ''], ['doc-cuenta', ''], ['doc-buscar', ''], ['doc-rut', '']]) setValor(id, v)
       pintarChips()

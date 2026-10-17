@@ -221,6 +221,21 @@ test('B1: pide el período global con limit/offset de servidor y refleja filtros
   assert.strictEqual(env.sandbox.docFiltrosDeURL().pagina, 1)
   env.location.hash = '#documentos?p=3'
   assert.strictEqual(env.sandbox.docFiltrosDeURL().pagina, 3)
+
+  // Orden de servidor en la URL (compartible): columna + sentido.
+  env.location.hash = '#documentos?estado=&orden=monto_total&dir=desc'
+  const conOrden = env.sandbox.docFiltrosDeURL()
+  assert.strictEqual(conOrden.orden, 'monto_total')
+  assert.strictEqual(conOrden.dir, 'desc')
+  // ?dir basura no rompe: cae al orden por defecto del backend.
+  env.location.hash = '#documentos?orden=monto_total&dir=xx'
+  assert.strictEqual(env.sandbox.docFiltrosDeURL().dir, '')
+  // Columna desconocida (URL libre) se descarta: nunca se pinta ni se envía.
+  env.location.hash = '#documentos?orden=drop%20table&dir=asc'
+  assert.strictEqual(env.sandbox.docFiltrosDeURL().orden, '')
+  // La columna de estado no es ordenable: tampoco se acepta por URL.
+  env.location.hash = '#documentos?orden=estado'
+  assert.strictEqual(env.sandbox.docFiltrosDeURL().orden, '')
 })
 
 test('B4: página 2 pide offset 50 y conserva el estado', async () => {
@@ -269,6 +284,7 @@ test('B3: totales del filtro completo (sumas), no la suma de la página', async 
   assert.match(html, /Totales del filtro/)
   assert.match(html, /no es la suma de esta página/)
   assert.match(html, /las NC restan/, 'aclara por qué el pie no calza con las filas de NC')
+  assert.match(html, /el orden abarca todo el filtro/, 'el orden ya no es solo de la página')
 })
 
 test('B3c: cabecera, filas y pie cubren las mismas columnas (RUT incluido)', async () => {
@@ -475,18 +491,53 @@ test('B10: accesibilidad de tabla, resumen y panel', () => {
   assert.match(fuenteVista, /aria-label="Más acciones/, 'menú con etiqueta')
 })
 
-test('B10c: con paginación de servidor el orden es de página (aria-sort honesto)', () => {
+test('B10c: con paginación de servidor el orden se pide al backend (aria-sort real)', () => {
   const env = crearSandbox()
   const mount = env.el()
-  env.sandbox.UITabla.montar({
+  const pedidos = []
+  const clics = []
+  let attrs = []
+  // El sandbox no trae nodos reales: se simula el <th> para poder cliquearlo.
+  const th = {
+    dataset: { k: 'monto_total' },
+    classList: { toggle() {} },
+    setAttribute: (n, v) => attrs.push([n, v]),
+    addEventListener: (ev, fn) => { if (ev === 'click') clics.push(fn) },
+  }
+  mount.querySelectorAll = (sel) => (String(sel).includes('th.th-sort') ? [th] : [])
+  const servidor = { total: 120, pagina: 1, paginas: 3, onPagina() {}, onOrden: (k, d) => pedidos.push([k, d]) }
+  const montar = () => env.sandbox.UITabla.montar({
     mount,
-    columnas: [{ key: 'a', label: 'A', num: true }],
-    filas: [{ a: 2 }, { a: 1 }],
-    filaHTML: (f) => `<tr><td>${f.a}</td></tr>`,
-    servidor: { total: 120, pagina: 1, paginas: 3, onPagina() {} },
+    columnas: [{ key: 'monto_total', label: 'Total', num: true }],
+    filas: [{ monto_total: 2 }, { monto_total: 1 }],
+    filaHTML: (f) => `<tr><td>${f.monto_total}</td></tr>`,
+    servidor,
   })
-  assert.match(mount.innerHTML, /data-k="a" aria-sort="none" title="Ordenar solo esta página"/, 'no anuncia orden global')
-  assert.match(String(fuenteTabla), /!st\.servidor && th\.dataset\.k === st\.sortKey/, 'aria-sort solo fuera del modo servidor')
+
+  montar()
+  assert.match(mount.innerHTML, /data-k="monto_total" aria-sort="none"/, 'sin orden activo al montar')
+  assert.deepStrictEqual(attrs.pop(), ['aria-sort', 'none'])
+
+  // Primer clic: pide asc al backend y NO ordena la página en el cliente.
+  clics[0]()
+  assert.deepStrictEqual(pedidos, [['monto_total', 'asc']])
+  assert.match(String(fuenteTabla), /return st\.servidor\.onOrden\(/, 'delega en la vista (sin reorden local)')
+
+  // Con el orden aplicado por el servidor, aria-sort dice la verdad.
+  servidor.orden = 'monto_total'
+  servidor.dir = 'asc'
+  attrs = []
+  montar()
+  assert.deepStrictEqual(attrs.pop(), ['aria-sort', 'ascending'])
+  assert.strictEqual(clics.length, 2, 'se vuelve a enganchar el clic tras repintar')
+
+  // Mismo clic sobre la columna activa invierte el sentido.
+  clics.at(-1)()
+  assert.deepStrictEqual(pedidos.at(-1), ['monto_total', 'desc'])
+  servidor.dir = 'desc'
+  attrs = []
+  montar()
+  assert.deepStrictEqual(attrs.pop(), ['aria-sort', 'descending'])
 })
 
 test('B10b: UITabla sigue igual para las demás vistas (opciones aditivas)', () => {

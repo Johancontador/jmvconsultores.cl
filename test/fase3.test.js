@@ -354,3 +354,29 @@ test('bandeja: filtros y resumen de estados coherentes', () => {
   const lRut = documentos.listar(db, { empresaId: EMP.id, rut: '76888888' })
   assert.ok(lRut.total >= 1)
 })
+
+test('bandeja: orden de servidor por lista blanca abarca el filtro completo', () => {
+  const base = documentos.listar(db, { empresaId: EMP.id, limit: 1000 })
+
+  const asc = documentos.listar(db, { empresaId: EMP.id, orden: 'folio', dir: 'asc', limit: 1000 })
+  const folios = asc.documentos.map((d) => Number(d.folio))
+  assert.deepStrictEqual(folios, [...folios].sort((a, b) => a - b), 'el folio se ordena numérico, no alfabético')
+  assert.strictEqual(asc.total, base.total, 'ordenar no altera el total del filtro')
+
+  const desc = documentos.listar(db, { empresaId: EMP.id, orden: 'monto_total', dir: 'desc', limit: 1000 })
+  const montos = desc.documentos.map((d) => d.monto_total)
+  assert.deepStrictEqual(montos, [...montos].sort((a, b) => b - a))
+
+  // El orden cubre el filtro, no la página: la página 2 continúa la 1 sin repetir.
+  const p1 = documentos.listar(db, { empresaId: EMP.id, orden: 'folio', dir: 'asc', limit: 2, offset: 0 })
+  const p2 = documentos.listar(db, { empresaId: EMP.id, orden: 'folio', dir: 'asc', limit: 2, offset: 2 })
+  assert.deepStrictEqual(
+    [...p1.documentos, ...p2.documentos].map((d) => d.folio),
+    asc.documentos.slice(0, 4).map((d) => d.folio),
+  )
+
+  // `orden` desconocido cae al orden por id: el nombre nunca llega al SQL.
+  const malo = documentos.listar(db, { empresaId: EMP.id, orden: 'folio; DROP TABLE documentos', dir: 'asc', limit: 1000 })
+  assert.deepStrictEqual(malo.documentos.map((d) => d.id), base.documentos.map((d) => d.id).sort((a, b) => a - b))
+  assert.ok(db.prepare(`SELECT COUNT(*) AS n FROM documentos`).get().n > 0, 'la tabla sigue existiendo')
+})
