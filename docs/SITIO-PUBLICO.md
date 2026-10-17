@@ -170,23 +170,34 @@ canonical/OG únicos, 404 propia, repo no público, URLs limpias, headers, enlac
 internos, tarjeta social, acceso a la app, sin listado de directorios y
 versionado de estáticos. Detalle en `jmv-www:docs/SITIO-TECNICO.md`.
 
-### 9.2 Pendiente (requiere root en el VPS)
+### 9.2 Cambio de servicio aplicado (2026-10-17)
 
-El servicio sigue arrancando `python3 -m http.server`, así que **en producción**
-todavía no se ven el 404 propio, el allowlist ni los headers: el archivo
-`deploy/jmv-www.service` está versionado y listo, pero copiarlo a
-`/etc/systemd/system/` y reiniciar requiere `sudo`:
+`jmv-www.service` ya ejecuta `python3 /home/johan/jmv-www/deploy/serve.py`
+(unit idéntico al versionado en `deploy/jmv-www.service`; se aplicó con
+`sudo install` + `daemon-reload` + `restart`).
 
-```bash
-sudo install -m 644 /home/johan/jmv-www/deploy/jmv-www.service /etc/systemd/system/jmv-www.service
-sudo systemctl daemon-reload && sudo systemctl restart jmv-www
-curl -s -o /dev/null -w "%{http_code}\n" https://jmvconsultores.cl/no-existe   # 404
-```
+Verificado en producción después del cambio:
 
-Ya está en producción (sin necesidad de reinicio): acceso a clientes, tarjeta
-social, `robots.txt` con las rutas no públicas, el fondo 3D arreglado y los
-estáticos versionados. Después del cambio de servicio, `/deploy/`, `/docs/`,
-`/data/` y `/.git/` dejan de responder.
+- 9 páginas, `robots.txt`, `sitemap.xml`, `og-image.png`, `css/` y `js/`: **200**.
+- `/.git/config`, `/.git/HEAD`, `gen_servicios.py`, `gen_faq_central.py`,
+  `README.md`, `docs/`, `deploy/`, `data/`, `tests/`, `package.json`,
+  `/.gitignore`, `/css/` y `/js/`: **404**.
+- URL inexistente: **404** con `404.html` (título «Página no encontrada»,
+  `noindex`, enlaces de recuperación y acceso a la app); ninguna huella de la
+  404 del módulo.
+- `/index.html` → 301 a `/`; `/remuneraciones` y `/remuneraciones/` → 301 a
+  `/remuneraciones.html`.
+- Headers en HTML: `nosniff`, `SAMEORIGIN`, `strict-origin-when-cross-origin`,
+  `Permissions-Policy`, `Cache-Control: no-cache`.
+- Chrome real a 390 px en las 9 páginas + 404: sin desbordes, sin errores de
+  consola, fondo 3D activo, `og:image` presente. La 404 carga el CSS y el logo
+  correctamente.
+- `npm test` del sitio (12 tests) verde en el VPS.
+
+Nota de caché: Cloudflare sigue sirviendo `.css`/`.js` con `max-age=14400`
+(HIT) aunque el origen envíe otro valor; por eso el `?v=<sha1>` es lo que
+garantiza que un cambio de estilos se vea al instante. El HTML queda `DYNAMIC`
+(sin caché de borde).
 
 ### 9.3 Riesgo residual
 
