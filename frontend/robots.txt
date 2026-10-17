@@ -1,0 +1,24 @@
+# JMV Consultores — robots.txt
+#
+# El sitio corporativo (landing, páginas de servicio, contenido público) es
+# indexable. Esto es HIGIENE de rastreo, NO seguridad: el acceso real a los
+# datos lo impone el servidor (sesión + permisos por empresa) — ver la sección
+# de seguridad de docs/DESPLIEGUE.md.
+
+User-agent: *
+# Sitio público
+Allow: /
+
+# Aplicación privada de clientes y API: fuera del índice.
+# (La app además exige sesión; aquí solo se evita que el rastreador entre.)
+Disallow: /sistema/
+Disallow: /api/
+
+# Nota deliberada: /login.html, /registro.html y las pantallas heredadas
+# (/index.html, /dashboard.html, /informe.html, /libro.html, /proceso.html,
+# /configuracion.html, /exportacion-masiva.html) NO se desautorizan aquí
+# porque llevan <meta name="robots" content="noindex"> en su propio HTML. Si se
+# bloqueara el rastreo, el buscador nunca leería ese noindex: una URL
+# desautorizada pero enlazada puede seguir apareciendo sin contenido.
+
+Sitemap: https://jmvconsultores.cl/sitemap.xml

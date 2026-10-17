@@ -1,0 +1,175 @@
+'use strict'
+/**
+ * test/sitio-seo.test.js — SEO técnico y frontera público/privado del sitio.
+ *
+ * Por qué: el sitio público tenía metadatos y JSON-LD, pero le faltaban las
+ * piezas que hacen que un buscador —y una persona que abre una URL rota—
+ * entiendan el sitio: robots.txt, sitemap.xml y una 404 propia. Además, `app.use
+ * (express.static('frontend'))` sirve TODO lo que hay en frontend/, así que las
+ * siete pantallas internas heredadas eran indexables sin que nadie lo decidiera.
+ *
+ * T1 — robots.txt: deja indexable el sitio público y desautoriza app y API.
+ * T2 — sitemap.xml: XML válido, dominio canónico y solo páginas reales.
+ * T3 — Toda URL del sitemap es indexable de verdad (sin noindex) y tiene
+ *      title, description, canonical y Open Graph coherentes con su <loc>.
+ * T4 — Frontera: las pantallas privadas declaran noindex y no están listadas.
+ * T5 — 404 real por HTTP: página con identidad para el navegador, JSON para la
+ *      API, y lo que existe sigue respondiendo 200 (el handler no lo intercepta).
+ * T6 — La 404 comparte identidad y no se lista en el sitemap.
+ *
+ * Ejecutar con: node --test test/sitio-seo.test.js
+ */
+const test = require('node:test')
+const assert = require('node:assert')
+const fs = require('fs')
+const path = require('path')
+const express = require('express')
+
+const FRONT = path.resolve(__dirname, '../frontend')
+const leer = (p) => fs.readFileSync(path.join(FRONT, p), 'utf8')
+const existe = (p) => fs.existsSync(path.join(FRONT, p))
+
+const DOMINIO = 'https://jmvconsultores.cl'
+/** URL pública → archivo que la sirve. Al crear una página hay que sumarla acá. */
+const RUTA_A_ARCHIVO = { '/': 'landing.html' }
+/** Pantallas que NUNCA deben indexarse (internas o de acceso). */
+const PRIVADAS = [
+  'login.html', 'registro.html', 'index.html', 'dashboard.html',
+  'informe.html', 'libro.html', 'proceso.html', 'configuracion.html',
+  'exportacion-masiva.html', 'sistema/index.html',
+]
+
+const robots = () => leer('robots.txt')
+const locs = () => [...leer('sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])
+
+/* ------------------------------ T1 robots.txt ----------------------------- */
+test('T1: robots.txt abre el sitio público y cierra la app y la API', () => {
+  const r = robots()
+  assert.match(r, /^User-agent: \*$/m, 'declara el agente comodín')
+  assert.match(r, /^Allow: \/$/m, 'el sitio público es indexable')
+  assert.ok(!/^Disallow: \/$/m.test(r), 'CONTROL: no desautoriza el sitio completo')
+  assert.match(r, /^Disallow: \/sistema\/$/m, 'la aplicación privada queda fuera')
+  assert.match(r, /^Disallow: \/api\/$/m, 'la API queda fuera del rastreo')
+  assert.match(r, /^Sitemap: https:\/\/jmvconsultores\.cl\/sitemap\.xml$/m, 'apunta al sitemap absoluto')
+  // Las de acceso llevan noindex en su propio HTML: si además se desautorizaran,
+  // el buscador no podría leer ese noindex.
+  for (const p of ['login.html', 'registro.html']) {
+    assert.ok(!r.includes(`Disallow: /${p}`), `${p} no se desautoriza (usa noindex)`)
+  }
+})
+
+/* ------------------------------ T2 sitemap.xml ---------------------------- */
+test('T2: sitemap.xml es XML válido y lista solo páginas que existen', () => {
+  const s = leer('sitemap.xml')
+  assert.match(s, /^<\?xml version="1\.0" encoding="UTF-8"\?>/, 'declaración XML')
+  assert.match(s, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/, 'namespace del protocolo')
+  assert.ok(s.trimEnd().endsWith('</urlset>'), 'cierra el urlset')
+
+  const urls = locs()
+  assert.ok(urls.length >= 1, 'al menos la portada')
+  const abiertos = (s.match(/<url>/g) || []).length
+  assert.strictEqual(abiertos, urls.length, 'un <url> por <loc> (sin bloques huérfanos)')
+
+  for (const u of urls) {
+    assert.ok(u.startsWith(`${DOMINIO}/`), `${u} usa el dominio canónico https`)
+    const ruta = u.slice(DOMINIO.length) || '/'
+    const archivo = RUTA_A_ARCHIVO[ruta]
+    assert.ok(archivo, `${u} está en el mapa de rutas del test (agrégalo si creaste la página)`)
+    assert.ok(existe(archivo), `${u} → frontend/${archivo} existe`)
+  }
+})
+
+/* --------------------- T3 lo listado es indexable de verdad ---------------- */
+test('T3: cada URL del sitemap tiene title, description, canonical y OG propios', () => {
+  for (const u of locs()) {
+    const ruta = u.slice(DOMINIO.length) || '/'
+    const html = leer(RUTA_A_ARCHIVO[ruta])
+
+    const title = (html.match(/<title>([^<]+)<\/title>/) || [])[1]
+    assert.ok(title && title.trim().length > 15, `${ruta}: título propio y descriptivo («${title || 'sin title'}»)`)
+    assert.match(html, /<meta name="description" content="[^"]{50,}"/, `${ruta}: meta description con contenido`)
+    assert.ok(!/name="robots" content="noindex/.test(html), `${ruta}: NO está marcada como noindex`)
+    assert.ok(html.includes(`<link rel="canonical" href="${u}">`), `${ruta}: canonical que coincide con el sitemap`)
+    for (const prop of ['og:title', 'og:description', 'og:url']) {
+      assert.ok(html.includes(`property="${prop}"`), `${ruta}: Open Graph ${prop}`)
+    }
+    assert.ok(html.includes(`<meta property="og:url" content="${u}">`), `${ruta}: og:url = ${u}`)
+    assert.match(html, /<meta name="viewport" content="[^"]*width=device-width/, `${ruta}: viewport móvil`)
+  }
+})
+
+/* --------------------------- T4 frontera público/privado ------------------ */
+test('T4: las pantallas privadas declaran noindex y no están en el sitemap', () => {
+  const urls = locs()
+  for (const p of PRIVADAS) {
+    assert.ok(existe(p), `frontend/${p} existe (si se renombra, actualiza este test)`)
+    const html = leer(p)
+    // Se exige la PROPIEDAD (declara noindex), no un formato exacto: login y
+    // registro ya venían con «noindex,follow» y forzar la misma cadena en todo
+    // el sitio solo agregaría ruido sin cambiar el comportamiento.
+    assert.match(html, /<meta name="robots" content="[^"]*noindex[^"]*">/, `${p} declara noindex`)
+    assert.ok(!/<meta name="robots" content="index/.test(html), `${p} no se autodeclara indexable`)
+    assert.ok(!urls.includes(`${DOMINIO}/${p}`), `${p} no figura en el sitemap`)
+  }
+})
+
+/* ------------------------------- T5 404 real ------------------------------ */
+test('T5: 404 real por HTTP — página con identidad, JSON para la API y 200 para lo que existe', async () => {
+  const app = express()
+  app.use(express.static(FRONT))
+  app.use(require('../backend/middleware/no-encontrado').noEncontrado)
+  const server = app.listen(0)
+  const base = `http://127.0.0.1:${server.address().port}`
+  try {
+    // 1) URL de página inexistente → 404 + HTML del sitio (no el texto de Express)
+    const pag = await fetch(`${base}/ruta-que-no-existe-123`)
+    assert.strictEqual(pag.status, 404, 'status 404 real (una 404 con 200 es un error de SEO)')
+    assert.match(pag.headers.get('content-type') || '', /text\/html/, 'responde HTML')
+    const cuerpo = await pag.text()
+    assert.ok(cuerpo.includes('No encontramos esa página'), 'entrega la 404 del sitio')
+    assert.ok(!cuerpo.includes('Cannot GET'), 'ya no expone el mensaje crudo de Express')
+    assert.ok(cuerpo.includes('/css/sitio.css'), 'la 404 carga la identidad del sitio')
+
+    // 2) API inexistente → 404 JSON (quien la llama no espera HTML)
+    const api = await fetch(`${base}/api/ruta-inexistente`)
+    assert.strictEqual(api.status, 404)
+    assert.match(api.headers.get('content-type') || '', /application\/json/, 'la API responde JSON')
+    const j = await api.json()
+    assert.strictEqual(j.ok, false)
+    assert.ok(j.error, 'el JSON explica el 404')
+
+    // 3) CONTROL: lo que existe no queda interceptado (el handler va al final)
+    const ok = await fetch(`${base}/landing.html`)
+    assert.strictEqual(ok.status, 200, 'una página real sigue en 200')
+    const okRobots = await fetch(`${base}/robots.txt`)
+    assert.strictEqual(okRobots.status, 200, 'robots.txt se sirve')
+    const okSitemap = await fetch(`${base}/sitemap.xml`)
+    assert.strictEqual(okSitemap.status, 200, 'sitemap.xml se sirve')
+  } finally {
+    server.close()
+  }
+})
+
+/* ------------------------------ T6 la 404 misma --------------------------- */
+test('T6: la 404 comparte identidad, no se indexa y ofrece salidas reales', () => {
+  const html = leer('404.html')
+  assert.match(html, /<meta name="robots" content="noindex, follow">/, 'noindex (con follow, para aprovechar sus enlaces)')
+  // nginx fija max-age=14400 a los .css: sin ?v=<sha1> un cambio de sitio.css
+  // dejaría la 404 con el diseño viejo en el navegador del visitante.
+  assert.match(html, /href="\/css\/sitio\.css\?v=[a-f0-9]{8}"/, 'el CSS va versionado por contenido')
+  assert.ok(html.includes('/assets/logo-ink.svg'), 'usa el logo del sitio')
+  assert.ok(!locs().includes(`${DOMINIO}/404.html`), 'no se lista en el sitemap')
+  for (const salida of ['href="/"', 'href="/#contacto"', 'href="/#servicios"', 'href="/login.html"']) {
+    assert.ok(html.includes(salida), `ofrece la salida ${salida}`)
+  }
+})
+
+/* --------------- T7 el arranque real monta el 404 en su sitio -------------- */
+test('T7: backend/index.js monta el 404 después de las rutas y antes del error', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '../backend/index.js'), 'utf8')
+  const pos404 = src.indexOf("require('./middleware/no-encontrado').noEncontrado")
+  assert.ok(pos404 > 0, 'el arranque monta el 404 propio')
+  assert.ok(src.indexOf('app.use(express.static') < pos404, 'va después de los estáticos (si no, taparía archivos reales)')
+  assert.ok(src.lastIndexOf("app.use('/api/") < pos404, 'va después de todos los routers de la API')
+  assert.ok(src.indexOf('app.use((err, req, res, next)') > pos404, 'va antes del manejador de errores')
+})

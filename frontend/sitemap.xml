@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Mapa del sitio público de JMV Consultores.
+
+  Solo se listan páginas indexables con contenido propio. Quedan fuera, a
+  propósito: el ingreso y el registro (/login.html, /registro.html), las
+  pantallas internas heredadas y toda la aplicación /sistema/ (llevan
+  <meta name="robots" content="noindex"> y/o están tras sesión).
+
+  Al publicar una página pública nueva hay que agregarla aquí: el test
+  test/sitio-seo.test.js falla si el sitemap y lo que existe en disco dejan de
+  coincidir, o si se lista algo marcado como noindex.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://jmvconsultores.cl/</loc>
+    <lastmod>2026-10-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

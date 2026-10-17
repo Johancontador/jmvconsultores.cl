@@ -35,6 +35,9 @@ const PAGINAS = [
   path.join(ROOT, 'frontend', 'landing.html'),
   path.join(ROOT, 'frontend', 'login.html'),
   path.join(ROOT, 'frontend', 'registro.html'),
+  // La 404 es una página pública más: si se agrega acá, su referencia a
+  // /css/sitio.css queda versionada por contenido como el resto.
+  path.join(ROOT, 'frontend', '404.html'),
 ]
 
 // El ?v= es OPCIONAL: también versiona referencias que aún no lo traen (una

@@ -96,6 +96,11 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, message: 'IVA Mensual API running' })
 })
 
+// 404 propio: la API responde JSON (quien la llama espera JSON), las páginas
+// reciben 404.html con la identidad del sitio y accesos útiles. Va después de
+// todas las rutas y antes del manejador de errores, con status 404 real.
+app.use(require('./middleware/no-encontrado').noEncontrado)
+
 // Manejador de errores de Express: cualquier error lanzado dentro de una ruta
 // (síncrono o pasado a next(err)) responde JSON en vez de tumbar el proceso.
 app.use((err, req, res, next) => {
