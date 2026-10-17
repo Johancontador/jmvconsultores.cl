@@ -103,6 +103,10 @@ python3 deploy/versionar.py     # reescribe ?v= en todos los .html
 Los generadores aplican el mismo helper al escribir, así que regenerar nunca
 pierde el versionado. T12 falla si se toca el CSS/JS y no se corre el script.
 
+El hash se calcula sobre los bytes desplegados (**LF**), por eso el repo fija
+`* text=auto eol=lf` en `.gitattributes`: sin eso, un checkout en Windows con
+`core.autocrlf=true` cambia los bytes y T12 falla aunque no haya nada roto.
+
 ## Desplegar
 
 El sitio se sirve desde el working tree del repo: no hay build.
