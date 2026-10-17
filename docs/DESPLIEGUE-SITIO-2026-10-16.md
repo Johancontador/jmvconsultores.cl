@@ -133,7 +133,9 @@ Un `530` con cuerpo `error code: 1033` significa que el túnel Argo de Cloudflar
 encuentra origen: el VPS o `cloudflared` están caídos (ver §4).
 
 ```bash
-ssh johan@100.116.109.54 'echo VPS_OK; cd /home/johan/iva-mensual && git rev-parse --short HEAD'
+ssh johan@100.116.109.54 'echo VPS_OK; hostname; uptime'
+# commit que corre producción = el del repo bare (el árbol de trabajo NO es un repo)
+ssh johan@100.116.109.54 'git --git-dir=/home/johan/repos/iva-mensual.git rev-parse HEAD'
 git fetch vps master && git rev-list --left-right --count vps/master...master   # esperado: izquierda 0
 ```
 
@@ -142,40 +144,80 @@ git fetch vps master && git rev-list --left-right --count vps/master...master   
 - Si `ssh` no responde: comprobar Tailscale (`tailscale status | grep remusaas`) y
   reintentar. **No publicar a ciegas.**
 
+> **Corrección importante (descubierta al ejecutar el 2026-10-16):** el despliegue real
+> **es Docker** y lo hace el propio `git push`, no systemd. El repo bare
+> `/home/johan/repos/iva-mensual.git` tiene un `hooks/post-receive` que ejecuta
+> `git checkout -f master` sobre `GIT_WORK_TREE=/home/johan/apps/iva-mensual` y en
+> seguida `docker compose up -d --build`. No existe `/home/johan/iva-mensual`, el árbol
+> de trabajo **no es un repo git**, y `jmv-www.service` es el sitio corporativo
+> estático (no la app).
+
 ### Paso 1 — Respaldo verificable ANTES de tocar nada (en el VPS)
 
-```bash
-cd /home/johan/iva-mensual
-git rev-parse --short HEAD > /tmp/commit-pre-deploy.txt && cat /tmp/commit-pre-deploy.txt
-node scripts/backup-db.js                 # backup online (seguro con WAL activo)
-ls -lh data/backups/ | tail -3            # .db.enc + manifest si BACKUP_ENCRYPTION_KEY está definida
+La app vive en la imagen Docker; el runtime y el `.env` están **dentro del contenedor**,
+así que los scripts se ejecutan ahí (la BD real es `data/iva_mensual.db` en el host =
+`/app/data/iva_mensual.db` en el contenedor):
 
-# Verificar el respaldo elegido en carpeta AISLADA (nunca toca la BD real):
-node scripts/restore-db.js --backup data/backups/<ARCHIVO>.db.enc --dest "$HOME/restore-pre-deploy"
+```bash
+ssh johan@100.116.109.54
+# commit que corre producción, para el rollback
+git --git-dir=/home/johan/repos/iva-mensual.git rev-parse HEAD | tee /home/johan/rollback-target.txt
+
+# respaldo online (seguro con WAL activo) desde dentro del contenedor
+docker exec iva-mensual node scripts/backup-db.js
+ls -lt /home/johan/apps/iva-mensual/data/backups/*.db.enc | head -3
+
+# verificarlo en carpeta AISLADA (nunca toca la BD real):
+docker exec iva-mensual node scripts/restore-db.js \
+  --backup /app/data/backups/<ARCHIVO>.db.enc --dest /tmp/restore-verify
 ```
 
 Criterio de aceptación: el restore termina con `integrity_check` OK, conteos de tablas
 críticas y claves SII descifrables. **Un respaldo que no se restauró no es un respaldo.**
 
-### Paso 2 — Publicar (local)
+### Paso 2 — Publicar (local) — el push DESPLIEGA
 
 ```bash
 git push vps master       # SIN --force. Si producción avanzó, Git rechaza el push.
 ```
 
-Leer la salida: `ad09d47..<sha-del-último-commit>  master -> master`. Un `[rejected]` significa que
-alguien movió producción: parar y volver al paso 0.
+Un push lanza el `post-receive`: `git checkout -f master` + `docker compose up -d --build`.
+Dos consecuencias prácticas:
 
-### Paso 3 — Aplicar en el VPS y reiniciar
+1. **El push tarda lo que tarda el rebuild** (minutos) porque el hook está enganchado a
+   la salida del cliente. Un `[rejected]` significa que alguien movió producción: parar y
+   volver al paso 0.
+2. **PELIGRO real, observado el 2026-10-16:** si el cliente SSH desaparece a mitad del
+   build, el hook queda **colgado escribiendo a un pipe muerto** (proceso vivo, `wchan`
+   `futex_wait`, contenedor sin recrear, imagen vieja). No se recupera solo. Cómo
+detectarlo y salir del paso:
 
 ```bash
-cd /home/johan/iva-mensual
-git fetch && git log --oneline -5          # confirmar los commits a publicar
-git pull                                    # fast-forward; si pide merge, parar
-node scripts/seed-versionado.js             # debe decir «Sin cambios: 33 …»
-systemctl list-units --type=service | grep -i jmv    # confirmar el nombre real (jmv-www)
-systemctl restart jmv-www && systemctl status jmv-www --no-pager | head -12
+# en el VPS: ¿quedó un hook colgado?
+ps aux | grep -E 'post-receive|docker compose' | grep -v grep
+# desbloquear y relanzar DESACOPLADO de cualquier sesión:
+kill <PID-post-receive> <PID-docker-compose>
+cd /home/johan/apps/iva-mensual && \
+  setsid nohup docker compose up -d --build > /tmp/deploy-build.log 2>&1 < /dev/null &
+# y seguir el build por el archivo, no por la sesión:
+tail -f /tmp/deploy-build.log
 ```
+
+### Paso 3 — Verificar en el VPS (el hook ya aplicó el código)
+
+```bash
+# el ref del bare ya avanzó y el árbol de trabajo tiene el código nuevo
+ls -l /home/johan/apps/iva-mensual/frontend/css/sitio.css | awk '{print $6,$7,$8,$9}'
+docker compose -f /home/johan/apps/iva-mensual/docker-compose.yml ps
+
+# ¿corre el contenedor el código publicado? (sha1 por contenido, no por fecha)
+docker exec iva-mensual sh -c 'for f in frontend/css/sitio.css frontend/shared/login-auth.js \
+  sistema/app.js backend/core/portal-comercial.js; do printf "%-40s %s\n" "$f" $(sha1sum /app/$f | cut -c1-8); done'
+# comparar contra `sha1sum` local de los mismos archivos: deben coincidir
+```
+
+El contenedor debe quedar `Up (healthy)`. La BD va montada (`data/`), así que no se
+recrea: comprobar igualmente los conteos críticos tras el arranque.
 
 ### Paso 4 — Comprobación post-deploy (desde fuera)
 
@@ -186,30 +228,39 @@ done
 curl -sI https://app.jmvconsultores.cl/css/sitio.css | grep -iE 'cache-control|etag'
 ```
 
-Esperado: `200` en las cuatro; el CSS con la referencia `?v=3fc0f66c`; y — si el nginx
-del VPS añade `max-age`, que eso **no** impida el refetch porque la URL es nueva.
-Luego, en el navegador: login correcto → `/sistema/`; botón *Mostrar* revela la
-contraseña; menú móvil de la landing abre con `Escape`; un envío de contacto de prueba
-aparece en `contactos_web` (y se borra).
+Esperado: `200` en las cuatro y `cache-control: public, max-age=14400` (verificado el
+2026-10-16 en el edge, con `cf-cache-status: MISS` para la URL nueva: el `max-age` no
+estorba porque la URL cambió). Comprobar también que las páginas servidas traen los
+`?v=` nuevos y que la función nueva responde protegida:
+
+```bash
+curl -s https://app.jmvconsultores.cl/login.html | grep -o 'login-auth.js?v=[a-f0-9]*'
+curl -s -o /dev/null -w '%{http_code}\n' https://app.jmvconsultores.cl/api/portal/empresas/1/comercial  # 401 sin sesión
+```
+
+Y en el navegador: botón *Mostrar* revela la contraseña; menú móvil de la landing abre
+y cierra con `Escape`; `/sistema/` sin sesión pide credenciales. **No** probar un envío
+de contacto ni logins fallidos contra producción: escriben datos / consumen el
+rate-limit real (5 logins y 10 registros por hora e IP).
 
 ### Rollback
 
+El rollback es un push hacia atrás: el mismo hook hace checkout y rebuild. Desde el repo
+local (donde está el commit anterior anotado en el paso 1, p. ej. `ad09d47`):
+
 ```bash
-# En el VPS
-cd /home/johan/iva-mensual
-git reset --hard "$(cat /tmp/commit-pre-deploy.txt)"   # volver al commit anotado en el paso 1
-node scripts/seed-versionado.js                        # rehash por contenido
-systemctl restart jmv-www
+git push --force vps ad09d47:master   # único caso donde un force es legítimo y deliberado
 ```
 
 La BD **no** necesita restaurarse (el rango no trae migraciones). Solo si algo hubiera
-escrito datos de forma indeseada:
+escrito datos de forma indeseada, en el VPS:
 
 ```bash
-systemctl stop jmv-www
-cp data/backups/<ARCHIVO>.db data/iva_mensual.db
+cd /home/johan/apps/iva-mensual
+docker compose stop iva-mensual
+cp data/backups/<ARCHIVO>.db   data/iva_mensual.db
 rm -f data/iva_mensual.db-wal data/iva_mensual.db-shm
-systemctl start jmv-www
+docker compose up -d iva-mensual
 ```
 
 Nota: los cambios de `/sistema/` son cosméticos desde el cliente (URLs `?v=` nuevas);
@@ -270,3 +321,66 @@ El sitio estaba caído **antes** de tocar nada: el estado previo de producción 
 puede confirmar por HTTP, así que el paso 0 (comparar `vps/master` contra `master` y
 revisar que el push sea fast-forward) sigue siendo el único control válido y hay que
 ejecutarlo igual, con el sitio ya arriba.
+
+### Resolución (23:47 UTC)
+
+**Se recuperó solo.** El túnel volvió a registrar sus cuatro conexiones a las 23:47:38 y
+ambos dominios respondieron `200` sin intervención. El host **no se reinició**
+(`uptime`: 2 días), así que fue un corte de red del VPS que tumbó a la vez Tailscale y
+`cloudflared`: de ahí que un mismo origen diera 1033 (túnel) y `rx 0` (Tailscale) sin que
+la app tuviera nada roto.
+
+## 5. Ejecución real — 2026-10-16, 23:50→00:00 UTC
+
+**Desplegado.** `ad09d47` → **`894fb24`** (fast-forward, sin `--force`), contenedor
+recreado a las 23:59:45 UTC y `healthy`.
+
+### Precondiciones comprobadas
+
+- Divergencia antes del push: **0 / 6** (producción era ancestro nuestro).
+- Árbol de producción: **sin cambios en archivos versionados** (`git diff` vacío), así que
+  el `checkout -f` no destruyó nada. Los 4 archivos sueltos (`backend/informe.js`,
+  `frontend/css/datagrid.js`, `frontend/reportes.html`, `docker-compose.yml.bak-*`) son
+  *untracked* y **ninguno pertenece al rango publicado**.
+- Sitio `200` antes de empezar (tras la recuperación del túnel).
+
+### Respaldo y rollback
+
+- Respaldo cifrado `iva_mensual_2026-10-16T23-49-43.db.enc` (AES-256-GCM + manifest + sha256).
+- **Restore verificado** en carpeta aislada: integridad `ok`, conteos coincidentes
+  (6 usuarios, 6 empresas, 5 clientes, 13.944 documentos, 263 asientos) y **11 claves SII
+  descifrables sin error**. La BD real quedó intacta (mismo tamaño y fecha).
+- Objetivo de rollback anotado en el VPS: `/home/johan/rollback-target.txt` → `ad09d47`.
+
+### Verificación post-deploy
+
+| comprobación | resultado |
+|---|---|
+| 7 archivos dentro del contenedor vs local | **sha1 idénticos byte a byte** (`sitio.css 3fc0f66c`, `login-auth.js 8d3d6fa7`, `api.js 80d2c456`, `app.js 01aec88d`, `views-portal.js 240abc40`, `logo-ink.svg b7e09f0a`, `portal-comercial.js d56f084e`) |
+| 4 URLs públicas por HTTPS | `/`, `/login.html`, `/registro.html`, `/sistema/` → **200** |
+| referencias servidas desde el edge | las nuevas (`login-auth.js?v=8d3d6fa7` incluido) |
+| cabecera de caché real | `cache-control: public, max-age=14400` + `cf-cache-status: MISS` en la URL nueva |
+| función nueva | `/api/portal/empresas/1/comercial` → **401** sin sesión; entrada `portal-comercial` en el `app.js` servido y en `VIEWS` |
+| BD tras el deploy | integridad `ok`, 6 empresas, 13.944 documentos |
+| navegador real | landing (8 secciones, sin desborde, identidad aplicada), móvil 390 con menú y `Escape`, **botón Mostrar funciona en producción**, registro con validación en vivo, `/sistema/` pide credenciales |
+
+### Hallazgos de la ejecución (ninguno es un defecto del despliegue)
+
+1. **El hook se cuelga si desaparece el cliente SSH.** Ocurrió: el build quedó vivo pero
+   idle (`futex_wait`) escribiendo a un pipe muerto y el contenedor nunca se recreó. Se
+   detectó por `ps` y se resolvió matando el hook y relanzando el build con
+   `setsid nohup … > /tmp/deploy-build.log`. **Ver §2, paso 2.**
+2. **CSP de la app bloquea el beacon de Cloudflare Analytics** en *todas* las páginas
+   (`backend/middleware/seguridad-headers.js`), incluida `/sistema/`, que no tocamos:
+   preexistente. Deja un error de consola en cada visita y hace que la analítica no mida.
+3. **Aviso de jobs al arrancar** (`[JOBS] reanudación sync-diaria falló … 'prepare'`):
+   reproducido en local con el mismo código → preexistente y no fatal.
+4. Dos aserciones de mi propia auditoría estaban mal, no la app: el umbral de secciones
+   (la landing tiene 8, igual que en local) y la validación de campos vacíos, que la hace
+   el navegador (`required` sin `novalidate`) sin emitir ninguna petición.
+
+### Pendientes reales que quedan como incidencia (no bloquean)
+
+- CSP vs beacon de Cloudflare Analytics (punto 1 arriba).
+- Defecto móvil preexistente de `/sistema/` — `docs/INCIDENCIA-SISTEMA-MOVIL-2026-10-16.md`.
+- Aviso de reanudación de `sync-diaria` al arrancar (punto 2 arriba).
