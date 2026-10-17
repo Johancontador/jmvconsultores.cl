@@ -841,44 +841,48 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .doc-menu-item.peligro { color: var(--danger); }
 .doc-menu-item.peligro:hover { background: var(--danger-soft); }
 
-/* Detalle lateral: lectura sin perder la lista de fondo. */
+/* Detalle lateral: lectura sin perder la lista de fondo.
+   El panel vive en <body> (fuera de `.sys`) para no quedar recortado por el
+   scroll de la tabla; por eso sus reglas NO llevan el prefijo `.sys` — con el
+   prefijo no aplicaban y el panel se pintaba sin fondo, ancho ni padding.
+   Lo mismo aplica a `.doc-dl`/`.doc-dato`, usados también en los modales. */
 .doc-drawer-back {
   position: fixed; inset: 0; z-index: 82; background: rgba(2, 6, 23, 0.38);
   display: flex; justify-content: flex-end;
 }
-.sys .doc-drawer {
+.doc-drawer {
   width: min(480px, 100%); height: 100%; display: flex; flex-direction: column;
   background: var(--bg-surface); border-left: 1px solid var(--border-default);
   box-shadow: var(--shadow-xl);
 }
-.sys .doc-drawer-head {
+.doc-drawer-head {
   display: flex; justify-content: space-between; gap: var(--space-3); align-items: flex-start;
   padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border-subtle);
 }
-.sys .doc-drawer-kicker { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
-.sys .doc-drawer-head h2 { margin: 2px 0; font-family: var(--font-display); font-size: var(--fs-lg); }
-.sys .doc-drawer-head p { margin: 0; font-size: var(--fs-sm); }
-.sys .doc-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-6); }
-.sys .doc-drawer-body h3 {
+.doc-drawer-kicker { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
+.doc-drawer-head h2 { margin: 2px 0; font-family: var(--font-display); font-size: var(--fs-lg); }
+.doc-drawer-head p { margin: 0; font-size: var(--fs-sm); }
+.doc-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-6); }
+.doc-drawer-body h3 {
   margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--fg-muted);
 }
-.sys .doc-drawer-body h3:first-child { margin-top: 0; }
-.sys .doc-dl { display: flex; flex-direction: column; gap: 2px; margin: 0; }
-.sys .doc-dato {
+.doc-drawer-body h3:first-child { margin-top: 0; }
+.doc-dl { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.doc-dato {
   display: flex; justify-content: space-between; gap: var(--space-4);
   padding: 5px 0; border-bottom: 1px dashed var(--border-subtle); font-size: var(--fs-sm);
 }
-.sys .doc-dato dt { color: var(--fg-muted); }
-.sys .doc-dato dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
-.sys .doc-drawer-foot { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border-subtle); }
-.sys .doc-drawer-foot .spacer { flex: 1; }
-.sys .doc-json {
+.doc-dato dt { color: var(--fg-muted); }
+.doc-dato dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.doc-drawer-foot { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border-subtle); }
+.doc-drawer-foot .spacer { flex: 1; }
+.doc-json {
   max-height: 180px; overflow: auto; font-size: var(--fs-xs);
   background: var(--bg-elevated); padding: var(--space-2); border-radius: var(--radius-sm);
 }
 @media (max-width: 640px) {
-  .sys .doc-drawer { width: 100%; }
+  .doc-drawer { width: 100%; }
   .sys .doc-f, .sys .doc-f select, .sys .doc-f input { width: 100%; min-width: 0; }
   .sys .doc-filtros > .btn { width: 100%; }
 }

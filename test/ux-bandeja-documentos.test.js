@@ -463,6 +463,11 @@ test('B10: accesibilidad de tabla, resumen y panel', () => {
   // El scroll horizontal debe ser alcanzable por teclado (región enfocable).
   assert.match(fuenteTabla, /<div class="tbl-wrap" tabindex="0" role="region" aria-label=/)
   assert.match(fuenteCss, /tbl-wrap:focus-visible/, 'foco visible en el contenedor')
+  // El panel y el menú viven en <body> (fuera de .sys): si sus reglas se
+  // prefijan con .sys no aplican y el panel queda transparente y sin ancho.
+  assert.ok(!/\.sys \.doc-drawer/.test(fuenteCss), 'reglas del panel sin prefijo .sys')
+  assert.match(fuenteCss, /^\.doc-drawer \{/m)
+  assert.ok(!/\.sys \.doc-dato/.test(fuenteCss), 'filas del detalle sin prefijo .sys')
   assert.match(fuenteVista, /aria-live="polite"/, 'el resumen anuncia cambios')
   assert.match(fuenteVista, /role="dialog" aria-modal="true"/, 'detalle como diálogo')
   assert.match(fuenteVista, /tabindex="0" data-doc=/, 'fila alcanzable por teclado')
