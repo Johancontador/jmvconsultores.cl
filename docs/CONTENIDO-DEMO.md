@@ -10,7 +10,7 @@ material real en cuanto el propietario lo entregue.
 - Lo que está aquí **no** se usa en publicidad pagada, campañas de correo ni
   presentaciones a clientes.
 - Si un dato pasa a ser real, se actualiza este archivo en el mismo commit.
-- Los datos legales (razón social, representante, domicilio) **no** son
+- Los datos legales (razón social, RUT, representante, domicilio) **no** son
   ficticios: son los que confirmó el propietario (`docs/LEGAL-PENDIENTE.md`).
 
 ## Inventario
@@ -28,8 +28,9 @@ material real en cuanto el propietario lo entregue.
 
 ## Qué NO se inventó, a propósito
 
-- **RUT de la sociedad.** No se publicó: un RUT inventado puede corresponder a
-  un tercero real. Los textos legales dicen que se entrega a solicitud.
+- **RUT de la sociedad.** Es el real, entregado por el propietario
+  (76.537.758-7) y validado por módulo 11 antes de publicarlo. Un RUT inventado
+  puede corresponder a un tercero real.
 - **Resultados de clientes** (montos ahorrados, multas evitadas): no se
   publicaron cifras de ahorro tributario en ninguna página.
 - **Credenciales profesionales** (universidad, colegiatura, certificaciones): el

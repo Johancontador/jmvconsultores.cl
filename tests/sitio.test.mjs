@@ -387,6 +387,21 @@ test('T17: redes sociales solo si están configuradas', () => {
 })
 
 /* ── T18 ──────────────────────────────────────────────────────────────────── */
+/** Valida el dígito verificador (módulo 11) de un RUT chileno ya formateado. */
+function rutValido(texto) {
+  const m = texto.replace(/\./g, '').match(/^(\d+)-([\dkK])$/)
+  if (!m) return false
+  let suma = 0
+  let mult = 2
+  for (let i = m[1].length - 1; i >= 0; i--) {
+    suma += Number(m[1][i]) * mult
+    mult = mult === 7 ? 2 : mult + 1
+  }
+  const resto = 11 - (suma % 11)
+  const dv = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto)
+  return dv === m[2].toUpperCase()
+}
+
 test('T18: páginas legales publicadas, enlazadas y sin marcadores vacíos', () => {
   // La identificación del proveedor es obligatoria (Ley 19.496, art. 28): los
   // datos que el propietario confirmó van publicados, y ninguno de los textos
@@ -397,6 +412,13 @@ test('T18: páginas legales publicadas, enlazadas y sin marcadores vacíos', () 
     assert.match(html, /Johan Morales/, `${legal}: no individualiza al responsable`)
     assert.match(html, /Regi[oó]n Metropolitana/, `${legal}: falta el domicilio`)
     assert.match(html, /privacidad@jmvconsultores\.cl/, `${legal}: falta el correo de privacidad`)
+
+    // El proveedor se individualiza con RUT (Ley 19.496, art. 28) y el número
+    // publicado pasa el módulo 11: un typo en un RUT es un dato falso.
+    const rut = html.match(/RUT\s*(?:<strong>)?\s*([\d.]{3,}-[\dkK])/)?.[1]
+    assert.ok(rut, `${legal}: no publica el RUT del proveedor`)
+    assert.ok(rutValido(rut), `${legal}: el RUT ${rut} no pasa el módulo 11`)
+
     // Solo la apertura: «}}» aparece legítimamente en el JSON-LD de la página.
     assert.doesNotMatch(html, /\{\{/, `${legal}: quedan marcadores sin completar`)
   }
@@ -408,6 +430,7 @@ test('T18: páginas legales publicadas, enlazadas y sin marcadores vacíos', () 
     for (const legal of ['/privacidad.html', '/cookies.html', '/terminos.html']) {
       assert.ok(html.includes(`href="${legal}"`), `${f}: no enlaza ${legal}`)
     }
+    assert.match(html, /RUT 76\.537\.758-7/, `${f}: el pie no individualiza al proveedor con RUT`)
     assert.doesNotMatch(html, /\{\{/, `${f}: quedan marcadores sin completar`)
   }
 })

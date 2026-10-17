@@ -6,11 +6,11 @@
   canonical propio, están en el sitemap y se enlazan desde el pie de las 28
   páginas y de la 404 (lo verifica el test T18).
 - Datos confirmados por el propietario y publicados: **JMV Consultores SpA**,
-  representada por **Johan Morales**, domicilio **Región Metropolitana, Chile**,
-  correo de privacidad **privacidad@jmvconsultores.cl**.
-- **RUT: no publicado por decisión del propietario.** Los tres textos dicen que
-  se entrega a solicitud escrita. Es una brecha respecto del art. 28 de la Ley
-  19.496 mientras no se publique.
+  **RUT 76.537.758-7** (dígito verificador validado por módulo 11), representada
+  por **Johan Morales**, domicilio **Región Metropolitana, Chile**, correo de
+  privacidad **privacidad@jmvconsultores.cl**.
+- El RUT aparece en los tres textos legales y en el pie de las 28 páginas y de
+  la 404; el test T18 falla si falta o si el módulo 11 no cuadra.
 - **Correo de privacidad: aún sin buzón.** El dominio no tiene MX; hay que
   configurarlo (ver `docs/CORREO-DOMINIO.md`).
 
@@ -50,7 +50,8 @@ textos definitivos.
 
 ### Resueltos y publicados
 
-1. **Responsable:** JMV Consultores SpA, representada por Johan Morales.
+1. **Responsable:** JMV Consultores SpA, RUT 76.537.758-7, representada por Johan
+   Morales.
 2. **Domicilio:** Región Metropolitana, Chile.
 3. **Correo de privacidad:** `privacidad@jmvconsultores.cl` (publicado; el
    buzón se habilita con Cloudflare Email Routing, ver `docs/CORREO-DOMINIO.md`).
@@ -59,11 +60,10 @@ textos definitivos.
 
 ### Pendientes
 
-5. **RUT de la sociedad.** No se publica por ahora; los textos dicen que se
-   entrega a solicitud. Publicarlo es lo que exige el art. 28 de la Ley 19.496.
-6. **Revisión legal** de los tres textos por un abogado.
-7. **Fecha de vigencia de la Ley 21.719**: confirmar si se postergó del 1 de
+5. **Revisión legal** de los tres textos por un abogado.
+6. **Fecha de vigencia de la Ley 21.719**: confirmar si se postergó del 1 de
    diciembre de 2026 antes de fijar plazos internos.
+7. **Buzón de correo:** el dominio sigue sin MX (ver `docs/CORREO-DOMINIO.md`).
 
 ## 4. Borradores
 
@@ -165,14 +165,14 @@ Hecho. El pie muestra `JMV Consultores SpA · Johan Morales · Región
 Metropolitana, Chile` y una columna «Información legal» con las tres páginas.
 La 404 también lo lleva.
 
-## 6. Cuando esté el RUT
+## 6. Si cambia el RUT o la razón social
 
-```bash
-# 1. editar privacidad.html y terminos.html: reemplazar el aviso de
-#    «RUT a solicitud» por el número, y actualizar la fecha de revisión
-# 2. regenerar chrome y versionar:
-python3 deploy/actualizar-chrome.py
-python3 deploy/versionar.py
-# 3. verificar (T18 cubre las páginas legales y los enlaces del pie):
-node --test tests/sitio.test.mjs
-```
+El RUT vive en cinco lugares y el test T18 exige que el pie lo lleve:
+
+1. `privacidad.html`, `cookies.html` y `terminos.html` (frase de
+   identificación).
+2. `nosotros.html` (aviso de transparencia).
+3. `deploy/actualizar-chrome.py`, función `footer_html` (pie de las 29 páginas).
+
+Después: `python3 deploy/actualizar-chrome.py`, `python3 deploy/versionar.py`
+y `node --test tests/sitio.test.mjs`.
