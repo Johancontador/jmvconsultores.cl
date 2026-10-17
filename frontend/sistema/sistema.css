@@ -766,6 +766,9 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .sys .doc-ctx-emp, .sys .doc-ctx-per { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sys .doc-ctx .frm-label { margin-bottom: 0; }
+/* Etiquetas pequeñas sobre superficie oscura: --fg-muted daba 3.75:1; con
+   --fg-secondary quedan sobre 6:1 en ambos temas. */
+.sys .doc-ctx .frm-label, .sys .doc-filtros .frm-label { color: var(--fg-secondary); }
 .sys .doc-ctx b { font-family: var(--font-display); font-size: var(--fs-md); }
 .sys .doc-ctx-per b { font-family: var(--font-mono); }
 .sys .doc-ctx .hint { font-size: var(--fs-xs); color: var(--fg-muted); }
@@ -773,7 +776,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 /* Barra de acciones de la bandeja. */
 .sys .doc-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-bottom: var(--space-3); }
 .sys .doc-toolbar .spacer { flex: 1; }
-.sys .doc-nota { font-size: var(--fs-xs); color: var(--fg-muted); }
+.sys .doc-nota { font-size: var(--fs-xs); color: var(--fg-secondary); }
 
 /* Chips de estado con conteo real del servidor. */
 .sys .doc-estados { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -796,12 +799,15 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .sys .doc-resumen { margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--fg-secondary); }
 .sys .doc-resumen b { color: var(--fg-primary); }
 .sys .doc-resumen .mono { color: var(--fg-primary); }
-.sys .doc-resumen-nota { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--fg-muted); }
+.sys .doc-resumen-nota { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--fg-secondary); }
 
 /* Tabla: densidad contable (~40 px de fila), fila clicable y foco visible.
    `nowrap` + elipsis evita que un texto largo envuelva y estire la fila: la
    celda más alta manda en el alto de TODA la fila. */
 .sys #doc-tabla .tbl td, .sys #doc-tabla .tbl th { padding-left: 10px; padding-right: 10px; }
+/* Encabezados: --fg-muted sobre la superficie elevada del tema oscuro da ~2.8:1
+   (bajo AA). --fg-secondary sube a ~4.6:1 en oscuro y ~7.5:1 en claro. */
+.sys #doc-tabla .tbl thead th { color: var(--fg-secondary); }
 .sys #doc-tabla .tbl td { padding-top: 6px; padding-bottom: 6px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sys #doc-tabla .tbl tbody tr[data-doc] { cursor: pointer; }
 .sys #doc-tabla .tbl tbody tr[data-doc]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -859,13 +865,13 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   display: flex; justify-content: space-between; gap: var(--space-3); align-items: flex-start;
   padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border-subtle);
 }
-.doc-drawer-kicker { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); }
+.doc-drawer-kicker { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-secondary); }
 .doc-drawer-head h2 { margin: 2px 0; font-family: var(--font-display); font-size: var(--fs-lg); }
 .doc-drawer-head p { margin: 0; font-size: var(--fs-sm); }
 .doc-drawer-body { flex: 1; overflow-y: auto; padding: var(--space-4) var(--space-5) var(--space-6); }
 .doc-drawer-body h3 {
   margin: var(--space-4) 0 var(--space-2); font-size: var(--fs-xs); text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--fg-muted);
+  letter-spacing: 0.06em; color: var(--fg-secondary);
 }
 .doc-drawer-body h3:first-child { margin-top: 0; }
 .doc-dl { display: flex; flex-direction: column; gap: 2px; margin: 0; }
@@ -873,7 +879,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   display: flex; justify-content: space-between; gap: var(--space-4);
   padding: 5px 0; border-bottom: 1px dashed var(--border-subtle); font-size: var(--fs-sm);
 }
-.doc-dato dt { color: var(--fg-muted); }
+.doc-dato dt { color: var(--fg-secondary); }
 .doc-dato dd { margin: 0; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .doc-drawer-foot { display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--border-subtle); }
 .doc-drawer-foot .spacer { flex: 1; }
