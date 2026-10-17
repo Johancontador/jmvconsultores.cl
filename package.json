@@ -5,6 +5,10 @@
   "description": "Sitio corporativo JMV Consultores — HTML/CSS/JS sin dependencias",
   "scripts": {
     "test": "node --test tests/sitio.test.mjs",
-    "serve": "python3 deploy/serve.py"
+    "serve": "node deploy/py.mjs deploy/serve.py",
+    "chrome": "node deploy/py.mjs deploy/actualizar-chrome.py",
+    "versionar": "node deploy/py.mjs deploy/versionar.py",
+    "build": "node deploy/py.mjs deploy/actualizar-chrome.py && node deploy/py.mjs deploy/versionar.py",
+    "verify:render": "node deploy/verificar-render.mjs"
   }
 }

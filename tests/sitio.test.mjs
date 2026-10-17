@@ -274,3 +274,114 @@ test('T12: css/js versionados con el sha1 del contenido', async () => {
   const r = await pedir('/css/styles.css?v=' + hashes['css/styles.css'])
   assert.equal(r.status, 200, 'el CSS con ?v= se sirve')
 })
+
+/* ── T13 ──────────────────────────────────────────────────────────────────── */
+test('T13: estructura accesible compartida en todas las páginas', () => {
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+
+    // Un solo h1 por página, y un destino real para el enlace de salto.
+    assert.equal((html.match(/<h1\b/g) || []).length, 1, `${f}: debe tener exactamente un h1`)
+    assert.match(html, /<a class="skip" href="#contenido">/, `${f}: falta el enlace de salto`)
+    assert.match(html, /<main id="contenido"/, `${f}: falta <main id="contenido">`)
+
+    // Navegación: menú etiquetado + botón de móvil con estado.
+    assert.match(html, /<nav class="nav" id="navPrincipal" aria-label="[^"]+"/, `${f}: menú sin aria-label`)
+    assert.match(html, /<button class="nav-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="navPrincipal"/, `${f}: botón de menú incompleto`)
+    // La 404 no es ninguna sección del menú: es la única sin marca de página actual.
+    if (f !== '404.html') {
+      assert.match(html, /aria-current="page"/, `${f}: el menú no marca la página actual`)
+    }
+
+    // El pie organiza navegación y no deja enlaces sin texto.
+    assert.match(html, /<footer class="site-foot">/, `${f}: pie compartido ausente`)
+    assert.match(html, /<nav aria-label="Servicios">/, `${f}: el pie no lista servicios`)
+    assert.match(html, /<html lang="es-CL">/, `${f}: idioma no declarado`)
+  }
+})
+
+/* ── T14 ──────────────────────────────────────────────────────────────────── */
+test('T14: toda clase usada en el HTML existe en el CSS', () => {
+  // Excepciones documentadas: envoltorios sin estilo propio y la clase que
+  // agrega el script de arranque.
+  const permitidas = new Set(['faq-home', 'wa-float__text', 'js'])
+  const css = leer('css/styles.css')
+  const definidas = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]))
+
+  const usadas = new Set()
+  for (const f of [...paginas, '404.html']) {
+    for (const m of leer(f).matchAll(/class="([^"]+)"/g)) {
+      m[1].split(/\s+/).filter(Boolean).forEach((c) => usadas.add(c))
+    }
+  }
+  const sinEstilo = [...usadas].filter((c) => !definidas.has(c) && !permitidas.has(c)).sort()
+  assert.deepEqual(sinEstilo, [], `clases sin regla CSS: ${sinEstilo.join(', ')}`)
+})
+
+/* ── T15 ──────────────────────────────────────────────────────────────────── */
+test('T15: no quedan restos del diseño anterior', () => {
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+    assert.doesNotMatch(html, /id="bg3d"/, `${f}: sigue el canvas 3D`)
+    assert.doesNotMatch(html, /bg3d\.js/, `${f}: sigue cargando el script 3D`)
+    assert.doesNotMatch(html, /data-counter=/, `${f}: quedan contadores animados`)
+    assert.doesNotMatch(html, /class="topbar"/, `${f}: quedó la barra superior antigua`)
+    assert.doesNotMatch(html, /font-family=Sora:[^"]*Inter/, `${f}: carga una segunda fuente de cuerpo`)
+    assert.match(html, /theme-color" content="#ffffff"/, `${f}: theme-color no corresponde al tema claro`)
+  }
+})
+
+/* ── T16 ──────────────────────────────────────────────────────────────────── */
+test('T16: datos estructurados válidos y formularios etiquetados', () => {
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+    const bloques = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+    // La 404 va con noindex y no declara datos estructurados: no aporta nada.
+    if (f !== '404.html') assert.ok(bloques.length >= 1, `${f}: sin datos estructurados`)
+    for (const [i, bloque] of bloques.entries()) {
+      const datos = JSON.parse(bloque[1]) // lanza si el JSON está roto
+      assert.equal(datos['@context'], 'https://schema.org', `${f}: bloque ${i} sin contexto schema.org`)
+      if (datos['@graph']) {
+        assert.ok(Array.isArray(datos['@graph']) && datos['@graph'].length > 0, `${f}: bloque ${i} con @graph vacío`)
+        datos['@graph'].forEach((nodo, j) => assert.ok(nodo['@type'], `${f}: nodo ${j} del bloque ${i} sin @type`))
+      } else {
+        assert.ok(datos['@type'], `${f}: bloque ${i} sin @type`)
+      }
+    }
+
+    // Cada control con id tiene su <label for>: nada depende solo del placeholder.
+    for (const m of html.matchAll(/<(input|select|textarea)\b[^>]*>/g)) {
+      const id = m[0].match(/id="([^"]+)"/)?.[1]
+      if (!id) continue
+      const etiquetado =
+        new RegExp(`for="${id}"`).test(html) || /aria-label="[^"]+"/.test(m[0]) || /type="hidden"/.test(m[0])
+      assert.ok(etiquetado, `${f}: el control ${id} no tiene etiqueta`)
+    }
+
+    // Las imágenes decorativas no deben anunciarse dos veces.
+    for (const m of html.matchAll(/<img\b[^>]*>/g)) {
+      assert.match(m[0], /\balt="[^"]*"/, `${f}: imagen sin atributo alt`)
+    }
+  }
+})
+
+/* ── T17 ──────────────────────────────────────────────────────────────────── */
+test('T17: redes sociales solo si están configuradas', () => {
+  // El componente vive en un solo lugar (js/main.js) y no se publica ningún
+  // perfil de ejemplo: si la constante está vacía, el bloque del pie se elimina.
+  const js = leer('js/main.js')
+  assert.match(js, /const REDES = \{/, 'falta la configuración central de redes')
+  assert.match(js, /bloqueRedes\.remove\(\)/, 'sin perfiles configurados debe eliminar el bloque')
+  assert.match(js, /a\.rel = "noopener me"/, 'los enlaces externos deben abrir con rel seguro')
+
+  const dominios = /(linkedin\.com|instagram\.com|facebook\.com|youtube\.com|twitter\.com|x\.com|tiktok\.com)/i
+  for (const f of [...paginas, '404.html']) {
+    const html = leer(f)
+    const enlaces = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]).filter((href) => dominios.test(href))
+    assert.deepEqual(enlaces, [], `${f}: publica perfiles sociales no confirmados`)
+    assert.match(html, /data-redes/, `${f}: el pie no tiene el bloque de redes`)
+  }
+
+  // Lo configurado debe salir del mismo CONFIG: nada duplicado a mano en el pie.
+  assert.doesNotMatch(leer('contacto.html'), /whatsapp\.com|api\.whatsapp/, 'no se repiten canales a mano')
+})

@@ -3,7 +3,15 @@
 """
 gen_faq_central.py — Genera preguntas-frecuentes.html con las 350 FAQ
 (portada de 50 destacadas con buscador + 7 bloques temáticos de 50).
-Correr después de editar data/faq_*.py:  python3 gen_faq_central.py
+
+Correr después de editar data/faq_*.py:
+
+    python3 gen_faq_central.py
+    python3 deploy/actualizar-chrome.py   # reaplica cabecera, menú y pie
+    python3 deploy/versionar.py
+
+Este generador escribe HTML completo con su propia cabecera y su propio pie:
+la versión vigente de esos bloques la pone actualizar-chrome.py.
 """
 import html as H
 import json
@@ -154,6 +162,7 @@ TEMPLATE = """<!DOCTYPE html>
       </div>
 
       <div class="faq-search reveal">
+        <label for="faqSearch">Busca por palabra clave</label>
         <input type="search" id="faqSearch" placeholder="Busca tu duda: finiquito, F22, Papito Corazón, MIPER..." aria-label="Buscar en preguntas frecuentes" />
       </div>
       <p class="faq-search__hint" id="faqCount" aria-live="polite">Mostrando las {dest_num} más consultadas</p>

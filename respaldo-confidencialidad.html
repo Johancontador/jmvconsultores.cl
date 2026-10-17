@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>document.documentElement.classList.add("js");</script>
   <title>Respaldo y confidencialidad — JMV Consultores | Chile</title>
   <meta name="description" content="Tu información contable y tributaria es tan sensible como tu cuenta bancaria. La protegemos con cifrado, accesos controlados, contratos de confidencialidad" />
   <meta name="author" content="JMV Consultores" />
-  <meta name="theme-color" content="#0a0e1a" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="canonical" href="https://jmvconsultores.cl/respaldo-confidencialidad.html" />
 
   <meta property="og:type" content="website" />
@@ -27,31 +28,51 @@
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" media="print" onload="this.media='all'" />
-  <noscript>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
-  </noscript>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap" />
 
-  <link rel="stylesheet" href="css/styles.css?v=dd3487a1" />
-  <script defer src="js/bg3d.js?v=80a05693"></script>
-  <script defer src="js/main.js?v=666b47f3"></script>
+  <link rel="stylesheet" href="css/styles.css?v=1e4607f6" />
+  <script defer src="js/main.js?v=82d284e0"></script>
 </head>
 <body>
 
-  <canvas id="bg3d" aria-hidden="true"></canvas>
-
-  <header class="topbar">
-    <div class="container topbar__inner">
-      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
-      <a href="https://app.jmvconsultores.cl" class="btn btn--ghost btn--sm" id="btnSistema">Iniciar sesión</a>
-      <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="site-head">
+    <div class="container site-head__inner">
+      <a class="site-head__brand" href="/" aria-label="JMV Consultores — ir al inicio">
+        <img src="/assets/marca-oscura.svg" alt="" width="36" height="36" aria-hidden="true" />
+        <span class="site-head__brand-text">JMV<small>Consultores</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="navPrincipal" aria-label="Abrir menú de navegación">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
+      <nav class="nav" id="navPrincipal" aria-label="Navegación principal">
+        <ul class="nav__list">
+          <li><a href="/">Inicio</a></li>
+          <li><a href="/servicios.html" aria-current="page">Servicios</a></li>
+          <li><a href="/soluciones-digitales.html">Soluciones digitales</a></li>
+          <li><a href="/preguntas-frecuentes.html">Recursos</a></li>
+          <li><a href="/nosotros.html">Nosotros</a></li>
+          <li><a href="/contacto.html">Contacto</a></li>
+        </ul>
+        <div class="nav__cta">
+          <a class="btn btn--ghost btn--sm" href="https://app.jmvconsultores.cl">Acceso clientes</a>
+          <a class="btn btn--primary btn--sm" href="/contacto.html">Consulta gratis</a>
+        </div>
+      </nav>
     </div>
   </header>
 
-  <main class="detail">
+  <main id="contenido" class="detail">
     <div class="container">
-      <a class="crumb" href="index.html"><span class="contact__arrow">←</span> Volver al inicio</a>
+      <nav class="breadcrumb" aria-label="Ruta de navegación">
+        <ol>
+          <li><a href="/">Inicio</a></li>
+          <li><a href="/servicios.html">Servicios</a></li>
+          <li aria-current="page">Respaldo y confidencialidad</li>
+        </ol>
+      </nav>
 
       <div class="detail__head">
         <span class="detail__num gradient-text">06</span>
@@ -675,13 +696,54 @@
     </div>
   </section>
 
-  <footer class="footer">
-    <div class="container footer__inner">
-      <img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" />
-      <p class="footer__legal">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
-      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · Hecho con precisión contable</p>
+  <footer class="site-foot">
+    <div class="container site-foot__grid">
+      <div class="site-foot__brand">
+        <a href="/" aria-label="JMV Consultores — ir al inicio"><img src="/assets/logo-light.svg" alt="JMV Consultores" width="168" height="126" /></a>
+        <p>Consultoría contable, tributaria y de remuneraciones para pymes chilenas. Atención 100% en línea, con información clara y respaldos ordenados.</p>
+        <a class="site-foot__mail" href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a>
+      </div>
+      <nav aria-label="Servicios">
+        <h2>Servicios</h2>
+        <ul>
+            <li><a href="/contabilidad-completa.html">Contabilidad completa</a></li>
+            <li><a href="/remuneraciones.html">Remuneraciones y finiquitos</a></li>
+            <li><a href="/acompanamiento-contable.html">Acompañamiento contable</a></li>
+            <li><a href="/asesoria-tributaria.html">Asesoría tributaria</a></li>
+            <li><a href="/emprendedores-pymes.html">Emprendedores y Pymes</a></li>
+            <li><a href="/prevencion-riesgos.html">Prevención de riesgos</a></li>
+            <li><a href="/respaldo-confidencialidad.html">Respaldo y confidencialidad</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Recursos">
+        <h2>Recursos</h2>
+        <ul>
+          <li><a href="/preguntas-frecuentes.html">Preguntas frecuentes</a></li>
+          <li><a href="/servicios.html">Catálogo de servicios</a></li>
+          <li><a href="/soluciones-digitales.html">Soluciones digitales</a></li>
+          <li><a href="/nosotros.html">Nosotros</a></li>
+        </ul>
+      </nav>
+      <div>
+        <h2>Contacto</h2>
+        <ul>
+          <li><a href="https://wa.me/56975752213">WhatsApp +56 9 7575 2213</a></li>
+          <li><a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></li>
+          <li><a href="https://app.jmvconsultores.cl">Acceso clientes</a></li>
+          <li><a href="/contacto.html">Solicitar asesoría</a></li>
+        </ul>
+      </div>
+      <!-- Redes oficiales: lo llena js/main.js solo con perfiles reales
+           (constante REDES). Sin perfiles configurados, el bloque se elimina. -->
+      <div data-redes hidden>
+        <h2>Redes oficiales</h2>
+        <ul></ul>
+      </div>
     </div>
-    <div class="footer__access" style="margin-top:14px"><a id="btnSistemaFooter" href="https://app.jmvconsultores.cl" style="color:inherit;text-decoration:underline">Acceso clientes al Software →</a></div>
+    <div class="container site-foot__bottom">
+      <p>© <span id="year">2026</span> JMV Consultores SpA · jmvconsultores.cl</p>
+      <p>Chile · Atención en línea</p>
+    </div>
   </footer>
 
   <a class="wa-float" href="https://wa.me/56975752213?text=Hola%2C%20necesito%20asesor%C3%ADa%20en%20respaldo%20y%20confidencialidad" target="_blank" rel="noopener">
@@ -908,6 +970,18 @@
     }
   ]
 }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {"@type": "ListItem", "position": 1, "name": "Inicio", "item": "https://jmvconsultores.cl/"},
+      {"@type": "ListItem", "position": 2, "name": "Servicios", "item": "https://jmvconsultores.cl/servicios.html"},
+      {"@type": "ListItem", "position": 3, "name": "Respaldo y confidencialidad", "item": "https://jmvconsultores.cl/respaldo-confidencialidad.html"}
+    ]
+  }
   </script>
 
 </body>

@@ -59,6 +59,28 @@ Levanta el servidor real en un puerto efímero y le pide cada página por HTTP:
 | T10 | todas las páginas llevan a la app (`app.jmvconsultores.cl`) |
 | T11 | sin listado de directorios |
 | T12 | `css`/`js` referenciados con `?v=<sha1>` del contenido |
+| T13 | estructura accesible compartida: un `h1`, enlace de salto, `<main id="contenido">`, menú etiquetado con `aria-current`, botón de móvil con `aria-expanded`, pie con navegación |
+| T14 | toda clase usada en el HTML tiene regla en `css/styles.css` |
+| T15 | sin restos del diseño anterior (canvas 3D, contadores, `topbar`, segunda fuente) |
+| T16 | JSON-LD parseable y con `@type`/`@graph`; cada control con etiqueta y cada imagen con `alt` |
+| T17 | redes sociales solo si están configuradas (el bloque del pie se elimina si `REDES` está vacío) |
+
+## Cabecera, menú y pie compartidos
+
+El sitio no tiene build, así que la navegación común vive en
+`deploy/actualizar-chrome.py`: define **una vez** la cabecera, el menú, el pie y
+las migas, y los inyecta en todas las páginas. También regenera `sitemap.xml`
+desde la lista `PAGINAS` (que es la fuente de verdad de la navegación).
+
+```bash
+python3 deploy/actualizar-chrome.py   # idempotente
+python3 deploy/versionar.py           # después, siempre
+```
+
+Las páginas escritas a mano que no son HTML completo usan los marcadores
+`<!--SITE_HEADER-->` y `<!--SITE_FOOTER-->`. Si se agrega una página nueva, se
+registra en `PAGINAS` (con su etiqueta de menú) y el sitemap y el menú se
+actualizan solos.
 
 ## Generadores
 
@@ -75,11 +97,13 @@ node --test tests/sitio.test.mjs
 
 ## Tarjeta social (`assets/og-image.png`)
 
-Fuente: `deploy/og-card.html` (1200×630). Para regenerarla:
+Fuente: `deploy/og-card.html` (1200×630), ya en la identidad clara. Para
+regenerarla (Windows: ruta completa a `chrome.exe`):
 
 ```bash
-google-chrome --headless --hide-scrollbars --force-device-scale-factor=1 \
-  --window-size=1200,630 --virtual-time-budget=4000 \
+google-chrome --headless=new --hide-scrollbars --force-device-scale-factor=1 \
+  --window-size=1200,630 --default-background-color=FFFFFFFF \
+  --virtual-time-budget=4000 \
   --screenshot=assets/og-image.png deploy/og-card.html
 ```
 
@@ -103,10 +127,6 @@ python3 deploy/versionar.py     # reescribe ?v= en todos los .html
 Los generadores aplican el mismo helper al escribir, así que regenerar nunca
 pierde el versionado. T12 falla si se toca el CSS/JS y no se corre el script.
 
-El hash se calcula sobre los bytes desplegados (**LF**), por eso el repo fija
-`* text=auto eol=lf` en `.gitattributes`: sin eso, un checkout en Windows con
-`core.autocrlf=true` cambia los bytes y T12 falla aunque no haya nada roto.
-
 ## Desplegar
 
 El sitio se sirve desde el working tree del repo: no hay build.
@@ -123,12 +143,50 @@ curl -sI https://jmvconsultores.cl/ | head -5
 El 404, los headers y los redirects no necesitan reload de nginx: los aplica
 el proceso del sitio.
 
+## Redes sociales
+
+Se configuran en un único lugar: la constante `REDES` de `js/main.js`. El pie
+(`deploy/actualizar-chrome.py`) trae un bloque `[data-redes]` oculto que el script
+rellena solo con URLs `https` reales; si no hay ninguna, el bloque se elimina. Sin
+perfiles confirmados no se publica ningún enlace, y T17 falla si aparece uno.
+
 ## Revisión en navegador real
 
-La suite es HTTP, no de navegador. Para verificar layout y consola se usó Chrome
-headless (CDP) sobre el servidor local, en 390 px y 1366 px: sin desbordes, sin
-errores de consola y con el canvas de fondo pintando tanto con movimiento normal
-como con `prefers-reduced-motion`.
+La suite es HTTP, no de navegador. `deploy/verificar-render.mjs` cubre lo que
+ocurre **después de pintar**, manejando Chrome por CDP (sin dependencias):
+14 páginas × móvil 390 px y escritorio 1280 px.
+
+```bash
+PORT=8090 python3 deploy/serve.py &
+node deploy/verificar-render.mjs     # o: npm run verify:render
+```
+
+Comprueba, por página y por ancho: errores de consola, desborde horizontal,
+contraste WCAG del texto de párrafo (≥ 4,5:1), `h1` presente y visible, fondo
+claro, controles visibles ≥ 40 px, enlace de salto, botón de menú solo en móvil,
+menú que abre y cierra con `Escape`, y formulario que marca errores, informa al
+usuario y mueve el foco al primer campo inválido.
+
+No entra en `npm test` a propósito: no se puede exigir Chrome en cualquier
+máquina que corra la suite. La variable `CHROME` permite indicar su ruta.
+
+## Sistema visual
+
+`css/styles.css` es la fuente única de estilos (tema claro: blanco y gris
+cálido, azul marino `#16243f`, acento bronce `#8a5a2b`). Los nombres de clase se
+mantuvieron a propósito para no romper el HTML ya generado. T14 falla si una
+página usa una clase que no existe en el CSS: es la red que evita que una página
+quede sin estilo.
+
+La tarjeta social se regenera con Chrome headless desde `deploy/og-card.html`
+(ver más arriba); después de cambiarla hay que correr `deploy/versionar.py` solo
+si se tocó css/js.
+
+## Nota sobre `js/bg3d.js`
+
+Es el canvas 3D del diseño anterior. **Ninguna página lo carga** (T15 falla si
+alguna lo referencia). Se conserva sin uso para poder revertir el rediseño sin
+recuperar el archivo de git; no pesa en la carga porque nadie lo pide.
 
 ## Nota sobre la copia antigua en `/var/www/jmvconsultores.cl`
 

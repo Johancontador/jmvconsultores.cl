@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>document.documentElement.classList.add("js");</script>
   <title>JMV Consultores — Contabilidad y Remuneraciones | Chile</title>
   <meta name="description" content="Contabilidad, remuneraciones y obligaciones tributarias al día, 100% en línea. Agenda tu consulta gratis y responde un contador en menos de 24 hrs." />
   <meta name="keywords" content="contabilidad chile, remuneraciones, contador, consultora contable, jmv consultores" />
   <meta name="author" content="JMV Consultores" />
-  <meta name="theme-color" content="#0a0e1a" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="canonical" href="https://jmvconsultores.cl/" />
 
   <!-- Open Graph -->
@@ -27,56 +28,91 @@
   <meta name="twitter:image" content="https://jmvconsultores.cl/assets/og-image.png" />
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
-
-  <!-- Fuentes asíncronas, solo pesos usados -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" media="print" onload="this.media='all'" />
-  <noscript>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@600&display=swap" />
-  </noscript>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap" />
 
-  <link rel="stylesheet" href="css/styles.css?v=dd3487a1" />
-  <script defer src="js/bg3d.js?v=80a05693"></script>
-  <script defer src="js/main.js?v=666b47f3"></script>
+  <link rel="stylesheet" href="css/styles.css?v=1e4607f6" />
+  <script defer src="js/main.js?v=82d284e0"></script>
 </head>
 <body>
-
-  <!-- ══════════ FONDO 3D ══════════ -->
-  <canvas id="bg3d" aria-hidden="true"></canvas>
-
-  <!-- ══════════ BARRA SUPERIOR ══════════ -->
-  <header class="topbar">
-    <div class="container topbar__inner">
-      <a href="index.html" class="topbar__logo-link" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="topbar__logo" /></a>
-      <a href="https://app.jmvconsultores.cl" class="btn btn--ghost btn--sm" id="btnSistema">Iniciar sesión</a>
-      <a href="#contacto" class="btn btn--primary btn--sm">Consulta gratis</a>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="site-head">
+    <div class="container site-head__inner">
+      <a class="site-head__brand" href="/" aria-label="JMV Consultores — ir al inicio">
+        <img src="/assets/marca-oscura.svg" alt="" width="36" height="36" aria-hidden="true" />
+        <span class="site-head__brand-text">JMV<small>Consultores</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="navPrincipal" aria-label="Abrir menú de navegación">
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+        <span class="nav-toggle__bar" aria-hidden="true"></span>
+      </button>
+      <nav class="nav" id="navPrincipal" aria-label="Navegación principal">
+        <ul class="nav__list">
+          <li><a href="/" aria-current="page">Inicio</a></li>
+          <li><a href="/servicios.html">Servicios</a></li>
+          <li><a href="/soluciones-digitales.html">Soluciones digitales</a></li>
+          <li><a href="/preguntas-frecuentes.html">Recursos</a></li>
+          <li><a href="/nosotros.html">Nosotros</a></li>
+          <li><a href="/contacto.html">Contacto</a></li>
+        </ul>
+        <div class="nav__cta">
+          <a class="btn btn--ghost btn--sm" href="https://app.jmvconsultores.cl">Acceso clientes</a>
+          <a class="btn btn--primary btn--sm" href="/contacto.html">Consulta gratis</a>
+        </div>
+      </nav>
     </div>
   </header>
 
+  <main id="contenido">
+
   <!-- ══════════ HERO ══════════ -->
   <section class="hero">
-    <div class="hero__blob hero__blob--1" aria-hidden="true"></div>
-    <div class="hero__blob hero__blob--2" aria-hidden="true"></div>
     <div class="container hero__content">
       <p class="hero__eyebrow reveal">Contabilidad · Remuneraciones · Tributario</p>
       <h1 class="hero__title reveal">
-        Tu contabilidad al día,<br />
-        <span class="gradient-text">tu negocio en foco.</span>
+        Contabilidad, gestión y tecnología para empresas que necesitan avanzar con claridad
       </h1>
       <p class="hero__subtitle reveal">
-        En <strong>JMV Consultores</strong> nos encargamos de tu contabilidad, remuneraciones y obligaciones tributarias,
-        para que tú dediques tu tiempo a hacer crecer tu empresa.
+        Servicios profesionales y herramientas de gestión para apoyar el cumplimiento, el control financiero
+        y la administración de tu negocio, con atención <strong>100% en línea</strong> desde cualquier región de Chile.
       </p>
       <div class="hero__actions reveal">
-        <a href="#contacto" class="btn btn--primary btn--lg">Agenda tu consulta gratis</a>
+        <a href="contacto.html" class="btn btn--primary btn--lg">Consultar por nuestros servicios</a>
+        <a href="#servicios" class="btn btn--ghost btn--lg">Ver los 7 servicios</a>
       </div>
       <ul class="hero__stats reveal">
-        <li><strong data-counter="100">0</strong><span>% digital</span></li>
-        <li><strong data-counter="100">0</strong><span>% en línea</span></li>
-        <li><strong data-counter="24">0</strong><span>hrs de respuesta</span></li>
+        <li><strong>7</strong><span>servicios contables y laborales</span></li>
+        <li><strong>350</strong><span>preguntas respondidas</span></li>
+        <li><strong>100%</strong><span>en línea, sin oficina</span></li>
       </ul>
+    </div>
+  </section>
+
+  <!-- ══════════ CONFIANZA — solo información comprobable ══════════ -->
+  <section class="section section--alt" id="confianza">
+    <div class="container">
+      <p class="section__eyebrow reveal">Cómo nos diferenciamos</p>
+      <h2 class="section__title reveal">Un método de trabajo, <span class="gradient-text">no una promesa</span></h2>
+      <p class="section__lead reveal">Tres cosas que puedes verificar desde el primer día.</p>
+      <div class="grid grid--3">
+        <div class="card reveal">
+          <span class="card__num">01</span>
+          <h3 class="card__title">Alcance por escrito</h3>
+          <p class="card__text">Antes de empezar sabemos qué se entrega, cada cuánto y quién lo hace. Sin servicios «según disponibilidad».</p>
+        </div>
+        <div class="card reveal">
+          <span class="card__num">02</span>
+          <h3 class="card__title">Respaldos ordenados</h3>
+          <p class="card__text">Documentos clasificados y conservados según la exigencia del Código Tributario, disponibles cuando los necesites.</p>
+        </div>
+        <div class="card reveal">
+          <span class="card__num">03</span>
+          <h3 class="card__title">Explicación clara</h3>
+          <p class="card__text">Reportes sin tecnicismos y una conversación periódica para decidir. Si algo no cuadra, se dice antes de presentarlo.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -85,7 +121,7 @@
     <div class="container">
       <p class="section__eyebrow reveal">Servicios</p>
       <h2 class="section__title reveal">Todo lo que tu empresa necesita, <span class="gradient-text">en un solo lugar</span></h2>
-      <p class="section__lead reveal">Cobertura completa en contabilidad y remuneraciones, con tecnología y trato cercano.</p>
+      <p class="section__lead reveal">Siete líneas de trabajo en contabilidad, personas y cumplimiento. <a href="servicios.html">Ver el catálogo completo</a>.</p>
 
       <div class="svc">
         <a class="svc__row reveal" href="contabilidad-completa.html">
@@ -148,6 +184,30 @@
     </div>
   </section>
 
+  <!-- ══════════ SOLUCIONES DIGITALES ══════════ -->
+  <section class="section section--alt" id="soluciones">
+    <div class="container">
+      <p class="section__eyebrow reveal">Soluciones digitales</p>
+      <h2 class="section__title reveal">La operación contable, <span class="gradient-text">en un sistema privado</span></h2>
+      <p class="section__lead reveal">Además de la asesoría, existe una plataforma donde se ordena la contabilidad de cada empresa cliente y donde el dueño consulta su información.</p>
+      <div class="grid grid--3">
+        <div class="card reveal">
+          <h3 class="card__title">Contabilidad e IVA</h3>
+          <p class="card__text">Bandeja SII, libros de compra y venta, IVA determinado y el ciclo contable hasta el asiento.</p>
+        </div>
+        <div class="card reveal">
+          <h3 class="card__title">Tesorería y reportes</h3>
+          <p class="card__text">Bancos, cartolas, conciliación bancaria y reportes construidos sobre los datos contables.</p>
+        </div>
+        <div class="card reveal">
+          <h3 class="card__title">Portal del cliente</h3>
+          <p class="card__text">Vista de solo lectura para el dueño: ventas, cartera, documentos y reportes de su propia empresa.</p>
+        </div>
+      </div>
+      <p class="faq__more"><a href="soluciones-digitales.html">Conocer la plataforma en detalle</a> · <a href="https://app.jmvconsultores.cl">Acceso clientes</a></p>
+    </div>
+  </section>
+
   <!-- ══════════ NOSOTROS ══════════ -->
   <section class="section section--alt" id="nosotros">
     <div class="container about">
@@ -155,28 +215,30 @@
         <p class="section__eyebrow reveal">Nosotros</p>
         <h2 class="section__title reveal">Contadores que hablan <span class="gradient-text">tu idioma</span></h2>
         <p class="reveal">
-          Somos un equipo de consultores contables apasionados por la modernización.
+          Somos una consultora contable chilena que trabaja en línea con pymes y emprendedores.
           Creemos que la contabilidad no debe ser un dolor de cabeza: debe ser una herramienta clara
-          que te dé control y tranquilidad.
+          para tomar decisiones y cumplir a tiempo.
         </p>
         <p class="reveal">
-          Combinamos años de experiencia con plataformas digitales para entregarte
-          información al día, en línea y explicada de forma simple.
+          Ordenamos la información, explicamos los números sin tecnicismos y usamos herramientas
+          digitales para que tengas todo a la vista. Cada decisión con costo o riesgo se comunica antes.
         </p>
         <ul class="about__list reveal">
-          <li>Atención personalizada y directa</li>
-          <li>100% digital, sin papeleo innecesario</li>
-          <li>Cumplimiento garantizado con SII y Previred</li>
+          <li>Alcance, plazos y entregables definidos por escrito</li>
+          <li>Trabajo 100% en línea, sin papeleo innecesario</li>
+          <li>Canal directo para las consultas del mes</li>
         </ul>
+        <p style="margin-top:22px"><a class="btn btn--ghost" href="nosotros.html">Conocer cómo trabajamos</a></p>
       </div>
       <div class="about__visual reveal" aria-hidden="true">
         <div class="about__panel">
-          <p class="about__panel-title">Resumen mensual · ejemplo</p>
-          <div class="about__panel-stat"><span>Ingresos</span><strong class="gradient-text">$ 12.450.000</strong></div>
-          <div class="about__panel-stat"><span>Impuestos F29</span><strong class="gradient-text">Declarado</strong></div>
-          <div class="about__panel-stat"><span>Remuneraciones</span><strong class="gradient-text">Pagadas</strong></div>
+          <p class="about__panel-title">Tu mes con JMV</p>
+          <div class="about__panel-stat"><span>F29 e impuestos del mes</span><strong>Declarados y pagados</strong></div>
+          <div class="about__panel-stat"><span>Remuneraciones</span><strong>Calculadas y en Previred</strong></div>
+          <div class="about__panel-stat"><span>Contabilidad</span><strong>Libros y conciliaciones al día</strong></div>
+          <div class="about__panel-stat"><span>Reportes</span><strong>Enviados en formato simple</strong></div>
           <div class="about__panel-bar"></div>
-          <p class="about__panel-note">Todo al día. Sin estrés.</p>
+          <p class="about__panel-note">Y una conversación para revisar tus números.</p>
         </div>
       </div>
     </div>
@@ -315,13 +377,57 @@
   </section>
 
   <!-- ══════════ FOOTER mínimo ══════════ -->
-  <footer class="footer">
-    <div class="container footer__inner">
-      <a href="index.html" aria-label="JMV Consultores — volver al inicio"><img src="assets/logo-light.svg" alt="JMV Consultores" class="footer__logo" /></a>
-      <p class="footer__legal" id="razonSocial">JMV CONSULTORES SPA · contacto@jmvconsultores.cl</p>
-      <p class="footer__copy">© <span id="year">2026</span> JMV Consultores · jmvconsultores.cl · <a class="footer__faq-link" href="preguntas-frecuentes.html">Preguntas frecuentes</a></p>
+  
+  </main>
+
+  <footer class="site-foot">
+    <div class="container site-foot__grid">
+      <div class="site-foot__brand">
+        <a href="/" aria-label="JMV Consultores — ir al inicio"><img src="/assets/logo-light.svg" alt="JMV Consultores" width="168" height="126" /></a>
+        <p>Consultoría contable, tributaria y de remuneraciones para pymes chilenas. Atención 100% en línea, con información clara y respaldos ordenados.</p>
+        <a class="site-foot__mail" href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a>
+      </div>
+      <nav aria-label="Servicios">
+        <h2>Servicios</h2>
+        <ul>
+            <li><a href="/contabilidad-completa.html">Contabilidad completa</a></li>
+            <li><a href="/remuneraciones.html">Remuneraciones y finiquitos</a></li>
+            <li><a href="/acompanamiento-contable.html">Acompañamiento contable</a></li>
+            <li><a href="/asesoria-tributaria.html">Asesoría tributaria</a></li>
+            <li><a href="/emprendedores-pymes.html">Emprendedores y Pymes</a></li>
+            <li><a href="/prevencion-riesgos.html">Prevención de riesgos</a></li>
+            <li><a href="/respaldo-confidencialidad.html">Respaldo y confidencialidad</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Recursos">
+        <h2>Recursos</h2>
+        <ul>
+          <li><a href="/preguntas-frecuentes.html">Preguntas frecuentes</a></li>
+          <li><a href="/servicios.html">Catálogo de servicios</a></li>
+          <li><a href="/soluciones-digitales.html">Soluciones digitales</a></li>
+          <li><a href="/nosotros.html">Nosotros</a></li>
+        </ul>
+      </nav>
+      <div>
+        <h2>Contacto</h2>
+        <ul>
+          <li><a href="https://wa.me/56975752213">WhatsApp +56 9 7575 2213</a></li>
+          <li><a href="mailto:contacto@jmvconsultores.cl">contacto@jmvconsultores.cl</a></li>
+          <li><a href="https://app.jmvconsultores.cl">Acceso clientes</a></li>
+          <li><a href="/contacto.html">Solicitar asesoría</a></li>
+        </ul>
+      </div>
+      <!-- Redes oficiales: lo llena js/main.js solo con perfiles reales
+           (constante REDES). Sin perfiles configurados, el bloque se elimina. -->
+      <div data-redes hidden>
+        <h2>Redes oficiales</h2>
+        <ul></ul>
+      </div>
     </div>
-    <div class="footer__access" style="margin-top:14px"><a id="btnSistemaFooter" href="https://app.jmvconsultores.cl" style="color:inherit;text-decoration:underline">Acceso clientes al Software →</a></div>
+    <div class="container site-foot__bottom">
+      <p>© <span id="year">2026</span> JMV Consultores SpA · jmvconsultores.cl</p>
+      <p>Chile · Atención en línea</p>
+    </div>
   </footer>
 
   <!-- WhatsApp flotante: píldora tipográfica, sin icono -->

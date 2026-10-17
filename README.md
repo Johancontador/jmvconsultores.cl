@@ -8,12 +8,24 @@ Construido con HTML + CSS + JS puro. Sin frameworks, sin build, sin dependencias
 ## 📁 Estructura
 
 ```
-├── index.html          → Página principal (todo el contenido)
-├── css/styles.css      → Estilos y diseño
-├── js/main.js          → Interactividad + CONFIG de datos
-├── assets/favicon.svg  → Ícono de la pestaña
-└── README.md
+├── index.html                  → Página principal
+├── servicios.html              → Catálogo de los 7 servicios
+├── <servicio>.html             → 7 páginas de detalle (generadas)
+├── soluciones-digitales.html   → Plataforma privada de gestión
+├── preguntas-frecuentes.html   → 350 respuestas (generada)
+├── nosotros.html               → Institucional: método, misión, valores
+├── contacto.html               → Canales + formulario
+├── 404.html
+├── css/styles.css              → Sistema visual (tema claro)
+├── js/main.js                  → Menú móvil, validación, CONFIG de datos
+├── assets/                     → Marca, favicon, og-image.png
+├── deploy/                     → servidor, versionado y cabecera/pie comunes
+├── data/                       → FAQ crudas de los generadores
+└── docs/                       → técnico, legal pendiente y rediseño
 ```
+
+El rediseño integral (auditoría, mapa de páginas, sistema visual, pruebas y
+pendientes) está documentado en [`docs/REDISENO-2026-10-17.md`](docs/REDISENO-2026-10-17.md).
 
 ---
 
@@ -167,8 +179,8 @@ cambia SSL/TLS en Cloudflare a **Full (strict)**.
 
 ## ✅ Checklist final
 
-- [ ] Número de WhatsApp real en `js/main.js`
-- [ ] Razón social y RUT en el footer
+- [x] Número de WhatsApp real en `js/main.js`
+- [ ] Razón social y RUT en el footer (falta el dato: ver `docs/LEGAL-PENDIENTE.md`)
 - [ ] Sitio probado en celular (Chrome → F12 → modo móvil)
 - [ ] Repositorio en GitHub
 - [ ] Nameservers cambiados a Cloudflare
@@ -181,10 +193,13 @@ cambia SSL/TLS en Cloudflare a **Full (strict)**.
 
 ## 📈 Mejoras futuras sugeridas
 
-- Google Analytics 4 o Plausible para estadísticas
-- Sección de testimonios de clientes
-- Blog de noticias tributarias (excelente para SEO)
-- Google Business Profile vinculado al dominio
+Priorizadas en `docs/REDISENO-2026-10-17.md` §9:
+
+- Páginas legales (privacidad, cookies, términos) — bloqueadas por datos del propietario
+- Blog tributario con artículos revisados
+- Analítica liviana (implica actualizar el texto legal)
+- Testimonios reales con autorización
+- Google Business Profile y Search Console
 
 ---
 
@@ -195,8 +210,14 @@ El sitio lo sirve `deploy/serve.py` (servicio `jmv-www` en el puerto 8090), no
 URLs limpias con 301 a la canónica y headers de seguridad.
 
 ```bash
-npm test        # 11 tests de consistencia contra el servidor real
-npm run serve   # levantar el sitio en local (PORT=8090 por defecto)
+npm test             # 16 tests de consistencia contra el servidor real
+npm run serve        # levantar el sitio en local (PORT=8090 por defecto)
+npm run build        # cabecera/menú/pie + sitemap + versionado ?v=sha1
+npm run verify:render # Chrome real: consola, desbordes, contraste, formulario
 ```
+
+Después de editar `css/` o `js/` hay que correr `npm run build` (el `?v=` cacha
+en Cloudflare 4 horas). Después de regenerar páginas con los scripts `gen_*.py`,
+también: inyectan el HTML completo y hay que volver a aplicar la cabecera común.
 
 Detalle completo en [`docs/SITIO-TECNICO.md`](docs/SITIO-TECNICO.md).

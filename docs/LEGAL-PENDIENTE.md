@@ -11,9 +11,9 @@ publicarlos. No publicar con marcadores `{{ }}` sin completar.
 | Cookies propias | **Ninguna.** El dominio no envía `Set-Cookie`. |
 | Analítica / píxeles | **Ninguno.** No hay GA4, GTM, Meta Pixel, Hotjar ni Clarity. |
 | Terceros que ven tu tráfico | **Cloudflare** (CDN/DNS, ve la IP), **Google Fonts** (`fonts.googleapis.com`, ve la IP al pedir las tipografías), **WhatsApp** (solo al pulsar un botón `wa.me`). |
-| Formulario de contacto | Pide nombre, negocio, servicio y mensaje. **No llega a ningún servidor**: `js/main.js` arma un texto y abre WhatsApp. No se guarda nada en el sitio. |
-| Páginas legales | **No existen**: `/privacidad`, `/terminos`, `/cookies` responden 404 y no hay ningún enlace legal en el pie. |
-| Identificación de la empresa | El pie dice `JMV CONSULTORES SPA · contacto@jmvconsultores.cl`, sin **RUT ni domicilio**. |
+| Formulario de contacto | En inicio y `/contacto.html` pide nombre, teléfono o correo, negocio (opcional), servicio y mensaje. **No llega a ningún servidor**: `js/main.js` arma un texto y abre WhatsApp. No se guarda nada en el sitio. Hay una trampa anti-bot oculta. |
+| Páginas legales | **No existen**: `/privacidad`, `/terminos`, `/cookies` responden 404 y no hay ningún enlace legal en el pie. El rediseño del 2026-10-17 dejó el pie listo para colgarlas bajo «Información legal» en cuanto el texto esté aprobado. |
+| Identificación de la empresa | El pie dice `© JMV Consultores SpA · jmvconsultores.cl`, **sin RUT ni domicilio** (no se inventan datos societarios). En `/nosotros.html` hay un aviso explícito de que esos datos están en proceso de confirmación. |
 
 ## 2. Normas que aplican
 

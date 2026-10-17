@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="JMV Consultores">
+  <g fill="#8fc7ee">
+    <circle cx="44" cy="18" r="6.4"/>
+    <circle cx="38.5" cy="9" r="4.9"/>
+    <circle cx="29.5" cy="4.6" r="3.6"/>
+    <circle cx="20.5" cy="5" r="2.4"/>
+    <circle cx="33" cy="15" r="2"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="19" cy="27" r="6.8"/>
+    <circle cx="28" cy="34" r="5"/>
+    <circle cx="39" cy="37" r="3.6"/>
+    <circle cx="49" cy="36" r="2.2"/>
+    <circle cx="24" cy="18" r="2.6"/>
+  </g>
+</svg>

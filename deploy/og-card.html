@@ -5,55 +5,59 @@
 <title>tarjeta og — jmvconsultores.cl</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap" rel="stylesheet" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: 1200px; height: 630px; overflow: hidden;
-    background: #0a0e1a;
-    font-family: Inter, "Segoe UI", sans-serif;
-    color: #eef2f8;
+    background: #ffffff;
+    font-family: "Segoe UI", system-ui, Helvetica, Arial, sans-serif;
+    color: #15202f;
     position: relative;
   }
-  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; }
-  .b1 { width: 560px; height: 560px; background: #1c4f8a; top: -200px; right: -120px; }
-  .b2 { width: 460px; height: 460px; background: #2e86c8; bottom: -260px; left: -80px; opacity: .4; }
-  .grid {
+  .banda { position: absolute; inset: 0 0 auto 0; height: 14px; background: #16243f; }
+  .calido {
     position: absolute; inset: 0;
-    background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(circle at 70% 30%, #000 0%, transparent 75%);
+    background: radial-gradient(760px 420px at 82% 14%, #f3efe7 0%, rgba(255,255,255,0) 72%);
   }
-  .wrap { position: relative; height: 100%; padding: 74px 80px; display: flex; flex-direction: column; }
-  .logo { height: 54px; width: auto; margin-bottom: auto; }
+  .wrap { position: relative; height: 100%; padding: 68px 80px 62px; display: flex; flex-direction: column; }
+  .marca { display: flex; align-items: center; gap: 14px; margin-bottom: auto; }
+  .marca img { height: 52px; width: auto; }
+  .marca .texto { font-family: Sora, "Segoe UI", sans-serif; font-weight: 700; font-size: 30px; color: #16243f; letter-spacing: -0.5px; }
+  .marca .texto small {
+    display: block; font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px;
+    font-weight: 600; letter-spacing: 4px; text-transform: uppercase; color: #6b7483;
+  }
   .eyebrow {
-    font-size: 21px; letter-spacing: .16em; text-transform: uppercase;
-    color: #7fb6e4; font-weight: 600; margin-bottom: 22px;
+    font-size: 20px; letter-spacing: 3px; text-transform: uppercase;
+    color: #8a5a2b; font-weight: 700; margin-bottom: 20px;
   }
   h1 {
-    font-family: Sora, "Segoe UI", sans-serif; font-weight: 800;
-    font-size: 78px; line-height: 1.04; letter-spacing: -2px; max-width: 900px;
+    font-family: Sora, "Segoe UI", sans-serif; font-weight: 700;
+    font-size: 66px; line-height: 1.06; letter-spacing: -1.8px; max-width: 940px;
   }
-  h1 span {
-    background: linear-gradient(100deg, #4ea8e8, #8fd3ff 55%, #dff0ff);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .bottom { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 34px; }
-  p.sub { font-size: 27px; color: #b6c3d6; max-width: 720px; line-height: 1.35; }
-  .domain { font-family: Sora, sans-serif; font-weight: 600; font-size: 25px; color: #7fb6e4; }
+  h1 em { font-style: normal; color: #8a5a2b; }
+  .bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-top: 36px; }
+  p.sub { font-size: 25px; color: #55606f; max-width: 760px; line-height: 1.38; }
+  .domain { font-family: Sora, "Segoe UI", sans-serif; font-weight: 600; font-size: 24px; color: #16243f; white-space: nowrap; }
+  .linea { position: absolute; left: 80px; right: 80px; bottom: 46px; height: 1px; background: #e4dfd6; }
 </style>
 </head>
 <body>
-  <div class="blob b1"></div><div class="blob b2"></div><div class="grid"></div>
+  <div class="banda"></div>
+  <div class="calido"></div>
   <div class="wrap">
-    <img class="logo" src="../assets/logo-light.svg" alt="JMV Consultores" />
+    <div class="marca">
+      <img src="../assets/marca-oscura.svg" alt="" />
+      <span class="texto">JMV<small>Consultores</small></span>
+    </div>
     <p class="eyebrow">Contabilidad · Remuneraciones · Tributario</p>
-    <h1>Tu contabilidad al día,<br /><span>tu negocio en foco.</span></h1>
+    <h1>Contabilidad, gestión y tecnología para <em>avanzar con claridad</em></h1>
     <div class="bottom">
-      <p class="sub">Contabilidad, remuneraciones y obligaciones tributarias<br />para empresas chilenas, 100% en línea.</p>
+      <p class="sub">Servicios profesionales y plataforma de gestión para pymes chilenas, con atención 100% en línea.</p>
       <p class="domain">jmvconsultores.cl</p>
     </div>
+    <div class="linea"></div>
   </div>
 </body>
 </html>

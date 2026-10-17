@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-gen_servicios.py — Genera las 6 páginas de detalle de servicio.
+gen_servicios.py — Genera las 7 páginas de detalle de servicio.
 Cada página: mensaje persuasivo del brand + 50 servicios numerados
 ordenados por las búsquedas más recurrentes en Google (Chile).
+
+DESPUÉS de correrlo hay que reaplicar los bloques compartidos:
+
+    python3 deploy/actualizar-chrome.py   # cabecera, menú, pie y migas
+    python3 deploy/versionar.py           # ?v=sha1 de css/js
+
+Este generador escribe HTML completo con su propia cabecera y su propio pie:
+la versión vigente de esos bloques la pone actualizar-chrome.py.
 """
 import html as H
 import json
