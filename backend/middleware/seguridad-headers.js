@@ -13,6 +13,12 @@
  *    framing (frame-ancestors 'none', consistente con X-Frame-Options DENY).
  *  - Fuentes Google (styles+fonts) y CDN jsdelivr son los únicos orígenes
  *    externos permitidos, igual que lo que ya carga el frontend.
+ *  - Cloudflare Web Analytics (RUM): el edge inyecta `static.cloudflareinsights.com/
+ *    beacon.min.js` en cada respuesta HTML y el beacon reporta a
+ *    `cloudflareinsights.com`. Sin autorizarlos, la propia CSP bloquea el
+ *    script y cada visita deja un error de consola (la analítica no mide
+ *    nada). Si se desactiva Web Analytics en el panel de Cloudflare, estas dos
+ *    entradas se pueden quitar.
  *
  * HSTS (P8.C): SOLO detrás de HTTPS real — nginx fija X-Forwarded-Proto https
  * (trust proxy activo) y NODE_ENV=production. En desarrollo HTTP/self-signed
@@ -21,11 +27,11 @@
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://cloudflareinsights.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
