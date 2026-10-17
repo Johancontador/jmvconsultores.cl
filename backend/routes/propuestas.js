@@ -107,7 +107,9 @@ router.get('/empresas/:empresaId/conciliacion/:periodo', requirePermiso('concili
 })
 
 router.get('/empresas/:empresaId/conciliaciones', requirePermiso('conciliacion:ver'), (req, res) => {
-  res.json({ ok: true, conciliaciones: conciliacion.listar(db, req.empresaId) })
+  // `?periodo=AAAAMM` filtra a una fila: la campana evita el 404 del detalle
+  // cuando el período aún no tiene conciliación ejecutada.
+  res.json({ ok: true, conciliaciones: conciliacion.listar(db, req.empresaId, req.query.limit, req.query.periodo || null) })
 })
 
 // Ejecuta la conciliación del período. `sii_resumen` es opcional ({neto, iva, total});

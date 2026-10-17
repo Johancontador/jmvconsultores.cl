@@ -233,3 +233,17 @@ test('T5b: NINGUNA vista lanza ReferenceError en render (clase de bug scope-fuer
   }
   assert.deepStrictEqual(refErrs, [], 'ReferenceErrors en render de vistas')
 })
+
+// ---------- T6: campana de notificaciones y conciliación ----------
+test('T6: la campana no pide el detalle de conciliación (404) y lee el conteo', () => {
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  // El detalle responde 404 cuando el período aún no tiene conciliación: en
+  // cada carga del shell dejaba "Failed to load resource: 404" en consola.
+  assert.ok(!/conciliacion\/\$\{periodo\}/.test(app), 'sin GET del detalle por período')
+  assert.match(app, /\/conciliaciones\?periodo=\$\{periodo\}/, 'usa el listado filtrado (200)')
+  // `diferencias` es el CONTEO persistido: con `.length` la alerta nunca salía.
+  assert.match(app, /Number\(c && c\.diferencias\)/)
+  const bloque = app.slice(app.indexOf("tiene('conciliacion:ver')"), app.indexOf("tiene('dte:ver')"))
+  assert.ok(bloque.length > 0, 'se encontró el bloque de conciliación')
+  assert.ok(!/if \(difs\.length\)/.test(bloque), 'no trata el conteo como arreglo')
+})

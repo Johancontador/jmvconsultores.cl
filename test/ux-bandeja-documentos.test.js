@@ -25,6 +25,7 @@ const crypto = require('node:crypto')
 const FRONT = path.resolve(__dirname, '../frontend')
 const fuenteVista = fs.readFileSync(path.join(FRONT, 'sistema', 'views-fiscal.js'), 'utf8')
 const fuenteTabla = fs.readFileSync(path.join(FRONT, 'shared', 'uitoolkit.js'), 'utf8')
+const fuenteCss = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
 
 process.on('unhandledRejection', () => {})
 
@@ -459,11 +460,28 @@ test('B11c: carga con esqueleto y sin bloquear la vista (aria-busy)', async () =
 test('B10: accesibilidad de tabla, resumen y panel', () => {
   assert.match(fuenteTabla, /caption class="sr-only"/)
   assert.match(fuenteTabla, /aria-sort/)
+  // El scroll horizontal debe ser alcanzable por teclado (región enfocable).
+  assert.match(fuenteTabla, /<div class="tbl-wrap" tabindex="0" role="region" aria-label=/)
+  assert.match(fuenteCss, /tbl-wrap:focus-visible/, 'foco visible en el contenedor')
   assert.match(fuenteVista, /aria-live="polite"/, 'el resumen anuncia cambios')
   assert.match(fuenteVista, /role="dialog" aria-modal="true"/, 'detalle como diálogo')
   assert.match(fuenteVista, /tabindex="0" data-doc=/, 'fila alcanzable por teclado')
   assert.match(fuenteVista, /aria-pressed/, 'chips de estado con estado accesible')
   assert.match(fuenteVista, /aria-label="Más acciones/, 'menú con etiqueta')
+})
+
+test('B10c: con paginación de servidor el orden es de página (aria-sort honesto)', () => {
+  const env = crearSandbox()
+  const mount = env.el()
+  env.sandbox.UITabla.montar({
+    mount,
+    columnas: [{ key: 'a', label: 'A', num: true }],
+    filas: [{ a: 2 }, { a: 1 }],
+    filaHTML: (f) => `<tr><td>${f.a}</td></tr>`,
+    servidor: { total: 120, pagina: 1, paginas: 3, onPagina() {} },
+  })
+  assert.match(mount.innerHTML, /data-k="a" aria-sort="none" title="Ordenar solo esta página"/, 'no anuncia orden global')
+  assert.match(String(fuenteTabla), /!st\.servidor && th\.dataset\.k === st\.sortKey/, 'aria-sort solo fuera del modo servidor')
 })
 
 test('B10b: UITabla sigue igual para las demás vistas (opciones aditivas)', () => {

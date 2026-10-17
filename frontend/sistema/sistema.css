@@ -224,6 +224,9 @@ table.pd-tbl tbody tr[style*="cursor:pointer"] { cursor: pointer; }
 
 /* Tabla */
 .tbl-wrap { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--bg-surface); }
+/* Con tabindex="0" el contenedor es alcanzable por teclado: las flechas
+   desplazan las columnas que quedan fuera de vista (RUT, montos, acciones). */
+.tbl-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .tbl th {
   text-align: left; font-size: var(--fs-xs); font-weight: var(--fw-semibold);

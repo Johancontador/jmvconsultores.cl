@@ -162,12 +162,16 @@
 
     const head = st.columnas.map((c) => {
       const ordenable = c.orden !== false
-      return `<th class="${c.num ? 'num' : ''} ${ordenable ? 'th-sort' : ''}" data-k="${esc(c.key)}"${ordenable ? ' aria-sort="none"' : ''}>${esc(c.label)}</th>`
+      // En modo servidor la vista solo trae una página: el clique reordena esa
+      // página, no el filtro completo, así que el título lo dice y aria-sort
+      // no anuncia un orden global que no existe.
+      const extra = ordenable ? (st.servidor ? ' aria-sort="none" title="Ordenar solo esta página"' : ' aria-sort="none"') : ''
+      return `<th class="${c.num ? 'num' : ''} ${ordenable ? 'th-sort' : ''}" data-k="${esc(c.key)}"${extra}>${esc(c.label)}</th>`
     }).join('')
 
     st.mount.innerHTML = `
       ${herramientas}
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0" role="region" aria-label="${esc(st.caption || 'Tabla de datos')}">
         <table class="tbl ${st.congelar ? 'uit-congelar' : ''}">
           ${st.caption ? `<caption class="sr-only">${esc(st.caption)}</caption>` : ''}
           <thead><tr>${head}</tr></thead>
@@ -199,8 +203,10 @@
       st.mount.querySelectorAll('th.th-sort').forEach((th) => {
         th.classList.toggle('asc', th.dataset.k === st.sortKey && st.sortDir === 'asc')
         th.classList.toggle('desc', th.dataset.k === st.sortKey && st.sortDir === 'desc')
-        // aria-sort refleja el estado real del ordenamiento por columna.
-        th.setAttribute?.('aria-sort', th.dataset.k === st.sortKey
+        // Fuera del modo servidor, aria-sort refleja el orden real del conjunto.
+        // Con paginación de servidor el orden es solo de la página visible: se
+        // deja "none" para no anunciar un orden que el filtro completo no tiene.
+        th.setAttribute?.('aria-sort', !st.servidor && th.dataset.k === st.sortKey
           ? (st.sortDir === 'asc' ? 'ascending' : 'descending') : 'none')
       })
       // B3: con la casilla de agrupar activa, la paginación se omite (las

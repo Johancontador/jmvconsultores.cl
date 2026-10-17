@@ -366,10 +366,15 @@ async function cargarNotificaciones() {
   }
   if (tiene('conciliacion:ver')) {
     const periodo = periodoGlobal()
-    tareas.push(apiGet(`/api/contable/empresas/${eid}/conciliacion/${periodo}`).then((r) => {
-      const difs = (r.conciliacion && r.conciliacion.diferencias) || []
-      if (difs.length) items.push({ nivel: 'error', hash: '#propuestas', texto: `Conciliación ${periodo}: ${difs.length} diferencia(s) libro vs cartola`, etiqueta: 'Revisar' })
-    }).catch(() => {})) // 404 = conciliación aún sin ejecutar en el período (no es error)
+    // Listado filtrado por período: responde 200 aun sin conciliación (el
+    // detalle /conciliacion/:periodo devolvía 404 en cada carga y la campana lo
+    // tragaba). Además `diferencias` es un CONTEO, no un arreglo: con
+    // `difs.length` la alerta no se mostraba nunca aunque hubiera diferencias.
+    tareas.push(apiGet(`/api/contable/empresas/${eid}/conciliaciones?periodo=${periodo}`).then((r) => {
+      const c = (r.conciliaciones || [])[0]
+      const difs = Number(c && c.diferencias) || 0
+      if (difs > 0) items.push({ nivel: 'error', hash: '#propuestas', texto: `Conciliación ${periodo}: ${difs} diferencia(s) libro vs cartola`, etiqueta: 'Revisar' })
+    }).catch(() => {}))
   }
   if (tiene('dte:ver')) {
     // BUGFIX QA: el header consultaba /api/dte/empresas/:id que NO EXISTE

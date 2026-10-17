@@ -367,6 +367,13 @@ test('conciliación: persiste resultado por empresa+período y es re-ejecutable;
   const lista = conciliacion.listar(db, EMP.id)
   assert.ok(lista.some((x) => x.periodo === '202609'))
 
+  // Filtro por período (lo usa la campana): 0 o 1 fila y sin el 404 del detalle.
+  const delPeriodo = conciliacion.listar(db, EMP.id, 50, '202609')
+  assert.strictEqual(delPeriodo.length, 1)
+  assert.strictEqual(delPeriodo[0].periodo, '202609')
+  assert.ok(Number(delPeriodo[0].diferencias) >= 0, 'el conteo es numérico')
+  assert.deepStrictEqual(conciliacion.listar(db, EMP.id, 50, '202501'), [])
+
   assert.throws(() => conciliacion.ejecutar(db, { empresaId: EMP.id, usuarioId: adminId, periodo: 'septiembre' }), /Período inválido/)
 
   // aislamiento: EMP2 no ve la conciliación de EMP

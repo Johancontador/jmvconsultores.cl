@@ -267,14 +267,22 @@ function obtener(db, empresaId, periodo) {
   return { ...fila, resultado: JSON.parse(fila.resultado_json) }
 }
 
-/** Historial de ejecuciones por período (el resultado persistido es el último). */
-function listar(db, empresaId, limit = 50) {
+/**
+ * Historial de ejecuciones por período (el resultado persistido es el último).
+ * `periodo` es opcional: con él devuelve 0 o 1 fila, que es lo que necesita la
+ * campana de notificaciones para saber si hay conciliación sin pedir el detalle
+ * (ese GET responde 404 cuando no existe y ensuciaba la consola en cada carga).
+ */
+function listar(db, empresaId, limit = 50, periodo = null) {
   // resultado_json incluido: la UI de historial pinta el detalle de las
   // diferencias del último resultado persistido (sin re-ejecutar).
+  const where = ['empresa_id = ?']
+  const params = [empresaId]
+  if (periodo) { where.push('periodo = ?'); params.push(String(periodo)) }
   return db.prepare(`
     SELECT id, empresa_id, periodo, fuente, resultado_json, diferencias, ejecutado_por, ejecutado_en
-    FROM conciliaciones WHERE empresa_id = ? ORDER BY periodo DESC, ejecutado_en DESC LIMIT ?
-  `).all(empresaId, Math.min(Number(limit) || 50, 200))
+    FROM conciliaciones WHERE ${where.join(' AND ')} ORDER BY periodo DESC, ejecutado_en DESC LIMIT ?
+  `).all(...params, Math.min(Number(limit) || 50, 200))
 }
 
 module.exports = { TIPOS_DIFERENCIA, ejecutar, obtener, listar, sumasBandeja, movimientosContables }
