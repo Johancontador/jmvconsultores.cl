@@ -5,3 +5,13 @@
 # necesidad. Solo se protege lo que corre en el servidor.
 *.sh text eol=lf
 ops/post-receive text eol=lf
+
+# El anti-caché de seed-versionado.js firma cada referencia con el sha1 del
+# archivo. Con core.autocrlf=true el árbol de trabajo de Windows quedaba en
+# CRLF mientras el servidor sirve el blob en LF: la semilla publicada no era
+# el hash del byte servido (sistema.css y css/app.css quedaron así). Fijar LF
+# en el checkout hace que la semilla coincida con lo que realmente se sirve.
+# No reescribe blobs: los de estos tipos ya están en LF.
+*.css text eol=lf
+*.js text eol=lf
+*.html text eol=lf
