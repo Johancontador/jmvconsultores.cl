@@ -33,7 +33,7 @@ VIEWS.automatizacion = {
     const puedeSemilla = tiene('reglas:editar')
 
     cont.innerHTML = `
-     <div class="frm-row mb">
+     <div class="frm-row mb pg-toolbar">
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('auto-periodo', periodo)}</div>
        <span class="spacer"></span>
        <span class="chip ${estado.periodo_abierto ? 'contabilizado' : 'anulado'}">Período ${estado.periodo_abierto ? 'ABIERTO' : 'CERRADO'}</span>

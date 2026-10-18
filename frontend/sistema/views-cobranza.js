@@ -34,6 +34,7 @@ async function renderCobranza(cnt) {
       ${(bancos.bancos || []).map((b) => `<option value="${b.id}">${esc(b.banco)}${b.numero ? ' ' + esc(b.numero) : ''}</option>`).join('')}</select>`
 
   cont.innerHTML = `
+    <p class="pg-flow"><b>Flujo:</b> <a href="#tesoreria">Tesorería</a> → Cobranza → <a href="#cclientes">Cuenta corriente de clientes</a></p>
     <div class="kpi-grid">
       <div class="kpi down"><small>Pendiente de cobro</small><strong style="color:var(--danger)">${fmt(cob.total_pendiente || 0)}</strong></div>
       <div class="kpi"><small>Clientes en mora</small><strong>${(cob.clientes || []).length}</strong></div>

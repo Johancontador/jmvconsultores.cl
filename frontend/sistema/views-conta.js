@@ -231,7 +231,8 @@ VIEWS.propuestas = {
     const tab = window._propTab || 'pendientes'
     const periodo = window._propPeriodo || periodoActual()
     cont.innerHTML = `
-     <div class="frm-row mb">
+     <p class="pg-flow"><b>Flujo:</b> <a href="#documentos">Documentos</a> → Propuestas → <a href="#asientos">Asientos</a> → <a href="#automatizacion">Contabilización</a></p>
+     <div class="frm-row mb pg-toolbar">
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('prop-periodo', periodo)}</div>
         ${tiene('propuestas:generar') ? `<button class="btn btn-primary btn-sm" id="prop-gen">Generar propuestas</button>` : ''}
         ${tiene('propuestas:confirmar') ? `<button class="btn btn-primary btn-sm" id="prop-lote">Confirmar lote del período</button>` : ''}
@@ -511,7 +512,7 @@ VIEWS.cierre = {
     cont.innerHTML = '<div class="empty">Cargando…</div>'
     const periodo = window._cierrePeriodo || window._repPeriodo || periodoGlobal()
     cont.innerHTML = `
-     <div class="frm-row mb">
+     <div class="frm-row mb pg-toolbar">
        <div><span class="frm-label">Período a cerrar</span>${inputPeriodoHTML('cierre-periodo', periodo)}</div>
      </div>
      <div id="cierre-body"><div class="empty">Preparando checklist…</div></div>`

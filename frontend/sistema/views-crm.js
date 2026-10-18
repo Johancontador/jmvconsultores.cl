@@ -68,6 +68,7 @@ async function renderCrm() {
   }
 
   wrap.innerHTML = `
+    <p class="pg-flow"><b>Flujo:</b> Prospecto → Oportunidad → Ficha → <a href="#portal-inicio">Portal del cliente</a></p>
     <div class="crm-tabs" role="tablist">
       ${TABS.map(([k, lbl]) => `<button class="crm-tab ${k === tab ? 'activa' : ''}" role="tab" data-tab="${k}">${esc(lbl)}</button>`).join('')}
     </div>

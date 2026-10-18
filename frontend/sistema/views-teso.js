@@ -23,6 +23,7 @@ VIEWS.tesoreria = {
     const puedeConciliar = tiene('bancos:conciliar')
 
     cont.innerHTML = `
+     <p class="pg-flow"><b>Flujo:</b> Bancos y cartola → Conciliación → <a href="#cobranza">Cobranza y mora</a></p>
      <div class="tabs">
        <button data-t="bancos" class="${tab === 'bancos' ? 'active' : ''}">Bancos</button>
        <button data-t="movimientos" class="${tab === 'movimientos' ? 'active' : ''}">Libro banco</button>

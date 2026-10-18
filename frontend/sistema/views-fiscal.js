@@ -29,7 +29,7 @@ VIEWS.inicio = {
     const maxBarra = Math.max(1, ...d.serie.flatMap((m) => [m.ventas, m.compras]))
 
     cont.innerHTML = `
-     <div class="frm-row mb">
+     <div class="frm-row mb pg-toolbar">
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('inicio-periodo', d.periodo)}</div>
        <span class="chip ${d.periodo_cerrado ? 'anulado' : 'contabilizado'}">${d.periodo_cerrado ? 'CERRADO' : 'ABIERTO'}</span>
        <span class="spacer"></span>
@@ -189,7 +189,7 @@ VIEWS.libros = {
     const puedeIngestar = tiene('documentos:ingestar')
 
     cont.innerHTML = `
-     <div class="frm-row mb">
+     <div class="frm-row mb pg-toolbar">
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('lb-periodo', periodo)}</div>
         ${puedeIngestar ? `<button class="btn btn-primary" id="lb-sync">⇅ Sincronizar con SII</button>` : ''}
        <span class="spacer"></span>
@@ -866,18 +866,7 @@ VIEWS.documentos = {
     let seq = 0
 
     cont.innerHTML = `
-     <div class="doc-ctx">
-       <div class="doc-ctx-emp">
-         <span class="frm-label">Empresa</span>
-         <b>${esc(S.empresa.nombre)}</b>
-         <span class="muted mono">${esc(formatRut(S.empresa.rut))}</span>
-       </div>
-       <div class="doc-ctx-per">
-         <span class="frm-label">Período</span>
-         <b>${esc(perDisplay(periodo))}</b>
-         <span class="hint">Se cambia en la cabecera del sistema</span>
-       </div>
-     </div>
+     <p class="pg-flow"><b>Flujo:</b> Bandeja → <a href="#libros">Libros</a> → <a href="#propuestas">Propuestas</a> → <a href="#automatizacion">Contabilizar</a></p>
 
      <div class="doc-toolbar">
        ${puedeClasificar ? '<button class="btn btn-primary btn-sm" id="doc-auto" type="button">Clasificar automático</button>' : ''}

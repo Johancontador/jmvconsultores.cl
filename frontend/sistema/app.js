@@ -500,13 +500,36 @@ function pintarResultados(drop, q, grupos) {
  * PORTAL es la superficie principal y va primero, después Inicio y el resto.
  * Solo afecta el orden de PRESENTACIÓN — los keys/rutas quedan intactos.
  */
+/**
+ * Orden de trabajo del menú (2026.3): lo que se hace a diario arriba.
+ * El catálogo MENU define el contenido; este mapa define el recorrido:
+ * documentos → facturación → contabilidad → tesorería → informes. El dueño
+ * (admin_empresa) sigue entrando por su Portal y el panel.
+ */
+const ORDEN_FLUJO = {
+  Inicio: 0,
+  'Documentos y libros': 1,
+  Facturación: 2,
+  Contabilidad: 3,
+  'Tesorería y cobranza': 4,
+  'Informes y control': 5,
+  'Gestión comercial': 6,
+  'Portal de cliente': 7,
+  Administración: 8,
+}
+
 function menuVisible() {
   const visible = MENU.filter((sec) => sec.items.some((i) => !i.permiso || tiene(i.permiso)))
-  if (!S.superAdmin && S.empresa?.rol === 'admin_empresa') {
-    const PRIORIDAD = { 'Portal de cliente': 0, Inicio: 1 }
-    return visible.slice().sort((a, b) => (PRIORIDAD[a.seccion] ?? 9) - (PRIORIDAD[b.seccion] ?? 9))
+  const dueno = !S.superAdmin && S.empresa?.rol === 'admin_empresa'
+  const prioridad = (seccion) => {
+    if (dueno) {
+      // El dueño no opera la contabilidad: su portal y su panel van primero.
+      if (seccion === 'Portal de cliente') return -2
+      if (seccion === 'Inicio') return -1
+    }
+    return ORDEN_FLUJO[seccion] ?? 99
   }
-  return visible
+  return visible.slice().sort((a, b) => prioridad(a.seccion) - prioridad(b.seccion))
 }
 
 /*
@@ -535,11 +558,12 @@ const MENU = [
       { key: 'crm', label: 'CRM Comercial', permiso: 'empresas:ver' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
-      { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
     ]
   },
   {
-    seccion: 'Compras y ventas (SII)', items: [
+    // Bandeja y libros son el trabajo diario del RCV: viven juntos y antes que
+    // la contabilidad, que consume lo que aquí se clasifica.
+    seccion: 'Documentos y libros', items: [
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
@@ -565,8 +589,11 @@ const MENU = [
     ]
   },
   {
-    seccion: 'Tesorería', items: [
+    // Flujo de dinero: banco y cobranza se consultan juntos (quién debe y
+    // con qué se cobra), por eso comparten sección.
+    seccion: 'Tesorería y cobranza', items: [
       { key: 'tesoreria', label: 'Bancos, Libro Banco y Conciliación', permiso: 'tesoreria:ver' },
+      { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
     ]
   },
   {
@@ -680,9 +707,12 @@ function renderShell() {
          ${window.Tema ? window.Tema.botonHTML() : ''}
        </div>
        <div class="sys-titlebar">
-         <h1 id="sys-title">Inicio</h1>
+         <div class="sys-title-tx">
+           <span class="sys-kicker" id="sys-kicker"></span>
+           <h1 id="sys-title">Inicio</h1>
+         </div>
          <span class="spacer"></span>
-         <div class="frm-row" style="gap:var(--space-2);align-items:center">
+         <div class="sys-periodo">
            <span class="sub" id="sys-periodo-estado"></span>
            <select id="sys-periodo" class="form-input" style="width:auto;height:30px;font-size:var(--fs-xs)" aria-label="Período activo"></select>
          </div>
@@ -817,6 +847,13 @@ function renderRoute() {
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
+  // Contexto persistente: empresa y RUT bajo el título, sin repetirlo en cada
+  // vista. El período tiene su propio selector a la derecha.
+  const kicker = document.getElementById('sys-kicker')
+  if (kicker) {
+    const emp = S.empresa || {}
+    kicker.textContent = [emp.nombre, emp.rut ? formatRut(emp.rut) : null].filter(Boolean).join(' · ')
+  }
   const bc = document.getElementById('sys-breadcrumb')
   if (bc) bc.innerHTML = breadcrumbHTML(route)
 

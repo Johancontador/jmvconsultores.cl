@@ -199,6 +199,10 @@ table.pd-tbl tbody tr[style*="cursor:pointer"] { cursor: pointer; }
 .card .hint { color: var(--fg-muted); font-size: var(--fs-xs); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+/* Un hijo de grid/flex no baja de su min-content: una tabla ancha dentro de
+   un .grid-2 estiraba la pagina (analitica: 96 px de scroll horizontal). */
+.grid-2 > *, .grid-3 > * { min-width: 0; }
+
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
 @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
 
@@ -975,12 +979,251 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 @media (prefers-reduced-motion: reduce) {
   .sys .crm-tab, .sys .crm-kcard { transition: none; }
 }
-  .sys .crm-kanban { grid-template-columns: 1fr 1fr; }
-  .sys .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
+
+/* ============================================================
+   REDISEÑO 2026.3 — capa de sistema (todas las pantallas)
+   Objetivo: jerarquía tipográfica, densidad contable y superficies
+   planas. Solo tokens del tema (claro/oscuro) y sin dependencias.
+   Esta capa redefine los componentes compartidos; las reglas
+   específicas de cada módulo (doc-, crm-, pd-) siguen mandando en
+   sus propios selectores.
+   ============================================================ */
+
+/* ---------- Shell: barra lateral más estrecha y navegación plana ---------- */
+.sys { grid-template-columns: 232px minmax(0, 1fr); }
+.sys-side {
+  gap: var(--space-4);
+  background: var(--bg-canvas);
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--space-5) var(--space-3);
 }
-@media (max-width: 480px) {
-  .sys .crm-kanban { grid-template-columns: 1fr; }
+.sys-logo { padding: 0 var(--space-2) var(--space-2); }
+.sys-logo div { font-size: var(--fs-base); }
+.sys-nav { gap: 1px; }
+.sys-nav a {
+  padding: 7px var(--space-3);
+  border-left: 0;
+  border-radius: var(--radius-sm);
+  color: var(--fg-secondary);
+  font-weight: var(--fw-medium);
 }
-@media (prefers-reduced-motion: reduce) {
-  .sys .crm-tab, .sys .crm-kcard { transition: none; }
+.sys-nav a:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.sys-nav a.active {
+  background: var(--bg-elevated);
+  color: var(--fg-primary);
+  border-left: 0;
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: var(--fw-semibold);
 }
+.nav-seccion {
+  margin: var(--space-4) 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  color: var(--fg-muted);
+}
+
+/* ---------- Cabecera pegajosa y título de página ---------- */
+.sys-main { max-width: 1240px; padding: var(--space-5) var(--space-6) var(--space-16); }
+.sys-header {
+  position: sticky; top: 0; z-index: 30;
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sys-breadcrumb { font-size: var(--fs-xs); color: var(--fg-muted); }
+.sys-titlebar {
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin: var(--space-5) 0 var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sys-title-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sys-kicker {
+  font-size: 10px; font-weight: var(--fw-semibold);
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--fg-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sys-titlebar h1 {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: var(--lh-tight);
+  margin: 0;
+}
+.sys-periodo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.sys-periodo .sub { font-size: var(--fs-xs); color: var(--fg-muted); }
+
+/* ---------- Scaffold de pantalla (opcional por vista) ---------- */
+.pg-head {
+  display: flex; flex-wrap: wrap; gap: var(--space-4);
+  align-items: flex-end; justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+.pg-head-tx { min-width: 220px; flex: 1; }
+.pg-kicker {
+  display: block; font-size: 10px; font-weight: var(--fw-semibold);
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-muted);
+}
+.pg-title {
+  font-family: var(--font-display); font-size: var(--fs-xl);
+  font-weight: 700; letter-spacing: -0.01em; margin: 2px 0 0;
+}
+.pg-sub { margin: var(--space-1) 0 0; font-size: var(--fs-sm); color: var(--fg-secondary); }
+.pg-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.pg-toolbar {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end;
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.pg-toolbar .spacer, .pg-toolbar .wide { flex: 1; }
+.pg-section { margin-top: var(--space-5); }
+.pg-section > h3 {
+  font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-semibold);
+  margin: 0 0 var(--space-2);
+}
+.pg-section > .pg-hint { margin: 0 0 var(--space-3); font-size: var(--fs-xs); color: var(--fg-muted); }
+/* Franja de flujo: "siguiente paso" entre pantallas relacionadas. */
+.pg-flow {
+  display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center;
+  margin: 0 0 var(--space-4); font-size: var(--fs-xs); color: var(--fg-muted);
+}
+.pg-flow a { color: var(--accent); text-decoration: none; font-weight: var(--fw-medium); }
+.pg-flow a:hover { text-decoration: underline; }
+
+/* ---------- KPI: planos, cifras tabulares y color solo si significa algo ---------- */
+.kpi-grid { gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); }
+.kpi {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.kpi small {
+  font-size: 10px; letter-spacing: 0.08em; font-weight: var(--fw-semibold);
+  color: var(--fg-muted); margin-bottom: 2px;
+}
+.kpi strong {
+  font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.kpi.acc strong { color: var(--fg-primary); }
+.kpi .sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--fg-muted); }
+
+/* ---------- Superficies ---------- */
+.card {
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: none;
+}
+.card h3 { font-size: var(--fs-md); font-weight: var(--fw-semibold); margin-bottom: var(--space-2); }
+.card > .hint:first-of-type { margin-top: 0; }
+
+/* ---------- Pestañas: subrayado sobrio, sin píldoras ---------- */
+.tabs { gap: var(--space-1); border-bottom: 1px solid var(--border-subtle); margin-bottom: var(--space-4); }
+.tabs button {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  font-weight: var(--fw-medium);
+  color: var(--fg-secondary);
+}
+.tabs button:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.tabs button.active {
+  background: var(--bg-surface);
+  color: var(--fg-primary);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px;
+}
+
+/* ---------- Tablas: cabecera fija, densidad y pie diferenciado ---------- */
+.tbl-wrap { border-radius: var(--radius-md); }
+.tbl th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg-surface);
+  padding: 9px var(--space-4);
+  font-size: 10px; letter-spacing: 0.07em;
+  /* --fg-muted sobre superficie oscura queda ~3:1; --fg-secondary supera AA. */
+  color: var(--fg-secondary);
+  border-bottom: 1px solid var(--border-default);
+}
+.tbl td { padding: 8px var(--space-4); }
+.tbl tbody tr:hover { background: var(--bg-hover); }
+.tbl tfoot td { background: var(--bg-elevated); border-top: 1px solid var(--border-default); }
+.tbl .num { font-variant-numeric: tabular-nums; }
+
+/* ---------- Controles: altura y foco uniformes ---------- */
+.btn { border-radius: var(--radius-sm); font-weight: var(--fw-medium); }
+.btn-primary {
+  --btn-bg: var(--accent);
+  --btn-border: transparent;
+  --btn-shadow: none;
+  --btn-hover-bg: var(--accent-hover);
+  --btn-hover-shadow: none;
+}
+.btn-secondary { --btn-bg: var(--bg-surface); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-sm { height: 30px; padding: 0 var(--space-3); font-size: var(--fs-xs); }
+.form-input, select.form-input, textarea.form-input { border-radius: var(--radius-sm); }
+.frm-label { font-size: 10px; letter-spacing: 0.08em; }
+
+/* ---------- Estados compartidos ---------- */
+.ui-empty {
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  padding: var(--space-8) var(--space-4);
+}
+.ui-empty b { font-size: var(--fs-md); color: var(--fg-primary); }
+.ui-empty p { max-width: 560px; margin-inline: auto; color: var(--fg-secondary); }
+.ui-error {
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.ui-loading { padding: var(--space-5) var(--space-4); }
+
+/* ---------- Móvil: el menú sigue siendo una fila desplazable ---------- */
+@media (max-width: 960px) {
+  .sys-main { max-width: none; }
+  .sys-side { background: var(--bg-surface); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  .sys-nav a { border-radius: var(--radius-sm); }
+  .sys-nav a.active { box-shadow: inset 0 -2px 0 var(--accent); }
+  .sys-titlebar { margin-top: var(--space-4); }
+  .sys-titlebar h1 { font-size: var(--fs-xl); }
+}
+@media (max-width: 640px) {
+  .pg-head, .pg-toolbar { align-items: stretch; }
+  .pg-actions { width: 100%; }
+  .pg-actions .btn { flex: 1 1 auto; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi { padding: var(--space-3); }
+  .tbl th { position: static; }
+}
+
+/* ---------- Familias con estilo propio alineadas al sistema ----------
+   CRM, Portal y Centro de Reportes tenían su propia piel (píldoras, radios
+   y escalas distintas). Se igualan a los componentes compartidos sin tocar
+   su lógica: mismas pestañas, misma geometría de tarjeta y de KPI. ---------- */
+.sys .crm-tabs {
+  display: flex; gap: var(--space-1); flex-wrap: nowrap; overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle); padding: 0;
+  margin-bottom: var(--space-4);
+}
+.sys .crm-tab {
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: var(--space-2) var(--space-3); color: var(--fg-secondary);
+  font-size: var(--fs-sm); font-weight: var(--fw-medium);
+}
+.sys .crm-tab:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.sys .crm-tab.activa {
+  background: var(--bg-surface); color: var(--fg-primary);
+  border-bottom-color: var(--accent); font-weight: var(--fw-semibold);
+}
+.pd-kpis { gap: var(--space-3); }
+.pd-kpi, .rep-card { border-radius: var(--radius-md); }
+.pd-kpi { padding: var(--space-3) var(--space-4); }
+.pd-kpi strong { font-size: var(--fs-xl); }
+.pd-title { font-size: var(--fs-xl); font-weight: 700; }

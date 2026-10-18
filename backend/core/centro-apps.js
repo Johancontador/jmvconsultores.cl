@@ -26,10 +26,10 @@ const { CATALOGO_CAPACIDADES } = require('./permisos')
  * sección es ENTRABLE si la capacidad específica está.
  *
  * Mapeo (MENU real 2026-10 → Centro):
- *   Compras y ventas (SII) + Facturación + Contabilidad → Contabilidad e IVA
+ *   Documentos y libros + Facturación + Contabilidad → Contabilidad e IVA
  *   Informes y control          → Inteligencia de Negocios
- *   Gestión comercial           → Gestión Comercial (incl. Cobranza y Mora)
- *   Tesorería                   → Finanzas (fuentes reales: bancos, cartola,
+ *   Gestión comercial           → Gestión Comercial
+ *   Tesorería y cobranza        → Finanzas (fuentes reales: bancos, cartola,
  *                                  conciliación bancaria — módulo implementado)
  *   Portal de cliente           → Portal (superficie del dueño; read-only)
  *   Inicio + Administración     → Administración (área RESTRINGIDA: solo con
@@ -45,7 +45,7 @@ const CATALOGO_APPS = [
     icono: 'libro',
     orden: 1,
     secciones: [
-      { grupo: 'Compras y ventas (SII)', ruta: 'documentos', capacidad: 'documentos:ver' },
+      { grupo: 'Documentos y libros', ruta: 'documentos', capacidad: 'documentos:ver' },
       { grupo: 'Facturación', ruta: 'dte', capacidad: 'dte:ver' },
       { grupo: 'Contabilidad', ruta: 'asientos', capacidad: 'asientos:ver' },
     ],
@@ -83,7 +83,7 @@ const CATALOGO_APPS = [
     orden: 4,
     secciones: [
       { grupo: 'Gestión comercial', ruta: 'cclientes', capacidad: 'reportes:ver' },
-      { grupo: 'Gestión comercial', ruta: 'cobranza', capacidad: 'tesoreria:ver' },
+      { grupo: 'Tesorería y cobranza', ruta: 'cobranza', capacidad: 'tesoreria:ver' },
     ],
   },
   {
@@ -93,7 +93,7 @@ const CATALOGO_APPS = [
     icono: 'banco',
     orden: 5,
     secciones: [
-      { grupo: 'Tesorería', ruta: 'tesoreria', capacidad: 'tesoreria:ver' },
+      { grupo: 'Tesorería y cobranza', ruta: 'tesoreria', capacidad: 'tesoreria:ver' },
     ],
   },
   {
