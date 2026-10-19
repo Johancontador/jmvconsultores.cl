@@ -140,7 +140,7 @@ async function renderPanel(cuerpo, base) {
       <div class="card">
         <h3>Salud del portafolio (engagement)</h3>
         <p class="sub">Score 0-100 con datos reales: sync SII, documentos pendientes, cierre y contacto.</p>
-        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
           <div class="kpi up"><small>Sanos</small><strong style="color:var(--success)">${resumen.SANO ?? 0}</strong></div>
           <div class="kpi"><small>Atención</small><strong style="color:var(--warning)">${resumen.ATENCION ?? 0}</strong></div>
           <div class="kpi"><small>Críticos</small><strong style="color:var(--danger)">${resumen.CRITICO ?? 0}</strong></div>

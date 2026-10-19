@@ -447,7 +447,11 @@ window.VIEWS['portal-inicio'] = {
       const sum = (col) => filas.reduce((acc, f) => (f[col] === null ? acc : acc + f[col]), 0)
       const tV = sum('v'), tC = sum('c')
       const hayTotales = tV !== 0 || tC !== 0
+      // `.tbl-wrap` (scroll propio + foco por teclado): a 390 px la tabla mide
+      // ~470 px y sin contenedor no había forma de alcanzar las columnas de
+      // la derecha (montos, diferencia) — el card la recortaba.
       zona.innerHTML = `
+        <div class="tbl-wrap" tabindex="0" role="region" aria-label="Resumen mensual de ventas y compras">
         <table class="tbl pd-tbl">
           <thead><tr><th>Mes</th><th style="text-align:right;color:${PD_PALETA.venta}">Ventas netas</th><th style="text-align:right">Docs</th><th style="text-align:right;color:${PD_PALETA.compra}">Compras netas</th><th style="text-align:right">Docs</th><th style="text-align:right">Diferencia bruta</th></tr></thead>
           <tbody>${filas.map((f) => {
@@ -471,6 +475,7 @@ window.VIEWS['portal-inicio'] = {
             <td style="text-align:right"><b style="color:${tV - tC >= 0 ? PD_PALETA.positivo : PD_PALETA.negativo}">${fmtCero(tV - tC)}</b></td>
           </tr></tfoot>` : ''}
         </table>
+        </div>
         <p class="hint mt">Clic en una fila para el detalle del mes (ambos flujos). Las NC restan una vez en las dos columnas.</p>`
       zona.querySelectorAll('[data-ver]').forEach((tr) => tr.addEventListener('click', () => abrirDetalle(tr.dataset.ver, 'venta')))
     }
@@ -536,6 +541,7 @@ window.VIEWS['portal-inicio'] = {
           return
         }
         zona.innerHTML = `
+          <div class="tbl-wrap" tabindex="0" role="region" aria-label="Top de clientes del período">
           <table class="tbl">
             <thead><tr><th>Cliente</th><th style="text-align:right">Docs</th><th style="text-align:right;color:${PD_PALETA.venta}">Venta neta</th><th style="text-align:right">Total (IVA)</th><th></th></tr></thead>
             <tbody>${r.resumen.top_clientes.map((c) => `
@@ -546,7 +552,8 @@ window.VIEWS['portal-inicio'] = {
                 <td style="text-align:right">${fmtCLP(c.total)}</td>
                 <td><button class="btn btn-secondary btn-sm" data-ver-mes="${p}" data-ver-rut="${esc(c.rut)}" data-nombre="${esc(c.razon_social || c.rut)}">Ver detalle</button></td>
               </tr>`).join('')}</tbody>
-          </table>`
+          </table>
+          </div>`
         zona.querySelectorAll('[data-ver-mes]').forEach((b) => b.addEventListener('click', () => {
           estado.rutDrill = b.dataset.verRut
           estado.nombreRut = b.dataset.nombre || null

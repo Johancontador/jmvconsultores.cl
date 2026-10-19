@@ -247,3 +247,29 @@ test('T6: la campana no pide el detalle de conciliación (404) y lee el conteo',
   assert.ok(bloque.length > 0, 'se encontró el bloque de conciliación')
   assert.ok(!/if \(difs\.length\)/.test(bloque), 'no trata el conteo como arreglo')
 })
+
+// ---------- T6: móvil — shell de una columna y menú desplegable ----------
+test('T7: móvil — ninguna plantilla de sidebar sin media query, menú desplegable y controles de 16 px', () => {
+  const css = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+
+  // Regresión real: `.sys { grid-template-columns: 232px … }` se declaró SIN
+  // media query después de las media queries del móvil, ganó por cascada y a
+  // 390 px el contenido quedaba en una franja de 232 px con 158 px vacíos.
+  const sinGuarda = css.split('\n').filter((l) => /^\.sys \{ grid-template-columns: \d+px/.test(l))
+  assert.deepStrictEqual(sinGuarda, [], 'la plantilla de escritorio debe ir dentro de @media (min-width: 961px)')
+
+  assert.match(css, /@media \(min-width: 961px\) \{\s*\.sys \{ grid-template-columns: 232px minmax\(0, 1fr\); \}/, 'escritorio con guarda de ancho')
+  assert.match(css, /@media \(max-width: 960px\)[\s\S]*?\.sys \{ grid-template-columns: minmax\(0, 1fr\); \}/, 'móvil en una sola columna real')
+  assert.match(css, /\.sys-side\.abierto/, 'el panel del menú se abre con clase explícita')
+  assert.match(css, /\.sys-side \{[\s\S]*?position: fixed;[\s\S]*?transform: translateX\(-102%\)/, 'menú lateral fuera de pantalla cuando está cerrado')
+  assert.match(css, /input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\)[\s\S]*?font-size: 16px/, 'controles a 16 px (sin zoom automático de iOS)')
+  assert.match(css, /\.tbl-hint \{ display: flex; \}/, 'aviso de tabla desplazable visible en móvil')
+
+  assert.match(app, /id="sys-menu-btn"[^>]*aria-expanded="false"[^>]*aria-controls="sys-nav"/, 'botón del menú con estado accesible')
+  assert.match(app, /id="sys-side"[^>]*>/, 'sidebar con id para el panel')
+  assert.match(app, /function marcarTablasDesplazables/, 'aviso de tablas ancho-dependiente')
+  assert.match(app, /observarTablas\(\)/, 'las tablas que se pintan después de render() también reciben aviso')
+  // El select de período ya no lleva el tamaño en un style inline imborrable.
+  assert.ok(!app.includes('id="sys-periodo" class="form-input" style='), 'sin style inline en el selector de período')
+})

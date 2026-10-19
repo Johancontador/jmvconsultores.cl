@@ -677,10 +677,13 @@ function renderShell() {
 
   $app().innerHTML = `
    <div class="sys">
-     <aside class="sys-side">
-       <div class="sys-logo">
-         <img src="/assets/logo-light.svg" alt="JMV">
-         <div>Sistema Contable<small>JMV Consultores</small></div>
+     <aside class="sys-side" id="sys-side">
+       <div class="sys-side-top">
+         <div class="sys-logo">
+           <img src="/assets/logo-light.svg" alt="JMV">
+           <div>Sistema Contable<small>JMV Consultores</small></div>
+         </div>
+         <button type="button" class="sys-menu-cerrar" id="sys-menu-cerrar" aria-label="Cerrar el menú de secciones">Cerrar</button>
        </div>
        <select id="sys-empresa" class="form-input" aria-label="Empresa activa">
           ${S.empresas.map((e) => `<option value="${e.id}" ${String(e.id) === String(S.empresa.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
@@ -698,8 +701,10 @@ function renderShell() {
          <a href="#" id="sys-logout">Salir</a>
        </div>
      </aside>
+     <div class="sys-menu-back" id="sys-menu-back" hidden></div>
      <main class="sys-main">
        <div class="sys-header">
+         <button type="button" class="sys-menu-btn" id="sys-menu-btn" aria-expanded="false" aria-controls="sys-nav" aria-label="Abrir el menú de secciones">Menú</button>
          <nav class="sys-breadcrumb" id="sys-breadcrumb" aria-label="Ruta"></nav>
          <span class="spacer"></span>
          ${buscarGlobalHTML()}
@@ -714,7 +719,7 @@ function renderShell() {
          <span class="spacer"></span>
          <div class="sys-periodo">
            <span class="sub" id="sys-periodo-estado"></span>
-           <select id="sys-periodo" class="form-input" style="width:auto;height:30px;font-size:var(--fs-xs)" aria-label="Período activo"></select>
+           <select id="sys-periodo" class="form-input sys-periodo-sel" aria-label="Período activo"></select>
          </div>
        </div>
        <div id="sys-banner">${banner}</div>
@@ -723,6 +728,8 @@ function renderShell() {
    </div>`
 
   if (window.Tema) window.Tema.conectar()
+  observarTablas()
+  conectarMenuMovil()
   conectarBuscadorMenu()
   conectarBusquedaGlobal()
   conectarNotificaciones()
@@ -791,6 +798,106 @@ function breadcrumbHTML(route) {
   return `<a href="#inicio">Inicio</a><span class="bc-sep">/</span><span>${esc(sec.seccion)}</span><span class="bc-sep">/</span><span class="bc-actual">${esc(route.label)}</span>`
 }
 
+/* ---------- menú de secciones en móvil ----------
+ * A ≤960 px el menú deja de ser una tira horizontal de 44 ítems (medido:
+ * 7384 px de ancho, 2 secciones visibles, sin rótulos de sección) y pasa a
+ * un panel lateral desplegable con el buscador y las secciones completas.
+ * El botón vive en la cabecera para seguir alcanzable con el pulgar.
+ */
+
+let menuMovilTeclado = false
+
+function estadoMenuMovil(abierto) {
+  const side = document.getElementById('sys-side')
+  const btn = document.getElementById('sys-menu-btn')
+  const back = document.getElementById('sys-menu-back')
+  if (!side || !btn) return
+  side.classList.toggle('abierto', abierto)
+  document.body.classList.toggle('menu-movil', abierto)
+  btn.setAttribute('aria-expanded', String(abierto))
+  if (back) back.hidden = !abierto
+}
+
+function cerrarMenuMovil(devolverFoco = false) {
+  const abierto = document.getElementById('sys-side')?.classList.contains('abierto')
+  if (!abierto) return
+  estadoMenuMovil(false)
+  if (devolverFoco) document.getElementById('sys-menu-btn')?.focus()
+}
+
+function conectarMenuMovil() {
+  const btn = document.getElementById('sys-menu-btn')
+  const side = document.getElementById('sys-side')
+  if (!btn || !side) return
+  estadoMenuMovil(false)
+  // Sin foco automático en el buscador: abrir el panel en el teléfono
+  // desplegaría el teclado y taparía media lista de secciones.
+  btn.addEventListener('click', () => estadoMenuMovil(!side.classList.contains('abierto')))
+  document.getElementById('sys-menu-cerrar')?.addEventListener('click', () => cerrarMenuMovil(true))
+  document.getElementById('sys-menu-back')?.addEventListener('click', () => cerrarMenuMovil(true))
+  // Elegir sección o empresa cierra el panel: el contenido viene después.
+  document.getElementById('sys-nav')?.addEventListener('click', (e) => {
+    if (e.target.closest('a')) cerrarMenuMovil()
+  })
+  document.getElementById('sys-empresa')?.addEventListener('change', () => cerrarMenuMovil())
+  if (!menuMovilTeclado) {
+    menuMovilTeclado = true
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') cerrarMenuMovil(true)
+    })
+  }
+}
+
+/**
+ * Aviso de tabla desplazable: a 390 px las tablas contables miden hasta
+ * 1000 px de más dentro de `.tbl-wrap` y nada indicaba que había columnas a la
+ * derecha (montos, acciones). Se inserta solo cuando la tabla realmente
+ * desborda; en escritorio el aviso queda oculto por CSS.
+ */
+let antiTablaTimer = null
+let observadorTablas = null
+window.addEventListener('resize', () => {
+  clearTimeout(antiTablaTimer)
+  antiTablaTimer = setTimeout(() => marcarTablasDesplazables(document.getElementById('sys-view')), 200)
+})
+
+/**
+ * Las vistas del portal, CRM y tesorería pintan sus tablas DESPUÉS de que
+ * `render()` resuelve (esperan API). Sin observar el contenedor, el aviso de
+ * desplazamiento no aparecía en esas pantallas. El observer es idempotente:
+ * si no hay nada que cambiar, no escribe DOM y no se realimenta.
+ */
+function observarTablas() {
+  const cont = document.getElementById('sys-view')
+  if (!cont) return
+  observadorTablas?.disconnect()
+  observadorTablas = new MutationObserver(() => {
+    clearTimeout(antiTablaTimer)
+    antiTablaTimer = setTimeout(() => marcarTablasDesplazables(document.getElementById('sys-view')), 120)
+  })
+  observadorTablas.observe(cont, { childList: true, subtree: true })
+}
+
+function marcarTablasDesplazables(cont) {
+  if (!cont) return
+  cont.querySelectorAll('.tbl-wrap').forEach((w) => {
+    let hint = w.previousElementSibling
+    if (!hint || !hint.classList?.contains('tbl-hint')) hint = null
+    const sobra = w.scrollWidth - w.clientWidth
+    if (sobra <= 8) {
+      if (hint) hint.remove()
+      return
+    }
+    if (!hint) {
+      hint = document.createElement('p')
+      hint.className = 'tbl-hint'
+      hint.innerHTML = '<span aria-hidden="true">↔</span> Desliza la tabla para ver todas las columnas'
+      w.insertAdjacentElement('beforebegin', hint)
+    }
+    w.setAttribute('tabindex', w.getAttribute('tabindex') || '0')
+  })
+}
+
 /* ---------- buscador del menú ---------- */
 
 function conectarBuscadorMenu() {
@@ -798,8 +905,16 @@ function conectarBuscadorMenu() {
   if (!inp) return
   inp.addEventListener('input', () => {
     const q = inp.value.trim().toLowerCase()
+    // Se compara también con el RÓTULO DE SECCIÓN: buscar «tesor» debe
+    // encontrar «Bancos, Libro Banco y Conciliación» (medido: antes la
+    // búsqueda devolvía 0 resultados porque el nombre vive en el rótulo).
+    const seccionDe = (a) => {
+      let n = a.previousElementSibling
+      while (n && !n.classList.contains('nav-seccion')) n = n.previousElementSibling
+      return n ? n.textContent.toLowerCase() : ''
+    }
     document.querySelectorAll('#sys-nav a').forEach((a) => {
-      a.classList.toggle('oculto', q && !a.textContent.toLowerCase().includes(q))
+      a.classList.toggle('oculto', q && !a.textContent.toLowerCase().includes(q) && !seccionDe(a).includes(q))
     })
     document.querySelectorAll('#sys-nav .nav-seccion').forEach((sec) => {
       const el = sec.nextElementSibling
@@ -867,11 +982,14 @@ function renderRoute() {
     return
   }
 
+  cerrarMenuMovil()
   const cont = document.getElementById('sys-view')
   cont.innerHTML = `<div class="empty">Cargando…</div>`
-  Promise.resolve(view.render(cont)).catch((err) => {
-    cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
-  })
+  Promise.resolve(view.render(cont))
+    .then(() => marcarTablasDesplazables(cont))
+    .catch((err) => {
+      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
+    })
 }
 
 /* ---------- pill de documentos pendientes en el nav ---------- */

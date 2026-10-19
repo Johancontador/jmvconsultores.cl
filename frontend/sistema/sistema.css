@@ -580,8 +580,12 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .sys .btn-secondary { color: var(--fg-secondary); border-color: var(--border-subtle); }
 .sys .btn-secondary:hover { color: var(--fg-primary); border-color: var(--border-default); }
 
-/* Sidebar: canvas del fondo (la superficie activa es el contenido) */
-.sys { grid-template-columns: 264px minmax(0, 1fr); }
+/* Sidebar: canvas del fondo (la superficie activa es el contenido).
+   Con guarda de ancho: sin ella esta regla (sin media query) pisaba la
+   plantilla de una columna del móvil por orden de cascada. */
+@media (min-width: 961px) {
+  .sys { grid-template-columns: 264px minmax(0, 1fr); }
+}
 .sys-side { background: var(--bg-canvas); padding: var(--space-6) var(--space-4); }
 .nav-seccion { letter-spacing: 0.14em; margin: var(--space-5) 0 var(--space-1); font-size: 10px; }
 .sys-nav a { border-left: none; padding: 6px var(--space-3); }
@@ -989,8 +993,13 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
    sus propios selectores.
    ============================================================ */
 
-/* ---------- Shell: barra lateral más estrecha y navegación plana ---------- */
-.sys { grid-template-columns: 232px minmax(0, 1fr); }
+/* ---------- Shell: barra lateral más estrecha y navegación plana ----------
+   Solo escritorio: a ≤960 px el shell es una columna (ver capa móvil final).
+   Esta regla, sin media query, dejaba el teléfono en `232px 158px`: el
+   contenido se dibujaba en 184 px de ancho con 158 px vacíos a la derecha. */
+@media (min-width: 961px) {
+  .sys { grid-template-columns: 232px minmax(0, 1fr); }
+}
 .sys-side {
   gap: var(--space-4);
   background: var(--bg-canvas);
@@ -1055,6 +1064,10 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .sys-periodo { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .sys-periodo .sub { font-size: var(--fs-xs); color: var(--fg-muted); }
+/* Selector de período: compacto en escritorio; 44 px y 16 px en móvil (lo
+   sube la capa móvil final). Antes el tamaño venía en un style inline, que
+   ninguna media query podía corregir. */
+.sys-periodo-sel { width: auto; height: 30px; font-size: var(--fs-xs); }
 
 /* ---------- Scaffold de pantalla (opcional por vista) ---------- */
 .pg-head {
@@ -1227,3 +1240,175 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .pd-kpi { padding: var(--space-3) var(--space-4); }
 .pd-kpi strong { font-size: var(--fs-xl); }
 .pd-title { font-size: var(--fs-xl); font-weight: 700; }
+
+/* ==========================================================================
+   CAPA MÓVIL (≤960 px) — agregada 2026-10-18
+   Va al FINAL a propósito: las capas anteriores del shell (incluida
+   «REDISEÑO 2026.3») se declararon después de sus propias media queries, así
+   que ganaban por orden de cascada y el teléfono quedaba con la plantilla de
+   escritorio. Aquí se corrige el layout y se resuelven los hallazgos medidos
+   a 390 px: menú de 7384 px horizontales, cabecera fija de 151 px, controles
+   de 12–13 px (zoom automático en iOS), targets de 18–36 px y tablas de hasta
+   1000 px de ancho sin ningún aviso de desplazamiento.
+   ========================================================================== */
+
+/* Aviso de tabla desplazable (lo inserta app.js solo si desborda). */
+.tbl-hint {
+  display: none;
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--fg-secondary);
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.tbl-hint span { color: var(--accent); font-weight: var(--fw-semibold); }
+
+/* Botones del menú móvil: ocultos en escritorio. */
+.sys-menu-btn, .sys-menu-cerrar, .sys-menu-back { display: none; }
+
+@media (max-width: 960px) {
+  /* ---------- 1. Shell: una sola columna real ---------- */
+  .sys { grid-template-columns: minmax(0, 1fr); }
+  .sys-side, .sys-main { grid-column: 1; min-width: 0; }
+  .sys-main { max-width: none; width: 100%; }
+
+  /* ---------- 2. Menú = panel lateral desplegable ---------- */
+  .sys-menu-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; height: 40px; padding: 0 var(--space-3);
+    background: var(--bg-surface); border: 1px solid var(--border-default);
+    border-radius: var(--radius-md); color: var(--fg-primary);
+    font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold);
+    cursor: pointer;
+  }
+  .sys-menu-btn[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .sys-side {
+    position: fixed; top: 0; bottom: 0; left: 0;
+    width: min(86vw, 340px); height: 100dvh;
+    z-index: 120; overflow-y: auto; overflow-x: hidden;
+    background: var(--bg-surface); border-right: 1px solid var(--border-default);
+    box-shadow: var(--shadow-xl);
+    padding: var(--space-4) var(--space-3) var(--space-6);
+    transform: translateX(-102%); visibility: hidden;
+    transition: transform var(--dur-base) var(--ease-out), visibility var(--dur-base);
+  }
+  .sys-side.abierto { transform: none; visibility: visible; }
+  .sys-side-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .sys-side-top .sys-logo { padding: 0; min-width: 0; }
+  .sys-menu-cerrar {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; height: 40px; padding: 0 var(--space-3);
+    background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md); color: var(--fg-secondary);
+    font: inherit; font-size: var(--fs-xs); cursor: pointer;
+  }
+
+  .sys-side > select#sys-empresa,
+  .sys-side-top > select#sys-empresa { width: 100%; height: 44px; font-size: 16px; }
+
+  .sys-nav { display: none; flex-direction: column; flex-wrap: nowrap; overflow: visible; gap: 1px; }
+  .sys-side.abierto .sys-nav { display: flex; }
+  .sys-side.abierto .nav-search { display: block; margin: var(--space-3) 0 var(--space-1); }
+  .sys-side.abierto .nav-search input { height: 40px; font-size: 16px; }
+  .sys-side.abierto .nav-seccion { display: block; width: auto; margin: var(--space-4) 0 2px; }
+  .sys-nav a {
+    min-height: 44px; padding: 10px var(--space-3);
+    white-space: normal; border-radius: var(--radius-md);
+  }
+  .sys-nav a.active { box-shadow: inset 2px 0 0 var(--accent); }
+
+  .sys-side-foot { display: none; }
+  .sys-side.abierto .sys-side-foot {
+    display: flex; flex-direction: row; align-items: center; flex-wrap: wrap;
+    gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .sys-side-foot a { min-height: 44px; display: inline-flex; align-items: center; font-size: var(--fs-sm); }
+
+  .sys-menu-back {
+    display: block; position: fixed; inset: 0; z-index: 110;
+    background: rgba(2, 6, 23, 0.5); border: 0;
+  }
+  .sys-menu-back[hidden] { display: none; }
+  body.menu-movil { overflow: hidden; }
+
+  /* ---------- 3. Cabecera compacta y pegajosa (40 px, no 151) ---------- */
+  .sys-header {
+    position: sticky; top: 0; z-index: 40;
+    min-height: 48px; padding: 6px 0; gap: var(--space-2);
+    flex-wrap: nowrap; align-items: center;
+  }
+  /* El título + kicker (empresa · RUT) ya ubican la pantalla: el breadcrumb
+     repetía la misma ruta y obligaba a una fila extra. */
+  .sys-header .sys-breadcrumb, .sys-header .spacer { display: none; }
+  .gsearch { flex: 1 1 auto; min-width: 0; }
+  .gsearch input { width: 100%; height: 40px; font-size: 16px; }
+  .campana-btn, .tema-toggle { width: 40px; height: 40px; }
+  /* El desplegable se ancla al viewport, no a un input de 170 px que lo
+     dejaba empezando fuera de pantalla. */
+  .gsearch-drop { position: fixed; left: 8px; right: 8px; top: 56px; width: auto; max-width: none; }
+  .campana-drop { width: min(320px, calc(100vw - 16px)); }
+
+  .sys-titlebar { align-items: flex-start; gap: var(--space-2); margin: var(--space-3) 0; padding-bottom: var(--space-3); }
+  .sys-titlebar h1 { font-size: var(--fs-lg); }
+  .sys-titlebar .spacer { display: none; }
+  .sys-periodo { width: 100%; justify-content: space-between; }
+  .sys-periodo-sel { width: auto; height: 44px; font-size: 16px; }
+
+  /* ---------- 4. Controles: 16 px (sin zoom iOS) y 44 px de alto ----------
+     La regla es amplia a propósito: cualquier control bajo 16 px dispara el
+     zoom automático de iOS al enfocar; enumerarlos dejaba fuera inputs de
+     vistas nuevas (medidos: .de-cant/.de-precio a 13 px en Emitir DTE). */
+  .sys input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  .sys select,
+  .sys textarea { font-size: 16px; }
+  /* Casillas: 13 px no es un objetivo táctil (medido en «Contabilizar alta»
+     de Activos). 24 px es el mínimo AA de 2.5.8; la etiqueta sigue asociada. */
+  .sys input[type='checkbox'],
+  .sys input[type='radio'] { width: 24px; height: 24px; }
+  /* Los filtros de la bandeja fijan 13 px con más especificidad: se repiten
+     aquí para que no queden fuera del mínimo de 16 px. */
+  .sys .doc-f select, .sys .doc-f input, .sys .tbl-toolbar input,
+  .sys .crm-kcard .form-input, .sys .crm-ft { font-size: 16px; }
+  .sys .doc-f select, .sys .doc-f input, .sys .tbl-toolbar input { height: 44px; }
+  .sys .doc-menu-item { padding: 12px; min-height: 44px; }
+  .sys .btn { min-height: 40px; }
+  /* Pestañas y segmentos también son objetivos de toque. */
+  .sys .tabs button, .sys .crm-tab, .sys .crm-seg-btn { min-height: 40px; }
+  /* Chips que son enlaces (Centro: recientes y accesos por grupo) medían 22 px. */
+  .sys a.chip { min-height: 40px; padding: 6px var(--space-3); }
+  /* Franja de flujo (Bandeja → Libros → Propuestas → Contabilizar): son
+     enlaces de navegación reales, no texto de una frase; medían 18 px. */
+  .sys .pg-flow { gap: var(--space-1); }
+  .sys .pg-flow a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 6px; }
+  .sys .rep-fav { min-width: 40px; min-height: 40px; padding: 0; }
+
+  /* ---------- 5. Tablas: aviso de desplazamiento ---------- */
+  .tbl-hint { display: flex; }
+  .tbl-wrap { -webkit-overflow-scrolling: touch; }
+
+  /* ---------- 6. Aire para la barra de gestos del iPhone ---------- */
+  .sys-main { padding-bottom: calc(var(--space-10) + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (max-width: 640px) {
+  .sys-main { padding: var(--space-3) var(--space-3) calc(var(--space-10) + env(safe-area-inset-bottom, 0px)); }
+  .sys-titlebar h1 { font-size: var(--fs-lg); }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card { padding: var(--space-3) var(--space-3); }
+  .modal-back { padding: 8px; }
+  .modal-card { padding: var(--space-4); max-height: calc(100dvh - 16px); border-radius: var(--radius-lg); }
+  .modal-foot { flex-wrap: wrap; }
+  .modal-foot .btn { flex: 1 1 auto; }
+  .doc-drawer-foot { flex-wrap: wrap; }
+  .doc-drawer-head, .doc-drawer-body { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .login-card { padding: var(--space-5); }
+  .pd-head-txt { min-width: 0; }
+  /* La tarjeta de favoritos del Centro de Reportes: el botón (17 px) queda
+     como objetivo de 40 px sin romper la tarjeta. */
+  .sys .rep-fav { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
+  .alertas .alerta, .alerta { gap: var(--space-2); }
+  .tbl th, .tbl td { padding-left: var(--space-3); padding-right: var(--space-3); }
+}
