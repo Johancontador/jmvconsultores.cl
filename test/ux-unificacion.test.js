@@ -273,3 +273,24 @@ test('T7: móvil — ninguna plantilla de sidebar sin media query, menú despleg
   // El select de período ya no lleva el tamaño en un style inline imborrable.
   assert.ok(!app.includes('id="sys-periodo" class="form-input" style='), 'sin style inline en el selector de período')
 })
+
+// ---------- T8: rejillas móviles sin mínimo fijo --------------------------
+test('T8: móvil — rejillas con min() , piso de 12 px y tarjetas del Centro sin recorte', () => {
+  const css = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
+  const sitio = fs.readFileSync(path.join(FRONT, 'css', 'sitio.css'), 'utf8')
+
+  // Medido el 2026-10-19 en Chrome real: a 320 px de viewport (Chrome expande el
+  // layout a 352/324) `minmax(320px, 1fr)` + padding del wrap forzaba zoom-out.
+  // Es el mismo síntoma de la incidencia móvil del 16-oct, en otra rejilla.
+  const minimosFijos = [
+    ...css.matchAll(/grid-template-columns[^;]*minmax\((\d+)px/g),
+    ...sitio.matchAll(/grid-template-columns[^;]*minmax\((\d+)px/g),
+  ]
+  assert.deepStrictEqual(minimosFijos.map((m) => m[0]), [], 'ninguna rejilla con minmax(<px>, …) sin min(…, 100%)')
+
+  assert.match(css, /grid-template-columns: repeat\(auto-fill, minmax\(min\(320px, 100%\), 1fr\)\)/, 'Centro de Aplicaciones fluido')
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.sys table\.tbl th,[\s\S]*?font-size: 12px/, 'encabezados de tabla a 12 px en teléfono')
+  assert.match(css, /\.sys \.centro-card-head > div \{ min-width: 0; \}/, 'el título de la tarjeta puede encogerse')
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.sys \.centro-card-head \{ flex-wrap: wrap; \}/, 'cabecera de tarjeta envuelve en teléfono')
+  assert.match(sitio, /@media \(max-width: 420px\)[\s\S]*?\.pv-kpis \{ grid-template-columns: 1fr; \}/, 'KPIs del sitio en una columna en pantallas angostas')
+})

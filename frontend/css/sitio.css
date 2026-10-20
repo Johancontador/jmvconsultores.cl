@@ -277,6 +277,12 @@ ul { margin: 0; }
   .pv-stage__deck { transform: none; }
   .pv-panel--float, .pv-panel--c { position: static; width: auto; margin-top: var(--pv-s3); transform: none; }
 }
+/* A 320-420 px la rejilla de 2 KPIs deja celdas de ~71 px y la palabra
+   «DOCUMENTOS» (11 px, mayúsculas y letter-spacing) mide ~85: se salía de su
+   tarjeta. Una columna en pantallas angostas. */
+@media (max-width: 420px) {
+  .pv-kpis { grid-template-columns: 1fr; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .pv-panel--a { animation: pv-float 7s ease-in-out infinite; }
   .pv-panel--b { animation: pv-float 8.5s ease-in-out infinite reverse; }
@@ -297,8 +303,10 @@ ul { margin: 0; }
 }
 
 /* ── 8. TARJETAS / GRIDS ─────────────────────────────────────────────────── */
-.pv-grid { display: grid; gap: var(--pv-s5); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.pv-grid--3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.pv-grid { display: grid; gap: var(--pv-s5); grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+/* min() en la pista: a 320 px de viewport el mínimo fijo de 300 px más el
+   padding del wrap forzaba un layout de 324 px (zoom-out de ~1 %). */
+.pv-grid--3 { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
 .pv-card {
   background: var(--pv-surface); border: 1px solid var(--pv-line);
   border-radius: var(--pv-r-lg); padding: var(--pv-s6);
@@ -319,7 +327,7 @@ ul { margin: 0; }
 .pv-ink .pv-card__ico { background: rgba(224,185,140,0.12); border-color: rgba(224,185,140,0.26); color: #e0b98c; }
 
 /* ── 9. PASOS / METODOLOGÍA ──────────────────────────────────────────────── */
-.pv-flow { display: grid; gap: var(--pv-s4); grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+.pv-flow { display: grid; gap: var(--pv-s4); grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); }
 .pv-step { position: relative; background: var(--pv-surface); border: 1px solid var(--pv-line); border-radius: var(--pv-r-lg); padding: var(--pv-s5); }
 .pv-step__n {
   display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;

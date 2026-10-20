@@ -137,7 +137,7 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
   background: var(--accent-soft); color: var(--accent);
   font-size: var(--fs-xs); font-weight: var(--fw-semibold); letter-spacing: 0.04em; text-transform: uppercase;
 }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-4); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: var(--space-4); }
 .kpi {
   background: var(--bg-surface); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
@@ -160,7 +160,7 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
 .pd-head-actions { text-align: right; }
 .pd-head-actions .hint { margin-top: var(--space-1); }
 
-.pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-4); }
+.pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: var(--space-4); }
 .pd-kpi {
   background: var(--bg-surface); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg); padding: var(--space-4) var(--space-5);
@@ -551,7 +551,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 
 .rep-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
   gap: var(--space-3);
 }
 .rep-card {
@@ -705,11 +705,16 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
    descripción clara (solicitud 2026-10-15) — solo tokens del design system. */
 .sys .centro-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  /* min() en la pista: con `minmax(320px, 1fr)` a secas el mínimo de 320 px
+     más el padding forzaba un viewport de 352 px en pantallas de 320 (Chrome
+     ampliaba el layout y la app se veía «alejada», el mismo síntoma de la
+     incidencia móvil del 16-oct). */
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5) var(--space-6);
   max-width: 1200px;
 }
+.sys .centro-card { min-width: 0; }
 
 .sys .centro-card {
   background: var(--surface, var(--card, #fff));
@@ -726,7 +731,16 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 .sys .centro-card-head { display: flex; gap: var(--space-3); align-items: center; }
-.sys .centro-card-head h3 { margin: 0; font-size: var(--fs-lg, 1.15rem); line-height: 1.25; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+/* min-width: 0 en el bloque de texto: sin él el h3 (título + chips) imponía su
+   min-content y a 320 px el panel entero se maquetaba a 351 px, con el zoom-out
+   de «la app se ve alejada». */
+.sys .centro-card-head > div { min-width: 0; }
+.sys .centro-card-head h3 {
+  margin: 0; font-size: var(--fs-lg, 1.15rem); line-height: 1.25;
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  min-width: 0; overflow-wrap: anywhere;
+}
+.sys .centro-card-head .chip { flex: 0 0 auto; }
 
 .sys .centro-ico {
   flex: 0 0 auto;
@@ -924,7 +938,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 
 .sys .crm-kanban {
   display: grid; gap: var(--space-3);
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
   padding: var(--space-3) var(--space-4) var(--space-6);
   align-items: start; overflow-x: auto;
 }
@@ -1108,7 +1122,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .pg-flow a:hover { text-decoration: underline; }
 
 /* ---------- KPI: planos, cifras tabulares y color solo si significa algo ---------- */
-.kpi-grid { gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); }
+.kpi-grid { gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(176px, 100%), 1fr)); }
 .kpi {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -1394,8 +1408,24 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 @media (max-width: 640px) {
+  /* Tarjetas del Centro: el chip de licencia y el icono dejaban al título con
+     47 px de ancho (el texto se salía de la tarjeta). Envolver la cabecera y
+     dejar que el bloque de texto use el ancho restante. */
+  .sys .centro-card-head { flex-wrap: wrap; }
+  .sys .centro-card-head > div { flex: 1 1 auto; }
+  .sys .centro-card-head .spacer { display: none; }
+  .sys .centro-ico { width: 52px; height: 52px; }
+  .sys .centro-ico-svg { width: 30px; height: 30px; }
+
   .sys-main { padding: var(--space-3) var(--space-3) calc(var(--space-10) + env(safe-area-inset-bottom, 0px)); }
   .sys-titlebar h1 { font-size: var(--fs-lg); }
+  /* Piso de legibilidad en teléfono: encabezados de tabla y etiquetas estaban
+     en 10 px (medido: 400 celdas de encabezado en Asientos, 14 en la Bandeja).
+     12 px es el mínimo que se lee sin acercar el teléfono. */
+  .sys table.tbl th,
+  .sys .frm-label,
+  .sys small,
+  .sys .sys-kicker { font-size: 12px; }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .card { padding: var(--space-3) var(--space-3); }
   .modal-back { padding: 8px; }
