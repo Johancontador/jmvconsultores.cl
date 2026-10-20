@@ -114,6 +114,40 @@ test('T1: ciclo de vida completo con exclusión mutua por clave de unicidad', ()
   assert.ok(r5.creado, 'con ventana=0 el completado libera (histórico re-lanzable)')
 })
 
+// Regresión del CI (Linux, 2026-10-20): con ventana=0 la comparación
+// `terminado_en >= ahora` encontraba un job COMPLETADO en el mismo milisegundo
+// y `crear` devolvía ese job; `tomar()` lo rechazaba («ya está completado») y la
+// re-corrida moría con 'error'. En Windows el reloj avanzaba entre las dos
+// llamadas y el fallo no se veía. Se fija el caso con la BD manipulada, sin
+// depender de la velocidad de la máquina.
+test('T1b: con ventana=0 un job completado en el MISMO milisegundo no bloquea', () => {
+  const r = jobsP.crear(db, {
+    tipo: 'historico_rcv', claveUnicidad: '55:202501-202502', empresaId: 55, usuarioId: 7,
+    periodoDesde: '202501', periodoHasta: '202502',
+  })
+  jobsP.tomar(db, r.id)
+  jobsP.finalizar(db, r.id, 'completado')
+
+  // El caso exacto que fallaba: terminado_en == ahora (misma marca de tiempo).
+  const ahora = new Date().toISOString()
+  db.prepare('UPDATE jobs_persistentes SET terminado_en = ? WHERE id = ?').run(ahora, r.id)
+
+  const otra = jobsP.crear(db, {
+    tipo: 'historico_rcv', claveUnicidad: '55:202501-202502', empresaId: 55, usuarioId: 7,
+    periodoDesde: '202501', periodoHasta: '202502', ventanaIdempotenciaMin: 0,
+  })
+  assert.ok(otra.creado, 'ventana=0 nunca reutiliza un completado (ni del mismo ms)')
+  assert.notStrictEqual(otra.id, r.id, 'el histórico se puede re-lanzar de inmediato')
+  assert.doesNotThrow(() => jobsP.tomar(db, otra.id), 'el job nuevo se puede tomar sin chocar con el anterior')
+
+  // La ventana por defecto (24 h) sigue bloqueando: el fix no la aflojó.
+  const bloqueado = jobsP.crear(db, {
+    tipo: 'historico_rcv', claveUnicidad: '55:202501-202502', empresaId: 55, usuarioId: 7,
+    periodoDesde: '202501', periodoHasta: '202502',
+  })
+  assert.strictEqual(bloqueado.id, otra.id, 'el vivo manda mientras corre')
+})
+
 // ============================ T2 ============================
 
 test('T2: checkpoints por período — reanudación pide solo lo faltante', () => {

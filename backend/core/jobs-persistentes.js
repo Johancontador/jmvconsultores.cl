@@ -96,13 +96,24 @@ function crear(db, { tipo, claveUnicidad, empresaId = null, usuarioId = null, pe
   if (vivo) return { id: vivo.id, estado: vivo.estado, creado: false, ya_existia: vivo }
 
   // Completado recientemente con la misma clave → ventana de idempotencia.
-  const limite = new Date(Date.now() - ventanaIdempotenciaMin * 60000).toISOString()
-  const hecho = db.prepare(`
-    SELECT id, estado FROM jobs_persistentes
-    WHERE tipo = ? AND clave_unicidad = ? AND estado = 'completado' AND COALESCE(terminado_en, '') >= ?
-    ORDER BY id DESC LIMIT 1
-  `).get(tipo, claveUnicidad, limite)
-  if (hecho) return { id: hecho.id, estado: hecho.estado, creado: false, ya_existia: hecho }
+  //
+  // ventana = 0 significa "re-lanzable SIEMPRE" (ingesta histórica): ahí la
+  // consulta no se hace. Antes se hacía con `limite = ahora` y `>=`, así que un
+  // job terminado en el MISMO milisegundo volvía a encontrarse y `crear`
+  // devolvía el job completado: `tomar()` lo rechazaba ("ya está completado") y
+  // la re-corrida moría con estado 'error'. Pasaba en máquinas rápidas — el
+  // CI en Linux lo destapó el 2026-10-20, en local (Windows) el reloj siempre
+  // avanzaba entre `finalizar` y `crear`.
+  const ventanaMin = Number(ventanaIdempotenciaMin)
+  if (Number.isFinite(ventanaMin) && ventanaMin > 0) {
+    const limite = new Date(Date.now() - ventanaMin * 60000).toISOString()
+    const hecho = db.prepare(`
+      SELECT id, estado FROM jobs_persistentes
+      WHERE tipo = ? AND clave_unicidad = ? AND estado = 'completado' AND COALESCE(terminado_en, '') >= ?
+      ORDER BY id DESC LIMIT 1
+    `).get(tipo, claveUnicidad, limite)
+    if (hecho) return { id: hecho.id, estado: hecho.estado, creado: false, ya_existia: hecho }
+  }
 
   const info = db.prepare(`
     INSERT INTO jobs_persistentes (tipo, clave_unicidad, empresa_id, usuario_id, periodo_desde, periodo_hasta, estado, progreso_json, max_intentos, actualizado_en)
