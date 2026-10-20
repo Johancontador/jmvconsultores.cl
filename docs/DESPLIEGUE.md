@@ -142,7 +142,25 @@ antes se veían iguales: commits de **solo documentación** por delante (esperad
 archivo), y un contenedor que **no es la imagen registrada** (alguien recreó el
 servicio por fuera del hook). Los scripts se instalan en el VPS con
 `install -m 755 ops/post-receive /home/johan/repos/iva-mensual.git/hooks/post-receive`;
-`ops/deploy.sh` y `ops/estado-deploy.sh` se ejecutan desde el árbol de trabajo.
+`ops/deploy.sh` y `ops/estado-deploy.sh` se ejecutan desde el árbol de trabajo (ambos
+van versionados con bit de ejecución: si el índice los tiene en 644, el `checkout -f`
+del hook revierte en silencio cualquier `chmod` manual).
+
+**Si el build falla, el sistema sigue sirviendo:** el registro anterior se conserva y
+`ops/estado-deploy.sh` responde `REVISAR` con el commit pendiente, mientras el contenedor
+viejo sigue `healthy`. Reintento (manual, no requiere push):
+
+```bash
+ssh johan@100.116.109.54 'cd /home/johan/apps/iva-mensual && setsid nohup bash ops/deploy.sh >> /home/johan/deploy-build.log 2>&1 < /dev/null &'
+```
+
+Ocurrió el 2026-10-20: `npm ci --omit=dev` abortó al descargar el binario precompilado de
+`better-sqlite3` y luego los headers de Node para compilarlo (`node-gyp … TypeError:
+terminated`), un corte de red del VPS. El contenedor no se tocó, el registro conservó el
+commit en vivo y el reintento entró sin más. Por eso **no** hay que podar la caché de
+build del host justo antes de un despliegue: sin capas cacheadas, cada intento vuelve a
+depender de la red para `apt-get`, `npm ci` y la compilación del módulo nativo (~7 min en
+vez de ~40 s).
 
 ## Opción B — PaaS (Render / Railway / Fly.io)
 
