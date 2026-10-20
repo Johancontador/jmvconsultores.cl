@@ -59,7 +59,33 @@ function respuesta(body, { status = 200, location = null, cookies = [], url = nu
 
 // ================= T1: credencial rechazada =================
 
-test('T1: el SII devuelve al formulario → «Clave SII incorrecta» (no «sesión expirada»)', async () => {
+/**
+ * Variante REAL observada el 2026-10-19 con la empresa 4: el POST responde 200
+ * con una página genérica (título vacío) y NO redirige ni dice «clave
+ * incorrecta»; la única cookie es la del balanceador. Un detector basado solo
+ * en la URL o en el texto de la respuesta no la ve — por eso el arreglo se
+ * apoya en la ausencia de cookies de sesión.
+ */
+test('T1: 200 sin cookies de sesión (caso real) → «Clave SII incorrecta»', async () => {
+  globalThis.fetch = async (url) => {
+    const u = String(url)
+    if (u.startsWith(LOGIN_URL)) {
+      return respuesta(
+        '<!DOCTYPE html><html><head><title></title></head><body><script>mostrar(0,"0")</script></body></html>',
+        { cookies: ['TS0161cd2b=balanceador; Path=/'], url: u }
+      )
+    }
+    return respuesta('<html>login</html>', { cookies: ['TS0161cd2b=balanceador; Path=/'], url: u })
+  }
+
+  await assert.rejects(
+    () => siiSession.loginSII('96987654-K', 'clave-mala'),
+    /Clave SII incorrecta/,
+    'una clave rechazada debe reportarse como tal, no como token ausente'
+  )
+})
+
+test('T1b: el SII devuelve al formulario (302) → «Clave SII incorrecta»', async () => {
   const urls = []
   globalThis.fetch = async (url) => {
     const u = String(url)
@@ -72,7 +98,6 @@ test('T1: el SII devuelve al formulario → «Clave SII incorrecta» (no «sesi�
       })
     }
     if (u.startsWith(LOGIN_URL)) {
-      // Credencial rechazada: nada de 401, un 302 de vuelta al formulario.
       return respuesta('', { status: 302, location: `${FORM_URL}?https://www4.sii.cl/consdcvinternetui/` })
     }
     return respuesta('<html>otro</html>')

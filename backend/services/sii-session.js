@@ -154,22 +154,28 @@ async function loginSII(rut, clave) {
     `[SII] login → HTTP ${res.status}, cookies recibidas: [${[...jar.cookies.keys()].join(', ') || 'ninguna'}]`
   )
 
-  // Credencial rechazada: el SII NO responde 401 ni un texto de error; redirige
-  // de vuelta al formulario. Si no se detecta aquí, el flujo sigue a
-  // obtenerTokenRCV y el 401 del facadeService se reporta como «sesión
-  // expirada», lo que hace que el reintento vuelva a autenticarse con la misma
-  // clave mala (2 logins por empresa y por corrida, con riesgo de bloqueo).
+  // Credencial rechazada: el SII NO responde 401. Lo hace de dos formas
+  // observadas contra el servicio real (empresa 4, 2026-10-19):
+  //   a) 302 de vuelta al formulario de autenticación, o
+  //   b) 200 con una página genérica (título vacío) y SOLO la cookie del
+  //      balanceador — sin redirección ni texto de error.
+  // La señal inequívoca de sesión abierta son las cookies de autenticación
+  // (NETSCAPE_LIVEWIRE.*, X-SII-STATE-*, TOKEN, CSESSIONID), que el login
+  // válido fija siempre. Sin ellas, el 401 posterior del facadeService se
+  // reportaba como «sesión expirada»: el reintento volvía a autenticarse con la
+  // misma clave mala (2 logins por empresa y corrida, con riesgo de bloqueo).
   const urlFinal = res.url || ''
   const volvioAlLogin = /IngresoRutClave/i.test(urlFinal) || /location\.replace\([^)]*IngresoRutClave/i.test(texto)
   const mensajeRechazo = /clave incorrecta|clave tributaria ingresada no es correcta|no existe/i.test(texto)
+  const cookiesSesion = [...jar.cookies.keys()].filter((k) =>
+    /^(TOKEN|CSESSIONID|RUT_NS|DV_NS)$|^(NETSCAPE_LIVEWIRE|X-SII-STATE)[.-]/.test(k)
+  )
 
-  if (volvioAlLogin || mensajeRechazo) {
-    console.log('[SII] login rechazado: el SII devolvió al formulario de autenticación (RUT/clave inválidos)')
-    throw new Error('Clave SII incorrecta')
-  }
-
-  if (!jar.header()) {
-    throw new Error('No se obtuvo sesión del SII — verifique credenciales')
+  if (volvioAlLogin || mensajeRechazo || cookiesSesion.length === 0) {
+    console.log(
+      `[SII] login rechazado: sin cookies de sesión (${volvioAlLogin ? 'redirigió al formulario' : mensajeRechazo ? 'mensaje de clave inválida' : 'solo cookies de balanceador'})`
+    )
+    throw new Error('Clave SII incorrecta (el SII no abrió sesión con estas credenciales)')
   }
 
   return jar
