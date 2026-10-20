@@ -59,6 +59,11 @@ function chipEstado(estado) {
   return `<span class="chip ${map[estado] || 'neutral'}">${esc(estado)}</span>`
 }
 
+// Listener de Esc del diálogo abierto. Vive fuera de `openModal` para que
+// `cerrarModal()` lo retire también cuando el cierre viene de un botón o de
+// una acción completada (si no, quedaría un keydown colgado por cada modal).
+let modalEscapeHandler = null
+
 function openModal(html) {
   cerrarModal()
   const back = document.createElement('div')
@@ -67,11 +72,27 @@ function openModal(html) {
   back.innerHTML = `<div class="modal-card">${html}</div>`
   back.addEventListener('click', (e) => { if (e.target === back) cerrarModal() })
   document.body.appendChild(back)
+  // Esc = cancelar en TODOS los diálogos (mismo componente para las vistas) y
+  // el foco vuelve al disparador: antes la única salida era el ratón.
+  const disparador = document.activeElement
+  modalEscapeHandler = (e) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    cerrarModal()
+    disparador?.focus?.()
+  }
+  document.addEventListener('keydown', modalEscapeHandler)
+  const primero = back.querySelector?.('button, input, select, textarea')
+  primero?.focus?.()
 }
 
 function cerrarModal() {
   const m = document.getElementById('modal-back')
   if (m) m.remove()
+  if (modalEscapeHandler) {
+    document.removeEventListener('keydown', modalEscapeHandler)
+    modalEscapeHandler = null
+  }
 }
 
 function selectOptions(items, valueKey, labelFn, selected) {
@@ -1091,6 +1112,10 @@ function aplicarPeriodoGlobal(p) {
   window._repPeriodo = p; window._balance8Periodo = p; window._clasificadoPeriodo = p
   window._situacionPeriodo = p; window._resultadosPeriodo = p; window._niifPeriodo = p
   window._niifResPeriodo = p; window._asPeriodo = p; window._tesoPeriodo = p
+  // F2: el Diario, las Propuestas y los Libros leían `periodoActual()` y
+  // quedaban en el mes del calendario aunque el header dijera otro. El
+  // período es uno solo: el selector del shell y la URL también los mueven.
+  window._ctaPeriodo = p; window._propPeriodo = p; window._librosPeriodo = p
 }
 
 let remontandoContexto = false

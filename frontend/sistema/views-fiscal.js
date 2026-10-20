@@ -181,10 +181,26 @@ VIEWS.inicio = {
 
 /* ====================== LIBROS COMPRAS Y VENTAS ====================== */
 
+/**
+ * Las notas de crédito (tipos 60 y 61) RESTAN en los libros. El backend lo
+ * aplica en SQL con `SIGNO_NC` (core/sii-convenios.js); sumar las filas en crudo
+ * inflaba neto, IVA y total justo en los libros que se comparan con el F29.
+ */
+function signoDoc(d) {
+  return [60, 61].includes(Number(d.tipo_doc)) ? -1 : 1
+}
+
+/** Totales de un libro: sin anulados/error y con las NC restando. */
+function sumaLibro(filas, campo) {
+  return (filas || [])
+    .filter((d) => !['ANULADO', 'ERROR'].includes(d.estado))
+    .reduce((acc, d) => acc + signoDoc(d) * (d[campo] || 0), 0)
+}
+
 VIEWS.libros = {
   titulo: 'Libros Compras y Ventas',
   async render(cont) {
-    const periodo = window._librosPeriodo || periodoActual()
+    const periodo = window._librosPeriodo || periodoGlobal()
     const tab = window._librosTab || 'compra'
     const puedeIngestar = tiene('documentos:ingestar')
 
@@ -203,7 +219,10 @@ VIEWS.libros = {
      <div id="lb-body"></div>`
 
     document.getElementById('lb-periodo').addEventListener('change', () => {
-      window._librosPeriodo = leerPeriodo('lb-periodo') || periodo
+      const p = leerPeriodo('lb-periodo') || periodo
+      aplicarPeriodoGlobal(p)
+      escribirHash(location.hash)
+      sincronizarSelectorPeriodo(p)
       renderRoute()
     })
     document.getElementById('lb-tabs').addEventListener('click', (e) => {
@@ -227,7 +246,13 @@ async function pintarLibro(periodo, tab) {
       apiGet(`/api/contable/empresas/${eid}/documentos?periodo=${periodo}&tipo_flujo=compra&limit=1000`),
       apiGet(`/api/contable/empresas/${eid}/documentos?periodo=${periodo}&tipo_flujo=venta&limit=1000`),
     ])
-    const s = (r, campo) => (r.documentos || []).filter((d) => !['ANULADO', 'ERROR'].includes(d.estado)).reduce((acc, d) => acc + (d[campo] || 0), 0)
+    const s = (r, campo) => sumaLibro(r.documentos, campo)
+    // El resumen se calcula sobre lo CARGADO (tope 1000 del endpoint): si el
+    // período tiene más, se dice — un total silenciosamente corto es peor que
+    // uno declarado.
+    const cargados = [c, v].map((r) => (r.documentos || []).length)
+    const declarados = [c, v].map((r) => Number(r.total) || (r.documentos || []).length)
+    const truncado = declarados.some((n, i) => n > cargados[i])
     const estados = {}
     for (const r of [c, v]) for (const e of (r.estados || [])) estados[e.estado] = (estados[e.estado] || 0) + e.n
 
@@ -242,13 +267,14 @@ async function pintarLibro(periodo, tab) {
      <div class="card mt">
        <h3>Estado de los documentos del período</h3>
        <div class="flex">${Object.entries(estados).map(([est, n]) => `<span>${chipEstado(est)} <b class="mono">${n}</b></span>`).join('') || '<span class="muted">Sin documentos</span>'}</div>
-     </div>`
+     </div>
+     ${truncado ? `<p class="hint mt">El período tiene más documentos que los ${Math.max(...cargados)} cargados: el resumen suma solo esos. Acota el período o revisa la Bandeja para el total del servidor.</p>` : ''}
+     <p class="hint mt">Los montos excluyen documentos anulados o con error y restan las notas de crédito (tipos 60 y 61), igual que el F29.</p>`
     return
   }
 
   const r = await apiGet(`/api/contable/empresas/${eid}/documentos?periodo=${periodo}&tipo_flujo=${tab}&limit=1000`)
   const docs = r.documentos || []
-  const suma = (filas, campo) => filas.reduce((acc, d) => acc + (d[campo] || 0), 0)
 
   body.innerHTML = `
    <div id="lb-tabla"></div>
@@ -295,12 +321,16 @@ async function pintarLibro(periodo, tab) {
       <td class="num"><b>${fmtM(d.monto_total)}</b></td>
       <td>${chipEstado(d.estado)}</td>
     </tr>`,
-    totalesHTML: (filas) => `<tr>
-      <td colspan="6">Totales de lo filtrado (${filas.length} docs) · período completo: ${fmtM(r.sumas?.total)}</td>
-      <td class="num">${fmtM(suma(filas, 'monto_neto'))}</td>
-      <td class="num">${fmtM(suma(filas, 'monto_iva'))}</td>
-      <td class="num">${fmtM(suma(filas, 'monto_total'))}</td><td></td>
-    </tr>`,
+    totalesHTML: (filas) => {
+      const incluidos = filas.filter((d) => !['ANULADO', 'ERROR'].includes(d.estado)).length
+      return `<tr>
+      <td colspan="5">Totales del libro (${incluidos} docs · sin anulados · NC restan) · período completo: ${fmtM(r.sumas?.total)}</td>
+      <td class="num">${fmtM(sumaLibro(filas, 'monto_exento'))}</td>
+      <td class="num">${fmtM(sumaLibro(filas, 'monto_neto'))}</td>
+      <td class="num">${fmtM(sumaLibro(filas, 'monto_iva'))}</td>
+      <td class="num">${fmtM(sumaLibro(filas, 'monto_total'))}</td><td></td>
+    </tr>`
+    },
   })
 }
 

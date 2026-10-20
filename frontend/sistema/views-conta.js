@@ -30,25 +30,43 @@ VIEWS.asientos = {
 }
 
 async function vistaDiario(body) {
-  const periodo = window._ctaPeriodo || periodoActual()
+  const periodo = window._ctaPeriodo || periodoGlobal()
   const eid = S.empresa.id
+  const puedeRevertir = tiene('asientos:revertir')
   const r = await apiGet(`/api/contable/empresas/${eid}/asientos?periodo=${periodo}&limit=200`)
+  const asientos = r.asientos || []
+  // La reversión es un asiento NUEVO que apunta al original (`asiento_revertido_id`).
+  // Con los ids ya apuntados en la página no se ofrece "Revertir" sobre uno que el
+  // backend rechazaría ("ya fue revertido por el asiento X"); fuera de la página el
+  // aviso real del backend sigue siendo el que manda.
+  const revertidos = new Set(asientos.map((a) => Number(a.asiento_revertido_id)).filter(Boolean))
+  const folioPorId = new Map(asientos.map((a) => [Number(a.id), a.folio]))
+  const chipTipo = (a) => (a.tipo === 'reversion'
+    ? `<span class="chip revision" title="Asiento que revierte a otro">reversión${a.asiento_revertido_id ? ` de #${esc(folioPorId.get(Number(a.asiento_revertido_id)) ?? a.asiento_revertido_id)}` : ''}</span>`
+    : `<span class="chip ${a.tipo === 'cierre' ? 'propuesto' : 'neutral'}">${esc(a.tipo)}</span>`)
   body.innerHTML = `
    <div class="frm-row mb">
      <div><span class="frm-label">Período</span>${inputPeriodoHTML('cta-periodo', periodo)}</div>
      <span class="sub">${r.total} asiento(s)</span>
+     ${(Number(r.total) || 0) > asientos.length ? `<span class="hint">Se muestran los ${asientos.length} más recientes del período.</span>` : ''}
    </div>
-    ${(r.asientos || []).map((a) => `
+    ${asientos.map((a) => {
+      const monto = (a.lineas || []).reduce((s, l) => s + l.debe, 0)
+      const yaRevertido = revertidos.has(Number(a.id))
+      return `
      <div class="card mb" style="padding:var(--space-4)">
-       <div class="flex" style="justify-content:space-between">
-         <div><b class="mono">#${a.folio}</b> · <span class="sub">${esc(a.fecha)}</span> · <span class="chip ${a.tipo === 'cierre' ? 'propuesto' : 'neutral'}">${esc(a.tipo)}</span></div>
-         <div class="num" style="font-family:var(--font-mono)">${fmtM(a.lineas.reduce((s, l) => s + l.debe, 0))}</div>
+       <div class="flex" style="justify-content:space-between;gap:var(--space-2)">
+         <div><b class="mono">#${a.folio}</b> · <span class="sub">${esc(a.fecha)}</span> · ${chipTipo(a)}${yaRevertido ? ' <span class="chip anulado">revertido</span>' : ''}</div>
+         <div class="flex" style="gap:var(--space-3)">
+           <div class="num" style="font-family:var(--font-mono)">${fmtM(monto)}</div>
+           ${puedeRevertir && !yaRevertido ? `<button class="btn btn-secondary btn-sm" type="button" data-rev="${Number(a.id)}" aria-label="Revertir asiento ${esc(a.folio)}">Revertir</button>` : ''}
+         </div>
        </div>
        <div class="mt" style="font-size:var(--fs-sm)">${esc(a.glosa)}</div>
        <div class="tbl-wrap mt" style="border-radius:var(--radius-md)">
          <table class="tbl">
            <thead><tr><th>Cuenta</th><th class="num">Debe</th><th class="num">Haber</th><th>Glosa</th></tr></thead>
-           <tbody>${a.lineas.map((l) => `<tr>
+           <tbody>${(a.lineas || []).map((l) => `<tr>
              <td class="mono sub">${esc(l.cuenta_codigo)} ${esc(l.cuenta_nombre || '')}</td>
              <td class="num">${l.debe ? fmtM(l.debe) : '—'}</td>
              <td class="num">${l.haber ? fmtM(l.haber) : '—'}</td>
@@ -56,11 +74,61 @@ async function vistaDiario(body) {
            </tr>`).join('')}</tbody>
          </table>
        </div>
-     </div>`).join('') || '<div class="empty">Sin asientos en este período.</div>'}`
+     </div>`
+    }).join('') || '<div class="empty">Sin asientos en este período.</div>'}`
 
-  document.getElementById('cta-periodo').addEventListener('change', (e) => {
-    window._ctaPeriodo = leerPeriodo('cta-periodo') || periodo
+  body.querySelectorAll?.('[data-rev]').forEach((b) => b.addEventListener('click', () => {
+    const a = asientos.find((x) => Number(x.id) === Number(b.dataset.rev))
+    if (a) modalRevertirAsiento(a)
+  }))
+  document.getElementById('cta-periodo').addEventListener('change', () => {
+    const p = leerPeriodo('cta-periodo') || periodo
+    aplicarPeriodoGlobal(p)
+    escribirHash(location.hash)
+    sincronizarSelectorPeriodo(p)
     renderRoute()
+  })
+}
+
+/**
+ * Reversión de un asiento: el backend registra un asiento NUEVO con las patas
+ * invertidas y `asiento_revertido_id` apuntando al original (core/asientos.js).
+ * La capacidad existía desde FASE 2 sin ninguna entrada en la interfaz: aquí se
+ * confirma el alcance (monto, fecha de hoy) antes de escribir y se muestra el
+ * mensaje real del backend si ya estaba revertido.
+ */
+function modalRevertirAsiento(a) {
+  const monto = (a.lineas || []).reduce((s, l) => s + (l.debe || 0), 0)
+  const hoy = new Date().toISOString().slice(0, 10)
+  const glosaSugerida = `Reversión del asiento ${a.folio}/${a.anio ?? ''} — ${a.glosa || ''}`.trim()
+  openModal(`
+    <h3>Revertir asiento #${esc(a.folio)}</h3>
+    <p class="sub">${esc(a.fecha || '—')} · ${esc(a.glosa || '')} · ${fmtM(monto)}</p>
+    <p class="hint">Se registra un asiento <b>nuevo</b> con las patas invertidas, fechado hoy (${esc(hoy)}). El original no se borra: queda auditado y un asiento solo se puede revertir una vez.</p>
+    <div class="form-group">
+      <label class="form-label" for="rev-glosa">Glosa de la reversión (opcional)</label>
+      <input id="rev-glosa" class="form-input" maxlength="200" placeholder="${esc(glosaSugerida)}">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-danger" id="rev-ok">Revertir asiento</button>
+    </div>`)
+  const ok = document.getElementById('rev-ok')
+  if (!ok) return
+  ok.addEventListener('click', async () => {
+    ok.disabled = true
+    try {
+      const r = await apiPost(`/api/contable/empresas/${S.empresa.id}/asientos/${a.id}/revertir`, {
+        glosa: (document.getElementById('rev-glosa')?.value || '').trim() || null,
+      })
+      cerrarModal()
+      showToast(`Reversión registrada — asiento folio ${r?.asiento?.folio ?? ''}`, 'success')
+      renderRoute()
+    } catch (err) {
+      // El backend explica el motivo exacto (p. ej. "ya fue revertido por ...").
+      ok.disabled = false
+      showToast(err.message, 'error')
+    }
   })
 }
 
@@ -229,7 +297,7 @@ VIEWS.propuestas = {
   titulo: 'Propuestas',
   async render(cont) {
     const tab = window._propTab || 'pendientes'
-    const periodo = window._propPeriodo || periodoActual()
+    const periodo = window._propPeriodo || periodoGlobal()
     cont.innerHTML = `
      <p class="pg-flow"><b>Flujo:</b> <a href="#documentos">Documentos</a> → Propuestas → <a href="#asientos">Asientos</a> → <a href="#automatizacion">Contabilización</a></p>
      <div class="frm-row mb pg-toolbar">
@@ -245,7 +313,10 @@ VIEWS.propuestas = {
      <div id="prop-body"></div>`
 
     document.getElementById('prop-periodo').addEventListener('change', () => {
-      window._propPeriodo = leerPeriodo('prop-periodo') || periodo
+      const p = leerPeriodo('prop-periodo') || periodo
+      aplicarPeriodoGlobal(p)
+      escribirHash(location.hash)
+      sincronizarSelectorPeriodo(p)
       renderRoute()
     })
     cont.querySelector('.tabs').addEventListener('click', (e) => {
@@ -254,19 +325,22 @@ VIEWS.propuestas = {
     const gen = document.getElementById('prop-gen')
     if (gen) gen.addEventListener('click', generarPropuestas)
     const lote = document.getElementById('prop-lote')
-    if (lote) lote.addEventListener('click', async () => {
-      try {
-        const r = await apiPost(`/api/contable/empresas/${S.empresa.id}/propuestas/confirmar-lote`, { periodo })
-        showToast(`Lote: ${r.aplicadas ?? 0} aplicadas, ${r.fallidas?.length || 0} fallidas`, (r.fallidas?.length || 0) ? 'error' : 'success')
-        renderRoute()
-      } catch (err) { showToast(err.message, 'error') }
-    })
+    if (lote) lote.addEventListener('click', () => confirmarLotePropuestas(periodo))
 
     const body = document.getElementById('prop-body')
     if (tab === 'conciliacion') return vistaConciliacion(body, periodo)
     const estadoQ = tab === 'pendientes' ? 'PENDIENTE' : null
     const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/propuestas?periodo=${periodo}${estadoQ ? `&estado=${estadoQ}` : ''}&limit=200`)
+    // Cantidad y monto del FILTRO (no de la página): `sumas` ya viene calculado
+    // por el servidor con el mismo where de la lista.
+    const totalFiltro = Number(r.total) || (r.propuestas || []).length
+    const montoFiltro = Number(r.sumas?.total) || 0
     body.innerHTML = `
+     <p class="doc-resumen" role="status">
+       <b>${totalFiltro}</b> propuesta(s) ${tab === 'pendientes' ? 'pendientes' : 'en el período'}
+       · monto de los documentos <b class="mono">${fmtM(montoFiltro)}</b>
+       ${totalFiltro > (r.propuestas || []).length ? `<span class="doc-resumen-nota">la tabla muestra las ${(r.propuestas || []).length} más recientes</span>` : ''}
+     </p>
      <div class="tbl-wrap">
        <table class="tbl">
          <thead><tr><th>Documento</th><th>Contraparte</th><th class="num">Total</th><th>Cuenta</th><th>Estado</th><th></th></tr></thead>
@@ -279,7 +353,7 @@ VIEWS.propuestas = {
            <td class="flex" style="gap:6px">
              <button class="btn btn-secondary btn-sm" data-ver="${p.id}">Ver</button>
               ${p.estado === 'PENDIENTE' && tiene('propuestas:confirmar') ? `<button class="btn btn-primary btn-sm" data-ok="${p.id}">Contabilizar</button>` : ''}
-              ${p.estado === 'PENDIENTE' && tiene('propuestas:generar') ? `<button class="btn btn-secondary btn-sm" data-no="${p.id}"></button>` : ''}
+              ${p.estado === 'PENDIENTE' && tiene('propuestas:generar') ? `<button class="btn btn-secondary btn-sm" data-no="${p.id}" aria-label="Descartar la propuesta del folio ${esc(p.doc_folio ?? '')}">Descartar</button>` : ''}
            </td>
          </tr>`).join('') || `<tr><td colspan="6"><div class="empty">Sin propuestas ${tab === 'pendientes' ? 'pendientes' : 'en el período'}.</div></td></tr>`}</tbody>
        </table>
@@ -299,7 +373,7 @@ VIEWS.propuestas = {
 }
 
 async function generarPropuestas() {
-  const periodo = window._propPeriodo || periodoActual()
+  const periodo = window._propPeriodo || periodoGlobal()
   const eid = S.empresa.id
   try {
     const docs = await apiGet(`/api/contable/empresas/${eid}/documentos?periodo=${periodo}&estado=CLASIFICADO&limit=1000`)
@@ -315,6 +389,55 @@ async function generarPropuestas() {
     showToast(`Propuestas generadas: ${ok}${fallo ? ` · ${fallo} con error` : ''}`, fallo ? 'error' : 'success')
     renderRoute()
   } catch (err) { showToast(err.message, 'error') }
+}
+
+/**
+ * Confirmación del lote con ALCANCE antes de escribir: cuántas propuestas y
+ * cuánto monto. Antes el botón disparaba el lote a ciegas y el resumen leía
+ * `fallidas`, un campo que el backend no devuelve (devuelve `omitidos`), así
+ * que las omitidas se informaban siempre como 0.
+ */
+async function confirmarLotePropuestas(periodo) {
+  let r
+  try {
+    r = await apiGet(`/api/contable/empresas/${S.empresa.id}/propuestas?periodo=${periodo}&estado=PENDIENTE&limit=1000`)
+  } catch (err) { return showToast(err.message, 'error') }
+
+  const cantidad = Number(r.total) || (r.propuestas || []).length
+  const monto = Number(r.sumas?.total) || 0
+  if (!cantidad) return showToast(`No hay propuestas pendientes en ${perDisplay(periodo)}`, 'success')
+
+  openModal(`
+    <h3>Confirmar lote del período</h3>
+    <p class="sub">${esc(S.empresa.nombre)} · ${esc(perDisplay(periodo))}</p>
+    <dl class="doc-dl">
+      <div class="doc-dato"><dt>Propuestas pendientes</dt><dd><b class="mono">${cantidad}</b></dd></div>
+      <div class="doc-dato"><dt>Monto de los documentos</dt><dd><b class="mono">${fmtM(monto)}</b></dd></div>
+    </dl>
+    <p class="hint">Cada propuesta se contabiliza por separado con su partida doble. Las que no cuadren (período cerrado, cuentas del plan cambiadas) se omiten y se informan al final: el lote nunca queda aplicado a medias en silencio.</p>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="prop-lote-ok">Contabilizar ${cantidad}</button>
+    </div>`)
+
+  document.getElementById('prop-lote-ok')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget
+    btn.disabled = true
+    try {
+      const res = await apiPost(`/api/contable/empresas/${S.empresa.id}/propuestas/confirmar-lote`, { periodo })
+      const omitidas = (res.omitidos || []).length
+      const detalle = omitidas
+        ? ` · ${omitidas} omitida(s): ${(res.omitidos || []).slice(0, 3).map((o) => o.motivo).filter(Boolean).join('; ')}`
+        : ''
+      showToast(`Lote: ${res.aplicadas ?? 0} contabilizada(s)${detalle}`, omitidas ? 'error' : 'success')
+      cerrarModal()
+      refrescarPillDocs()
+      renderRoute()
+    } catch (err) {
+      btn.disabled = false
+      showToast(err.message, 'error')
+    }
+  })
 }
 
 async function verPropuesta(id) {
