@@ -11,7 +11,7 @@
  * catálogo REAL expuesto en /api/portal/metricas.
  */
 
-/* global VIEWS, esc, apiGet, apiPost, apiPut, apiDelete, S, UIEstado, inputPeriodoHTML, leerPeriodo, periodoActual */
+/* global VIEWS, esc, apiGet, apiPost, apiPut, apiDelete, S, UIEstado, showToast, inputPeriodoHTML, leerPeriodo, periodoActual */
 
 /* Helpers compartidos del portal */
 
@@ -992,7 +992,7 @@ window.VIEWS['portal-reportes'] = {
 
     async function guardar() {
       const nombre = document.getElementById('pr-nombre').value.trim()
-      if (!nombre) { alert('Escribe un nombre para el reporte'); return }
+      if (!nombre) { showToast('Escribe un nombre para el reporte', 'info'); return }
       try {
         await apiPost(`/api/portal/empresas/${eid}/reportes`, {
           nombre,
@@ -1004,8 +1004,9 @@ window.VIEWS['portal-reportes'] = {
           },
         })
         document.getElementById('pr-nombre').value = ''
+        showToast('Reporte guardado con la configuración actual', 'success')
         await listar()
-      } catch (err) { alert(err.message) }
+      } catch (err) { showToast(err.message, 'error') }
     }
 
     async function listar() {
@@ -1046,11 +1047,22 @@ window.VIEWS['portal-reportes'] = {
           window.scrollTo({ top: 0, behavior: 'smooth' })
         }))
         zona.querySelectorAll('[data-borrar]').forEach((b) => b.addEventListener('click', async () => {
-          if (!confirm('¿Eliminar este reporte guardado? (solo borra la config, no tus datos)')) return
+          const rep = r.reportes.find((x) => String(x.id) === String(b.dataset.borrar))
+          const nombre = rep?.nombre || ''
+          const ok = await UIEstado.confirmar({
+            titulo: 'Eliminar el reporte guardado',
+            texto: 'Eliminar reporte',
+            peligro: true,
+            idBoton: 'pr-del-ok',
+            cuerpo: `<p>Se elimina <b>${esc(nombre)}</b> de tus reportes guardados.</p>
+              <p class="hint">Solo se borra la configuración: los documentos y asientos no se tocan.</p>`,
+          })
+          if (!ok) return
           try {
             await apiDelete(`/api/portal/empresas/${eid}/reportes/${b.dataset.borrar}`)
+            showToast('Reporte eliminado', 'success')
             await listar()
-          } catch (err) { alert(err.message) }
+          } catch (err) { showToast(err.message, 'error') }
         }))
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)
@@ -1101,8 +1113,9 @@ window.VIEWS['portal-credito'] = {
           monto_autorizado: Number(document.getElementById('pcr-monto').value),
         })
         document.getElementById('pcr-monto').value = ''
+        showToast('Crédito autorizado actualizado', 'success')
         await cargar()
-      } catch (err) { alert(err.message) }
+      } catch (err) { showToast(err.message, 'error') }
     }
 
     async function cargar() {
@@ -1200,14 +1213,15 @@ window.VIEWS['portal-costos'] = {
           costo_unitario: Number(document.getElementById('pcs-costo').value),
         })
         document.getElementById('pcs-costo').value = ''
+        showToast('Costo unitario actualizado', 'success')
         await cargar()
-      } catch (err) { alert(err.message) }
+      } catch (err) { showToast(err.message, 'error') }
     }
 
     async function importarCSV() {
       const zona = document.getElementById('pcs-csv-res')
       const texto = document.getElementById('pcs-csv').value
-      if (!texto.trim()) { alert('Pega el CSV primero'); return }
+      if (!texto.trim()) { showToast('Pega el CSV primero', 'info'); return }
       zona.innerHTML = UIEstado.cargando('Importando…')
       try {
         const r = await apiPost(`/api/portal/empresas/${eid}/costos-csv`, { texto_csv: texto })
@@ -1287,8 +1301,9 @@ window.VIEWS['portal-cotizaciones'] = {
           monto: Number(document.getElementById('pt-monto').value),
         })
         document.getElementById('pt-monto').value = ''
+        showToast('Cotización registrada como BORRADOR', 'success')
         await cargar()
-      } catch (err) { alert(err.message) }
+      } catch (err) { showToast(err.message, 'error') }
     }
 
     async function cargar() {
@@ -1343,14 +1358,31 @@ window.VIEWS['portal-cotizaciones'] = {
           try {
             await apiPut(`/api/portal/empresas/${eid}/cotizaciones/${sel.dataset.est}`, { estado: sel.value })
             await cargar()
-          } catch (err) { alert(err.message); await cargar() }
+          } catch (err) { showToast(err.message, 'error'); await cargar() }
         }))
         zona.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
-          if (!confirm('¿Eliminar esta cotización? (queda en la auditoría del sistema)')) return
+          const cot = (r.cotizaciones || []).find((x) => String(x.id) === String(b.dataset.del)) || {}
+          const cliente = cot.cliente_razon || cot.cliente_rut || ''
+          const monto = fmtCLP(cot.monto)
+          const ok = await UIEstado.confirmar({
+            titulo: 'Eliminar la cotización',
+            texto: 'Eliminar cotización',
+            peligro: true,
+            idBoton: 'pt-del-ok',
+            cuerpo: `
+              <dl>
+                ${UIEstado.dato('N°', esc(b.dataset.del))}
+                ${UIEstado.dato('Cliente', esc(cliente || '—'))}
+                ${UIEstado.dato('Monto', esc(monto || '—'))}
+              </dl>
+              <p class="hint mt">Queda registrada en la auditoría del sistema; no se puede deshacer desde aquí.</p>`,
+          })
+          if (!ok) return
           try {
             await apiDelete(`/api/portal/empresas/${eid}/cotizaciones/${b.dataset.del}`)
+            showToast('Cotización eliminada', 'success')
             await cargar()
-          } catch (err) { alert(err.message) }
+          } catch (err) { showToast(err.message, 'error') }
         }))
       } catch (err) {
         zona.innerHTML = UIEstado.error(err.message)

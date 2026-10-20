@@ -18,7 +18,7 @@
  * con los tokens del sistema; sin librería de drag: cambio de etapa con
  * control en la tarjeta/registro (consistente con cero-dependencias).
  */
-/* global VIEWS, esc, apiGet, apiPost, apiDelete, apiPut, showToast, S, renderRoute, openModal, cerrarModal, fmt */
+/* global VIEWS, esc, apiGet, apiPost, apiDelete, apiPut, showToast, S, renderRoute, openModal, cerrarModal, UIEstado, fmt */
 
 VIEWS.crm = {
   titulo: 'CRM Comercial',
@@ -869,6 +869,31 @@ async function renderInformes(cuerpo) {
   document.getElementById('crm-inf-export')?.addEventListener('click', () => exportarCsv('embudo', inf.embudo))
 }
 
+/**
+ * Copia texto al portapapeles con dos caminos: la API moderna y, si el
+ * navegador la bloquea (sin permiso, contexto no seguro o ventana sin foco),
+ * el textarea temporal + execCommand, que funciona dentro del gesto del clic.
+ * Devuelve false si ninguno funcionó, para poder avisarlo en vez de callar.
+ */
+async function crmCopiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto)
+    return true
+  } catch { /* se intenta el camino clásico */ }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = texto
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok === true
+  } catch { return false }
+}
+
 /* ============================== FIDELIZACIÓN =========================== */
 /* Las tarjetas de retención/campañas/recordatorios existentes, preservadas 1:1 */
 
@@ -964,6 +989,11 @@ async function renderFidelizacion(cuerpo, base) {
       </div>
       <div class="card">
         <h3>Campañas de fidelización</h3>
+        <p class="hint" style="margin-top:0">
+          <b>Aquí solo se genera el texto.</b> El sistema NO envía WhatsApp, correo ni SMS:
+          copia el mensaje y mándalo desde tu propia aplicación. «Marcar como enviada»
+          únicamente deja constancia de que lo hiciste tú.
+        </p>
         <div class="frm-row">
           <select id="crm-cam-empresa" class="form-input" style="width:auto">
             ${(base.pipeline.pipeline || []).map((p) => `<option value="${p.empresa_id}">${esc(p.nombre)}</option>`).join('')}
@@ -977,7 +1007,9 @@ async function renderFidelizacion(cuerpo, base) {
         <div class="tbl-wrap" style="border:none"><table class="tbl">
           <tbody>${(campanas.campanas || []).slice(0, 8).map((c) => `<tr>
             <td><b>${esc(c.empresa_nombre)}</b> · <span class="chip neutral">${esc(c.plantilla)}</span><div class="sub" style="white-space:pre-wrap">${esc(c.mensaje)}</div></td>
-            <td>${c.enviado ? '<span class="chip contabilizado">enviado</span>' : `<button class="btn btn-sm crm-cam-env" data-id="${c.id}">Marcar enviado</button>`}</td>
+            <td class="acc">${c.enviado ? '<span class="chip contabilizado">enviada</span>' : `
+              <button class="btn btn-secondary btn-sm crm-cam-copiar" data-id="${c.id}" title="Copiar el texto al portapapeles">Copiar</button>
+              <button class="btn btn-sm crm-cam-env" data-id="${c.id}" title="No envía nada: registra que ya la enviaste tú">Marcar como enviada</button>`}</td>
           </tr>`).join('') || '<tr><td class="muted">Sin campañas aún.</td></tr>'}</tbody>
         </table></div>
       </div>
@@ -1024,7 +1056,31 @@ async function renderFidelizacion(cuerpo, base) {
       renderCrm()
     } catch (e) { showToast(e.message, 'error') }
   })
+  // Las campañas ya vienen en la respuesta: se buscan por id en vez de leer el
+  // DOM — el texto generado se copia y se menciona tal cual, sin depender del
+  // marcado de la fila.
+  const campanaPorId = new Map((campanas.campanas || []).map((c) => [String(c.id), c]))
+  // Copiar el texto generado: es el paso real que hace el usuario (el sistema
+  // no envía). Sin permiso de portapapeles se avisa en vez de fallar callado.
+  cuerpo.querySelectorAll('.crm-cam-copiar').forEach((b) => b.addEventListener('click', async () => {
+    const c = campanaPorId.get(String(b.dataset.id))
+    const texto = String(c?.mensaje || '').trim()
+    if (!texto) { showToast('La campaña no tiene texto que copiar', 'info'); return }
+    if (await crmCopiarTexto(texto)) showToast('Mensaje copiado: pégalo en WhatsApp o correo', 'success')
+    else showToast('El navegador no permitió copiar; selecciona el texto a mano', 'info')
+  }))
   cuerpo.querySelectorAll('.crm-cam-env').forEach((b) => b.addEventListener('click', async () => {
+    const c = campanaPorId.get(String(b.dataset.id))
+    const ok = await UIEstado.confirmar({
+      titulo: 'Marcar la campaña como enviada',
+      texto: 'Marcar como enviada',
+      idBoton: 'crm-cam-ok',
+      cuerpo: `
+        <p>Se dejará constancia de que el mensaje de <b>${esc(c?.empresa_nombre || 'esta empresa')}</b> ya se envió.</p>
+        <p class="hint">Esto <b>no envía nada</b>: el sistema solo genera el texto. Si todavía no lo
+        mandaste por WhatsApp o correo, cancela y usa «Copiar».</p>`,
+    })
+    if (!ok) return
     try { await apiPost(`/api/crm/campanas/${b.dataset.id}/enviar`, {}); showToast('Marcada como enviada', 'success'); renderCrm() }
     catch (e) { showToast(e.message, 'error') }
   }))
@@ -1125,6 +1181,16 @@ async function modalEmbudo() {
 
   document.querySelectorAll('.em-eliminar').forEach((b) => b.addEventListener('click', async () => {
     limpiarErr()
+    // Borrar una etapa mueve el embudo entero: antes era un clic sin vuelta atrás.
+    const ok = await UIEstado.confirmar({
+      titulo: 'Eliminar la etapa del embudo',
+      texto: 'Eliminar etapa',
+      peligro: true,
+      idBoton: 'em-del-ok',
+      cuerpo: `<p>La etapa <b>${esc(b.dataset.eliminar)}</b> desaparece del embudo y del Kanban.</p>
+        <p class="hint">Si hay oportunidades en esa etapa, el servidor rechazará el borrado (no se mueven solas).</p>`,
+    })
+    if (!ok) return
     try { await apiDelete(`/api/crm/etapas/${encodeURIComponent(b.dataset.eliminar)}`); b.closest('tr').remove(); showToast('Etapa eliminada', 'success') }
     catch (e) { mostrarErr(e.message) }
   }))
