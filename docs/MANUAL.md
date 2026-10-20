@@ -216,6 +216,11 @@ nunca física). Monto 0 → `REVISIÓN` obligatoria.
 2. Si el formato no se reconoce: preview con filas vacías → **mapear columnas
    manualmente** (fecha/monto/cargo/abono/glosa, fila de inicio) y opcionalmente
    **guardar el formato con un nombre** (queda por empresa para siempre).
+   Los formatos guardados aparecen listados bajo el selector de archivo con sus
+   columnas descritas (`fecha col 1 · monto col 2 · glosa col 3 · desde fila 2`):
+   **«Usar»** elige uno y, al analizar el archivo, ese mapeo manda sobre la
+   detección automática. Elegir un formato **no importa nada**: primero ves la
+   preview y solo después confirmas la importación.
 3. Importar → dedupe idempotente (re-importar la misma cartola = 0 duplicados).
 4. **Conciliar**: empareja cartola↔libro por monto firmado + ventana ±3 días;
    devuelve lo no conciliado de AMBOS lados y la diferencia libro−cartola con
@@ -274,9 +279,13 @@ nunca física). Monto 0 → `REVISIÓN` obligatoria.
    F29_POR_PAGAR (el remanente de crédito fiscal lo arrastra el F29), PPM
    devengado (ingresos × tasa de la empresa), resultado acumulado →
    RESULTADO_EJERCICIO. Cada propuesto viene cuadrado y verificado.
-4. **Confirmar cierre** (selección de asientos + confirmación): UNA transacción
-   auditada, asientos fechados el último día del período, período → CERRADO y
-   snapshot persistido (consultable después).
+4. **Confirmar cierre**: el diálogo muestra el impacto (período, documentos
+   pendientes, conciliación, asientos propuestos con sus claves y el total del
+   Debe) y exige **teclear el período exacto** para habilitar el botón
+   destructivo; «Forzar con pendientes» advierte que se cierra igual y pide la
+   misma confirmación. Escape o Cancelar no escriben nada. Al confirmar: UNA
+   transacción auditada, asientos fechados el último día del período, período →
+   CERRADO y snapshot persistido (consultable después).
 5. Tras cerrar, NINGUNA mutación anterior es posible. Reabrir es excepcional y
    auditado (`periodos:reabrir`).
 
@@ -341,10 +350,14 @@ bandeja —
 **Cobranza (Operación → Cobranza de Clientes):** la lista de clientes con
 saldo pendiente (cuenta corriente de facturas contabilizadas menos cobros),
 clasificada por mora: verde (<15 d), amarilla (15–30), roja (>30). Por cada
-factura abierta, el botón **«Pagada»** registra el cobro con la Tesorería
-(elección de banco en la propia fila): asiento del núcleo (Debe banco /
-Haber clientes) + movimiento aplicado a la factura + auditoría — el saldo
-baja al instante y el cliente desaparece de la lista al quedar en cero.
+factura abierta, el botón **«Pagada»** abre una confirmación que dice cliente,
+folio, monto, banco, fecha del movimiento y el asiento que se creará (Debe
+banco / Haber clientes); al confirmar registra el cobro en la Tesorería
+elegida en la propia fila + movimiento aplicado a la factura + auditoría — el
+saldo baja al instante y el cliente desaparece de la lista al quedar en cero.
+Cancelar no escribe nada. El botón **«Aplicaciones»** de cada factura muestra
+con qué movimientos se ha pagado (fecha, glosa, monto y asiento de cada uno) y
+el cobrado acumulado, o avisa que aún no tiene aplicaciones.
 Cobros PARCIALES o por transferencia no asociada: usaré el flujo normal de
 Tesorería → Cobros (el plan B — detección pasiva en cartolas — se conecta
 con la conciliación de la FASE 9.2).

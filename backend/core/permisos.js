@@ -36,6 +36,11 @@ const CATALOGO_CAPACIDADES = {
   'conciliacion:ejecutar': 'Ejecutar la conciliación de un período',
   'onboarding:ejecutar': 'Consultar el SII y confirmar la ficha tributaria + ingesta del histórico (onboarding autónomo)',
   'reportes:ver': 'Ver reportes financieros',
+  // CRM COMERCIAL: exclusivo del despacho. No es una capacidad de la empresa
+  // cliente sino del equipo JMV — el dueño (admin_empresa), el auditor o
+  // tesorería JAMÁS lo ven en el menú ni pueden abrir #crm. La API revalida con
+  // guardCrm (rol contador/super_admin) en cada ruta: esto es la mitad de UX.
+  'crm:ver': 'Ver el CRM comercial del despacho (exclusivo contador y super admin)',
   'tesoreria:ver': 'Ver cuentas bancarias, libro banco y conciliación bancaria',
   'tesoreria:operar': 'Registrar pagos, cobros y transferencias con asiento contable',
   'bancos:conciliar': 'Importar cartolas y conciliar banco ↔ libro',
@@ -71,7 +76,7 @@ const PERMISOS_POR_ROL = {
     'automatizacion:ejecutar',
     'conciliacion:ver', 'conciliacion:ejecutar',
     'onboarding:ejecutar',
-    'reportes:ver', 'config:editar',
+    'reportes:ver', 'crm:ver', 'config:editar',
     // Fase 6: el contador opera tesorería completa (puede delegarla al rol TESORERÍA)
     'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
     // Fase 7: activos fijos y depreciación mensual

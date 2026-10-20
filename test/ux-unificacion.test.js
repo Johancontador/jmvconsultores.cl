@@ -43,6 +43,24 @@ test('T1: menú — keys únicos y toda vista con entrada de menú', () => {
   assert.strictEqual(sinMenu.length, 0, `vistas sin entrada de menú: ${sinMenu.join(',')}`)
 })
 
+// ---------- T12: CRM exclusivo del despacho ----------
+test('T12: el CRM es exclusivo del despacho — menú, centro y RBAC coinciden', () => {
+  const { permisosDeRol } = require('../backend/core/permisos')
+  assert.ok(permisosDeRol('contador').has('crm:ver'), 'el contador (despacho) ve el CRM')
+  assert.ok(permisosDeRol('super_admin').has('crm:ver'), 'el super admin ve el CRM')
+  for (const rol of ['admin_empresa', 'auditor', 'tesoreria']) {
+    assert.ok(!permisosDeRol(rol).has('crm:ver'), `${rol} NO debe ver el CRM`)
+  }
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  assert.match(app, /\{ key: 'crm', label: 'CRM Comercial', permiso: 'crm:ver' \}/, 'el menú usa la capacidad del despacho')
+  assert.ok(!/key: 'crm'[^}]*permiso: 'empresas:ver'/.test(app), 'ya no se ofrece con una capacidad que el cliente tiene')
+  const centro = fs.readFileSync(path.resolve(__dirname, '../backend/core/centro-apps.js'), 'utf8')
+  assert.match(centro, /ruta: 'crm', capacidad: 'crm:ver'/, 'la tarjeta del Centro usa el mismo gate')
+  // El router bloquea la ruta por `permiso` antes de renderizar: sin la
+  // capacidad, #crm no ejecuta la vista (ni su primera llamada a /api/crm).
+  assert.match(app, /if \(route\.permiso && !tiene\(route\.permiso\)\)/, 'gate de ruta genérico intacto')
+})
+
 // ---------- T2: UIEstado — carga y escape ----------
 test('T2: UIEstado carga y escapa HTML en vacio/error/chip (anti inyección)', () => {
   const sandbox = { window: {}, document: undefined }

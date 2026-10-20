@@ -39,6 +39,62 @@
   }
 
   /**
+   * Confirmación con alcance para acciones que ESCRIBEN (F3, auditoría §4.3).
+   *
+   * Reemplaza el `confirm()` del navegador en las acciones con consecuencia
+   * contable: muestra qué se va a crear, cuánto y con qué período antes de
+   * enviar nada. Devuelve Promise<boolean> — true solo si la persona confirma.
+   *
+   * `requiere` obliga a teclear un texto exacto (p. ej. el período al cerrar):
+   * el botón nace deshabilitado y solo se habilita al calzar. Escape, clic en
+   * el fondo y «Cancelar» resuelven false, así ninguna promesa queda colgada
+   * (a diferencia de un `confirm()` que nadie puede resolver por otra vía).
+   */
+  function confirmar({ titulo, cuerpo = '', texto = 'Confirmar', peligro = false, requiere = null, idBoton = 'ui-conf-ok', idInput = 'ui-conf-input' } = {}) {
+    return new Promise((resolve) => {
+      let cerrado = false
+      const fin = (valor) => {
+        if (cerrado) return
+        cerrado = true
+        document.removeEventListener('keydown', enEsc, true)
+        document.removeEventListener('click', enFondo, true)
+        cerrarModal()
+        resolve(valor)
+      }
+      const enEsc = (e) => { if (e && e.key === 'Escape') fin(false) }
+      const enFondo = (e) => { if (e && e.target && e.target.id === 'modal-back') fin(false) }
+
+      openModal(`
+        <h3>${esc(titulo)}</h3>
+        <div class="ui-confirm">${cuerpo}</div>
+        ${requiere ? `
+        <div class="mt">
+          <span class="frm-label">Escribe <b class="mono">${esc(requiere)}</b> para confirmar</span>
+          <input id="${idInput}" class="form-input mt" autocomplete="off" spellcheck="false" style="width:100%">
+        </div>` : ''}
+        <div class="modal-foot">
+          <button class="btn btn-secondary" id="ui-conf-no">Cancelar</button>
+          <button class="btn ${peligro ? 'btn-danger' : 'btn-primary'}" id="${idBoton}" ${requiere ? 'disabled' : ''}>${esc(texto)}</button>
+        </div>`)
+
+      document.addEventListener('keydown', enEsc, true)
+      document.addEventListener('click', enFondo, true)
+      document.getElementById('ui-conf-no').addEventListener('click', () => fin(false))
+      const boton = document.getElementById(idBoton)
+      boton.addEventListener('click', () => fin(true))
+      if (requiere) {
+        const input = document.getElementById(idInput)
+        input.addEventListener('input', () => { boton.disabled = input.value.trim() !== requiere })
+      }
+    })
+  }
+
+  /** Fila de dato para el cuerpo de una confirmación (etiqueta → valor). */
+  function dato(etiqueta, valorHTML) {
+    return `<dt>${esc(etiqueta)}</dt><dd>${valorHTML}</dd>`
+  }
+
+  /**
    * VIEW calculadora de IVA — Herramientas.
    * Aritmética local (equivalente al reporte existente de resumen IVA, vista
    * por documento desde la bandeja); NO calcula impuesto definitivo:
@@ -106,5 +162,5 @@
     })
   }
 
-  window.UIEstado = { cargando, vacio, chip, error, calculadoraIvaHTML, conectarCalculadoraIva }
+  window.UIEstado = { cargando, vacio, chip, error, confirmar, dato, calculadoraIvaHTML, conectarCalculadoraIva }
 })()

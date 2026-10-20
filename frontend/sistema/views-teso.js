@@ -267,6 +267,17 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
   let modoSimple = false
   try { modoSimple = (await apiGet(`/api/contable/empresas/${eid}/config`)).config.modo_conciliacion === 'simple' } catch { /* default */ }
 
+  // Formatos de cartola guardados (la API existía y ninguna vista la llamaba:
+  // auditoría UX §2.6). Si el catálogo falla, la conciliación sigue usable y
+  // el fallo se muestra con su mensaje real — no se oculta.
+  let formatos = []
+  let formatosError = ''
+  if (puedeConciliar) {
+    try { formatos = (await apiGet(`/api/contable/empresas/${eid}/tesoreria/cartola-formatos`)).formatos || [] }
+    catch (err) { formatosError = err.message }
+  }
+  const formatoElegido = () => formatos.find((f) => f.nombre === window._tesoFormatoCartola) || null
+
   cont.innerHTML = `
     ${modoSimple ? `<div class="banner-lic" style="background:var(--accent-soft);color:var(--accent)">Modo simple activo: tus compras y ventas se netean automáticamente contra la cuenta regular — la conciliación bancaria es opcional. Cámbialo en <a href="#memoria" style="font-weight:600">Memoria de Contabilización</a>.</div>` : ''}
    <div class="frm-row mb">
@@ -289,6 +300,23 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
      <div class="frm-row mt">
        <input type="file" id="c-archivo" class="form-input" accept=".csv,.xlsx,.xls" style="max-width:360px">
        <button class="btn btn-secondary btn-sm" id="c-archivo-ver" disabled>Analizar archivo</button>
+     </div>
+     <div class="mt">
+       <h4 style="margin:0 0 var(--space-2)">Formatos de cartola guardados</h4>
+        ${formatosError
+          ? `<p class="hint" style="color:var(--warning)">No se pudieron cargar los formatos: ${esc(formatosError)}</p>`
+          : formatos.length ? `
+       <div class="tbl-wrap"><table class="tbl">
+         <thead><tr><th>Formato</th><th>Columnas</th><th>Guardado</th><th></th></tr></thead>
+         <tbody>${formatos.map((f) => `<tr>
+           <td><b>${esc(f.nombre)}</b>${window._tesoFormatoCartola === f.nombre ? ' <span class="chip clasificado">elegido</span>' : ''}</td>
+           <td class="sub mono">${esc(describirMapeoCartola(f.mapeo))}</td>
+           <td class="sub">${esc(String(f.creado_en || '').slice(0, 10) || '—')}</td>
+           <td><button class="btn btn-secondary btn-sm" data-fmt="${esc(f.nombre)}">Usar</button></td>
+         </tr>`).join('')}</tbody>
+       </table></div>
+       <p class="hint mt">Elegir un formato NO importa nada: fija qué columna es fecha, monto y glosa, y se aplica al analizar el archivo que tú subas. Un formato se guarda al mapear a mano y escribirle un nombre.</p>`
+          : '<p class="hint">Aún no hay formatos guardados para esta empresa. Si el archivo de tu banco no se reconoce, mapea las columnas y ponle un nombre: quedará aquí para la próxima vez.</p>'}
      </div>
      <div id="c-archivo-out"></div>
    </div>` : ''}
@@ -359,18 +387,22 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
 
   async function analizarArchivo() {
     if (!archivoBase64) { showToast('Elige primero el archivo', 'error'); return }
-    outArchivo.innerHTML = '<p class="hint mt">Analizando archivo…</p>'
+    const elegido = formatoElegido()
+    outArchivo.innerHTML = `<p class="hint mt">Analizando archivo${elegido ? ` con el formato «${esc(elegido.nombre)}»` : ''}…</p>`
     try {
-      const r = await pedirParseo({})
+      // Un formato guardado manda sobre la detección automática: es el mapeo
+      // que la persona ya validó con el archivo real de su banco.
+      const r = await pedirParseo(elegido ? { mapeo: elegido.mapeo } : {})
       ultimoResultado = r
       pintarPreview(r)
     } catch (err) { showToast(err.message, 'error'); outArchivo.innerHTML = '' }
   }
 
   function pintarPreview(r) {
+    const elegido = formatoElegido()
     const fuente = r.fuente_mapeo === 'encabezado' ? 'detectado por encabezado'
       : r.fuente_mapeo === 'estadistico' ? 'detectado por estructura de columnas'
-      : r.fuente_mapeo === 'manual' ? 'mapeo manual tuyo' : 'no reconocido'
+      : r.fuente_mapeo === 'manual' ? (elegido ? `formato guardado «${elegido.nombre}»` : 'mapeo manual tuyo') : 'no reconocido'
     outArchivo.innerHTML = `
      <p class="hint mt">Archivo <b>${esc(archivoNombre)}</b> (${esc(r.tipo_archivo)}) — formato: <b>${esc(fuente)}</b>. Detectadas <b>${r.filas_detectadas}</b> de ${r.filas_totales} fila(s)${r.saltadas.length ? `, ${r.saltadas.length} saltada(s) con motivo` : ''}.</p>
       ${r.filas.length ? `
@@ -421,6 +453,22 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
 
   if (btnVer) btnVer.addEventListener('click', analizarArchivo)
 
+  // Elegir un formato guardado: se aplica al próximo análisis (o al archivo ya
+  // elegido, sin esperar otro clic). No escribe nada por sí solo.
+  cont.querySelectorAll('[data-fmt]').forEach((b) => b.addEventListener('click', async () => {
+    window._tesoFormatoCartola = b.dataset.fmt
+    const f = formatoElegido()
+    if (!f) return
+    showToast(`Formato «${f.nombre}» elegido`, 'info')
+    cont.querySelectorAll('[data-fmt]').forEach((otro) => {
+      const activo = otro.dataset.fmt === f.nombre
+      otro.textContent = activo ? 'Elegido' : 'Usar'
+      otro.classList.toggle('btn-primary', activo)
+      otro.classList.toggle('btn-secondary', !activo)
+    })
+    if (archivoBase64) await analizarArchivo()
+  }))
+
   function pintarResultado(r) {
     document.getElementById('c-out').innerHTML = `
      <div class="kpi-grid mt">
@@ -443,4 +491,58 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
        </div>
      </div>`
   }
+}
+
+/* ================= FORMATOS DE CARTOLA (descripción legible) ================= */
+
+/**
+ * Mapeo guardado → texto para humanos, con columnas 1-based (el archivo que ve
+ * el usuario cuenta desde 1; el mapeo interno desde 0).
+ */
+function describirMapeoCartola(m = {}) {
+  const col = (n) => (n === null || n === undefined ? '—' : `col ${Number(n) + 1}`)
+  const monto = m.col_monto !== null && m.col_monto !== undefined
+    ? `monto ${col(m.col_monto)}`
+    : `cargo ${col(m.col_cargo)} / abono ${col(m.col_abono)}`
+  const desde = Number.isInteger(Number(m.fila_inicio)) ? `desde fila ${Number(m.fila_inicio) + 1}` : 'desde fila ?'
+  return `fecha ${col(m.col_fecha)} · ${monto} · glosa ${col(m.col_glosa)} · ${desde}`
+}
+
+/* ============ APLICACIONES DE UN DOCUMENTO (trazabilidad del cobro) ============ */
+
+/**
+ * Muestra cada aplicación del documento: qué movimiento la pagó, cuándo, con
+ * qué asiento y qué motivo. Antes solo existía en la API (auditoría §4.3): sin
+ * esta entrada, «quién cobró qué con qué transferencia» no era consultable.
+ * Solo lectura: la conciliación y los cobros ya se registraron en su vista.
+ */
+async function modalAplicacionesDocumento(documentoId, referencia = '') {
+  openModal(`
+    <h3>Aplicaciones del documento${referencia ? ` — ${esc(referencia)}` : ''}</h3>
+    <div id="apl-out"><p class="hint">Consultando…</p></div>
+    <div class="modal-foot"><button class="btn btn-secondary" id="apl-cerrar">Cerrar</button></div>`)
+  document.getElementById('apl-cerrar').addEventListener('click', () => cerrarModal())
+  const caja = document.getElementById('apl-out')
+  let r
+  try {
+    r = await apiGet(`/api/contable/empresas/${S.empresa.id}/tesoreria/documentos/${documentoId}/aplicaciones`)
+  } catch (err) {
+    caja.innerHTML = `<p class="hint" style="color:var(--danger)">${esc(err.message)}</p>`
+    return null
+  }
+  const filas = r.aplicaciones || []
+  caja.innerHTML = `
+   <p class="hint">Cobrado acumulado: <b class="mono">${fmtM(r.cobrado || 0)}</b> en ${filas.length} aplicación(es).</p>
+    ${filas.length ? `<div class="tbl-wrap"><table class="tbl">
+     <thead><tr><th>Fecha</th><th>Tipo</th><th>Glosa</th><th>Asiento</th><th class="num">Monto</th><th>Motivo</th></tr></thead>
+     <tbody>${filas.map((a) => `<tr>
+       <td class="mono">${esc(a.fecha || '—')}</td>
+       <td><span class="chip ${a.tipo === 'COBRO' ? 'contabilizado' : 'error'}">${esc(a.tipo || '')}</span></td>
+       <td class="sub">${esc(a.glosa || '—')}</td>
+       <td class="sub">${a.asiento_id ? `#${esc(a.asiento_id)}` : '—'}</td>
+       <td class="num">${fmtM(a.monto)}</td>
+       <td class="sub">${esc(a.motivo || '—')}</td>
+     </tr>`).join('')}</tbody>
+   </table></div>` : `<p class="hint">Este documento no tiene aplicaciones registradas: se puede cobrar desde <a href="#cobranza">Cobranza</a> o registrar el cobro en el Libro banco con el documento indicado.</p>`}`
+  return r
 }

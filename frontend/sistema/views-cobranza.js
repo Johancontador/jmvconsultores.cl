@@ -29,6 +29,12 @@ async function renderCobranza(cnt) {
   }
 
   const CRED = cob.credito || null
+  // Los documentos visibles, con su cliente: el diálogo de cobro necesita el
+  // folio, el monto y el nombre para decir QUÉ se va a crear antes de escribir.
+  const docsPorId = new Map()
+  ;(cob.clientes || []).forEach((c) => (c.documentos_abiertos || []).forEach((d) => {
+    docsPorId.set(String(d.id), { ...d, cliente: c.razon_social })
+  }))
   const sel = (id) => `
     <select class="form-input ccb-banco" data-doc="${id}" style="max-width:230px; padding:3px 6px">
       ${(bancos.bancos || []).map((b) => `<option value="${b.id}">${esc(b.banco)}${b.numero ? ' ' + esc(b.numero) : ''}</option>`).join('')}</select>`
@@ -65,22 +71,61 @@ async function renderCobranza(cnt) {
           <td class="mono">${esc(d.fecha_docto || '—')}</td>
           <td class="mono" style="text-align:right">${fmt(d.monto_total)}</td>
           <td class="mono">${d.mora_dias} d</td>
-          <td>${sel(d.id)} <button class="btn btn-primary btn-sm ccb-pagada" data-doc="${d.id}">Pagada</button></td>
+          <td>${sel(d.id)} <button class="btn btn-primary btn-sm ccb-pagada" data-doc="${d.id}" aria-label="Registrar pagada la factura ${esc(d.folio)}">Pagada</button>
+            <button class="btn btn-secondary btn-sm ccb-apl" data-doc="${d.id}" data-ref="Factura ${esc(d.folio)}">Aplicaciones</button></td>
         </tr>`).join('')}</tbody>
       </table></div>
     </div>`).join('')}
 
-    <p class="sub mt">«Pagada» registra el cobro en Tesorería con asiento del núcleo (Debe banco / Haber clientes), lo conecta a la factura y baja el saldo al instante — todo auditado. Cobros parciales: el botón paga el total; para parciales usa Tesorería → Cobros con el documento indicado.</p>
+    <p class="sub mt">«Pagada» muestra antes el banco, el monto y el asiento que va a crear (Debe banco / Haber clientes); al confirmar, el cobro queda en Tesorería conectado a la factura y el saldo baja al instante — todo auditado. Cobros parciales: el botón paga el total; para parciales usa Tesorería → Cobros con el documento indicado. «Aplicaciones» muestra con qué movimientos se ha pagado cada factura.</p>
   `
 
   // acciones
   cont.querySelectorAll('.ccb-pagada').forEach((b) => b.addEventListener('click', async () => {
-    const docId = b.dataset.doc
+    const docId = String(b.dataset.doc)
+    const doc = docsPorId.get(docId) || { id: docId, folio: '—', monto_total: 0, cliente: '' }
     const selB = cont.querySelector(`.ccb-banco[data-doc="${docId}"]`)
-    try {
-      const r = await apiPost(`/api/contable/empresas/${S.empresa.id}/cobranza/${docId}/pagada`, { banco_cuenta_id: Number(selB.value) })
-      showToast(`Cobrado: asiento F${r.asiento_folio} · saldo restante ${fmt(r.saldo_restante)}`, 'success')
-      renderRoute()
-    } catch (e) { showToast(e.message, 'error') }
+    const banco = (bancos.bancos || []).find((x) => String(x.id) === String(selB.value)) || { id: selB.value, banco: '—' }
+    try { await modalPagadaCobranza(doc, banco) } catch (e) { showToast(e.message, 'error') }
   }))
+
+  cont.querySelectorAll('.ccb-apl').forEach((b) => b.addEventListener('click', () => {
+    modalAplicacionesDocumento(Number(b.dataset.doc), b.dataset.ref || '')
+  }))
+}
+
+/**
+ * Cobro de una factura: dice qué banco, qué monto y qué asiento se van a
+ * crear ANTES de escribir (antes el botón creaba el movimiento a ciegas).
+ * Solo escribe si la persona confirma; el backend sigue validando todo.
+ */
+async function modalPagadaCobranza(doc, banco) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const bancoTexto = `${banco?.banco || '—'}${banco?.numero ? ` ${banco.numero}` : ''}`
+  const ok = await UIEstado.confirmar({
+    titulo: `Cobrar folio ${doc.folio}`,
+    texto: 'Registrar cobro',
+    idBoton: 'ccb-conf-ok',
+    cuerpo: `
+      <p>Se registrará el cobro completo del documento y su asiento en partida doble.</p>
+      <dl>
+        ${UIEstado.dato('Cliente', esc(doc.cliente || '—'))}
+        ${UIEstado.dato('Documento', `F${esc(doc.folio)} · ${esc(String(doc.fecha_docto || '').slice(0, 10) || 'sin fecha')}`)}
+        ${UIEstado.dato('Monto', `<b class="mono">${fmt(doc.monto_total)}</b>`)}
+        ${UIEstado.dato('Banco', esc(bancoTexto))}
+        ${UIEstado.dato('Asiento', 'Debe banco / Haber clientes')}
+        ${UIEstado.dato('Fecha del movimiento', esc(hoy))}
+      </dl>
+      <p class="hint mt">No se puede deshacer: queda auditado y baja el saldo del cliente.</p>`,
+  })
+  if (!ok) return null
+  try {
+    const r = await apiPost(`/api/contable/empresas/${S.empresa.id}/cobranza/${doc.id}/pagada`, { banco_cuenta_id: Number(banco.id) })
+    showToast(`Cobrado: asiento F${r.asiento_folio} · saldo restante ${fmt(r.saldo_restante)}`, 'success')
+    renderRoute()
+    return r
+  } catch (e) {
+    showToast(e.message, 'error')
+    return null
+  }
 }

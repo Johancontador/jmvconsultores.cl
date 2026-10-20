@@ -584,7 +584,11 @@ const MENU = [
   },
   {
     seccion: 'Gestión comercial', items: [
-      { key: 'crm', label: 'CRM Comercial', permiso: 'empresas:ver' },
+      // CRM = herramienta del DESPACHO, no del cliente: `crm:ver` solo existe
+      // en los roles contador/super_admin (igual que guardCrm en su API). Con
+      // `empresas:ver` —que el dueño sí tiene— el menú ofrecía un módulo que
+      // devolvía 403 en cada consulta.
+      { key: 'crm', label: 'CRM Comercial', permiso: 'crm:ver' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
     ]

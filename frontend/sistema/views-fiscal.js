@@ -14,9 +14,13 @@ VIEWS.inicio = {
     try {
       const r = await apiGet(`/api/contable/empresas/${eid}/dashboard${pedido ? `?periodo=${pedido}` : ''}`)
       d = r.dashboard
-      // Fase 4: KPI de cobranza en el Inicio — fallo silencioso si el rol no
-      // incluye tesorería:ver (el dashboard no se rompe por eso).
-      try { cobranzaRes = await apiGet(`/api/contable/empresas/${eid}/cobranza?limit=1`) } catch { }
+      // Fase 4: KPI de cobranza en el Inicio. Se pide SOLO si el rol puede
+      // leerla (`tesoreria:ver`): antes la consulta se hacía igual para el
+      // dueño cliente, que no tiene esa capacidad, y cada visita al panel le
+      // dejaba un 403 en la consola (sin romper la vista, pero ruido real).
+      if (tiene('tesoreria:ver')) {
+        try { cobranzaRes = await apiGet(`/api/contable/empresas/${eid}/cobranza?limit=1`) } catch { /* el KPI es opcional: el panel sigue */ }
+      }
     } catch (err) {
       cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
       return

@@ -1242,6 +1242,20 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .ui-loading { padding: var(--space-5) var(--space-4); }
 
+/* ---------- Confirmación con alcance (F3): el diálogo dice qué se crea ---------- */
+.btn-danger { --btn-bg: var(--danger); --btn-border: transparent; color: #fff; }
+.btn-danger:disabled, .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ui-confirm { font-size: var(--fs-sm); color: var(--fg-secondary); }
+.ui-confirm p { margin: 0 0 var(--space-3); }
+.ui-confirm dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px var(--space-4); margin: var(--space-2) 0 0; }
+.ui-confirm dt { color: var(--fg-muted); }
+.ui-confirm dd { margin: 0; color: var(--fg-primary); font-variant-numeric: tabular-nums; }
+
+/* ---------- Centro de Reportes: lo que NO existe, fuera de los reportes ---------- */
+.rep-proximos { border-style: dashed; }
+.rep-proximos .rep-card-off { cursor: not-allowed; opacity: 0.8; }
+.rep-proximos .rep-card-off:hover { border-color: var(--border-default); }
+
 /* ---------- Móvil: el menú sigue siendo una fila desplazable ---------- */
 @media (max-width: 960px) {
   .sys-main { max-width: none; }

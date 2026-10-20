@@ -606,7 +606,8 @@ async function vistaCierre(body, periodo) {
   const ejecutar = async (forzar) => {
     const claves = [...body.querySelectorAll('.ci-clave:checked')].map((c) => c.value)
     try {
-      const r = await apiPost(`/api/contable/empresas/${eid}/cierre/${periodo}/ejecutar`, { claves, forzar })
+      const r = await confirmarCierre({ eid, periodo, cierre, claves, forzar })
+      if (!r) return // cancelado: no se envió nada
       document.getElementById('ci-out').innerHTML = `
        <div class="card" style="border-color:var(--success)">
          <h3>Período cerrado</h3>
@@ -618,9 +619,41 @@ async function vistaCierre(body, periodo) {
   const btnE = document.getElementById('ci-ejec')
   if (btnE) btnE.addEventListener('click', () => ejecutar(false))
   const btnF = document.getElementById('ci-forzar')
-  if (btnF) btnF.addEventListener('click', () => {
-    if (confirm('¿Cerrar con documentos pendientes? Quedará auditado como decisión explícita.')) ejecutar(true)
+  if (btnF) btnF.addEventListener('click', () => ejecutar(true))
+}
+
+/**
+ * Cierre con confirmación fuerte (F3, auditoría §2.7).
+ *
+ * Antes era un clic (y `confirm()` para forzar) sobre una acción que genera
+ * asientos y bloquea el período: el impacto no se veía. El diálogo lista el
+ * alcance real — pendientes, asientos propuestos y monto — y exige teclear el
+ * período exacto, para que cerrar el mes equivocado no sea un accidente.
+ * No escribe nada por sí solo: devuelve el resultado del POST o null.
+ */
+async function confirmarCierre({ eid, periodo, cierre, claves = [], forzar = false }) {
+  const propuestos = (cierre.cierres_propuestos || []).filter((c) => !claves.length || claves.includes(c.clave))
+  const totalDebe = propuestos.reduce((s, c) => s + (c.lineas || []).reduce((a, l) => a + (l.debe || 0), 0), 0)
+  const ch = cierre.checklist || {}
+  const ok = await UIEstado.confirmar({
+    titulo: `Cerrar ${perDisplay(periodo)}`,
+    texto: forzar ? 'Cerrar de todas formas' : 'Cerrar período',
+    peligro: true,
+    requiere: periodo,
+    idBoton: 'ci-conf-ok',
+    cuerpo: `
+      <p>Al cerrar se generan los asientos de cierre y el período queda bloqueado para nuevas mutaciones. <b>No se reabre desde la interfaz.</b></p>
+      <dl>
+        ${UIEstado.dato('Período', `<b class="mono">${esc(periodo)}</b>`)}
+        ${UIEstado.dato('Documentos sin contabilizar', ch.documentos_pendientes ? `<b style="color:var(--danger)">${ch.documentos_pendientes}</b> — se cierra con pendientes` : '0')}
+        ${UIEstado.dato('Conciliación', ch.conciliacion_ejecutada ? `ejecutada · ${ch.conciliacion_diferencias || 0} diferencia(s), no bloquea` : 'no ejecutada')}
+        ${UIEstado.dato('Asientos de cierre', `${propuestos.length}<br><span class="sub">${propuestos.map((c) => esc(c.clave)).join(' · ') || 'ninguno'}</span>`)}
+        ${UIEstado.dato('Monto total (Debe)', `<b class="mono">${fmtM(totalDebe)}</b>`)}
+      </dl>
+      ${forzar ? '<p class="hint mt" style="color:var(--danger)">Forzar: el período se cierra CON documentos pendientes y queda auditado como decisión explícita.</p>' : ''}`,
   })
+  if (!ok) return null
+  return apiPost(`/api/contable/empresas/${eid}/cierre/${periodo}/ejecutar`, { claves, forzar })
 }
 
 /* ==================== CIERRE DE PERÍODO (vista propia) ====================
@@ -714,30 +747,29 @@ VIEWS.reportes = {
   async render(cont) {
     const periodo = window._repPeriodo || periodoGlobal()
     const tienePerm = (p) => tiene(p)
+    // Solo reportes REALES en los grupos. Lo que el sistema todavía no calcula
+    // vive aparte (bloque «Próximamente» al final): mezclar tarjetas falsas con
+    // reales hacía que el usuario buscara funciones inexistentes (auditoría §1.4).
     const grupos = [
       { titulo: 'Contabilidad', items: [
         { hash: '#comprobacion', label: 'Balance de comprobación', desc: 'Sumas y saldos con cuadre ΣD = ΣH (mes y acumulado)' },
         { hash: '#balance8', label: 'Balance de 8 columnas', desc: 'Hoja de trabajo completa con Pérdida/Utilidad' },
         { hash: '#asientos', tabVar: '_ctaTab', tabVal: 'mayor', label: 'Libro mayor', desc: 'Movimientos y saldos por cuenta' },
+        { hash: '#cierre', label: 'Cierre del período', desc: 'Checklist, asientos de cierre propuestos y cierre auditado' },
       ] },
       { titulo: 'Estados financieros', items: [
         { hash: '#situacion', label: 'Estado de situación financiera', desc: 'A = P + Patrimonio, con saldos bancarios' },
         { hash: '#resultados', label: 'Estado de resultados', desc: 'Por período y acumulado, con detalle por cuenta' },
         { hash: '#clasificado', label: 'Balance clasificado', desc: 'Corriente / no corriente + capital de trabajo' },
         { hash: '#niif', label: 'Estados NIIF por rubros', desc: 'Presentación por rubros con mapeo editable' },
-        { label: 'Flujo de efectivo', desc: 'En preparación' },
-        { label: 'Cambios en patrimonio', desc: 'En preparación' },
       ] },
       { titulo: 'Tributarios', items: [
         { hash: '#analitica', label: 'IVA — dashboard tributario', desc: 'Débito, crédito, determinado anual y por mes' },
         { hash: '#libros', label: 'RCV — libros de compra y venta', desc: 'Documento a documento desde el SII' },
-        { label: 'F29', desc: 'En preparación' },
-        { label: 'PPM', desc: 'En preparación' },
       ] },
       { titulo: 'Clientes y proveedores', items: [
         { hash: '#cclientes', label: 'Cuenta corriente — clientes', desc: 'Cargos, abonos y saldo corrido por cliente' },
         { hash: '#cproveedores', label: 'Cuenta corriente — proveedores', desc: 'Cargos, abonos y saldo corrido por proveedor' },
-        { label: 'Antigüedad de saldos', desc: 'En preparación' },
       ] },
       { titulo: 'Tesorería', items: [
         { hash: '#tesoreria', tabVar: '_tesoTab', tabVal: 'movimientos', label: 'Libro banco', desc: 'Saldo corrido con folio por movimiento' },
@@ -745,8 +777,15 @@ VIEWS.reportes = {
       ] },
       { titulo: 'Gestión', items: [
         { hash: '#analitica', label: 'Comparativos anuales', desc: 'Ventas, compras e IVA vs año anterior' },
-        { label: 'Centros de costo', desc: 'En preparación' },
       ] },
+    ]
+    const proximos = [
+      { label: 'Flujo de efectivo', desc: 'No disponible todavía' },
+      { label: 'Cambios en patrimonio', desc: 'No disponible todavía' },
+      { label: 'F29', desc: 'No disponible todavía' },
+      { label: 'PPM', desc: 'No disponible todavía' },
+      { label: 'Antigüedad de saldos', desc: 'No disponible todavía' },
+      { label: 'Centros de costo', desc: 'No disponible todavía' },
     ]
     // Favoritos y recientes (§10 mandato): en localStorage, sin backend — son
     // accesos, no módulos nuevos. Cada entrada guarda anchor+tab.
@@ -809,6 +848,13 @@ VIEWS.reportes = {
              : `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
          </div>
        </div>`).join('')}
+       <div class="card mb rep-grupo rep-proximos" data-grupo="próximamente">
+         <h3>Próximamente <span class="chip neutral">no disponible</span></h3>
+         <p class="hint" style="margin-top:-6px">Estas funciones NO existen todavía en el sistema. Se listan separadas de los reportes reales para que la navegación no prometa lo que no se calcula; no son enlaces.</p>
+         <div class="rep-grid">
+           ${proximos.map((it) => `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
+         </div>
+       </div>
      </div>
      <div id="rep-sin-resultados" style="display:none">${window.UIEstado ? UIEstado.vacio('Ningún reporte coincide con la búsqueda', 'Prueba con otro término: balance, IVA, clientes, banco…', '') : ''}</div>`
     document.getElementById('rep-periodo-global').addEventListener('change', () => {

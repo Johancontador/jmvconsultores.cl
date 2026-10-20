@@ -72,7 +72,7 @@ const CATALOGO_APPS = [
     orden: 3,
     roles: ['contador'], // + super admin (is_admin) — igual que guardCrm
     secciones: [
-      { grupo: 'Gestión comercial', ruta: 'crm', capacidad: 'empresas:ver' },
+      { grupo: 'Gestión comercial', ruta: 'crm', capacidad: 'crm:ver' },
     ],
   },
   {
