@@ -239,7 +239,9 @@ test('ingestarHistorico con SII mockeado: inserta, marca checklist, audita y es 
     const t = onboarding.trabajos.get(job.jobId)
     await t.promise
 
-    assert.strictEqual(t.estado, 'completado')
+    // El motivo viaja en el mensaje: un 'error' sin causa obliga a reproducir
+    // el fallo a ciegas (pasó en CI con Linux, 2026-10-20).
+    assert.strictEqual(t.estado, 'completado', `estado=${t.estado} error=${t.error}`)
     assert.strictEqual(t.resultado.insertados_total, 5, 'venta+compra 202509, 2 ventas+compra 202510')
     assert.strictEqual(t.resultado.duplicados_total, 0)
 
