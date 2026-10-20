@@ -8,7 +8,7 @@
 VIEWS.automatizacion = {
   titulo: 'Automatización',
   async render(cont) {
-    const periodo = window._autoPeriodo || periodoActual()
+    const periodo = window._autoPeriodo || periodoGlobal()
     const eid = S.empresa.id
 
     let estado = null
@@ -37,8 +37,9 @@ VIEWS.automatizacion = {
        <div><span class="frm-label">Período</span>${inputPeriodoHTML('auto-periodo', periodo)}</div>
        <span class="spacer"></span>
        <span class="chip ${estado.periodo_abierto ? 'contabilizado' : 'anulado'}">Período ${estado.periodo_abierto ? 'ABIERTO' : 'CERRADO'}</span>
-        ${puedeEjecutar ? `<button class="btn btn-primary" id="auto-run" ${estado.sin_resolver === 0 && estado.propuestas_pendientes === 0 ? 'title="Nada por contabilizar en este período"' : ''}>Contabilizar automáticamente</button>` : ''}
+        ${puedeEjecutar ? `<button class="btn btn-primary" id="auto-run">Contabilizar automáticamente</button>` : ''}
      </div>
+      ${estado.periodo_abierto ? '' : `<p class="hint" id="auto-cerrado">El período está <b>CERRADO</b>: el pipeline puede clasificar y proponer, pero el núcleo contable <b>no crea asientos</b> en un período cerrado — esos documentos saldrán como omitidos con su motivo. Para contabilizarlos hay que reabrir el período.</p>`}
 
      <div class="kpi-grid">
        <div class="kpi"><small>⏳ Pendientes (sin cuenta)</small><strong>${cuenta('PENDIENTE')}</strong><span class="sub">esperando reglas o clasificación</span></div>
@@ -81,12 +82,17 @@ VIEWS.automatizacion = {
      </div>`
 
     document.getElementById('auto-periodo').addEventListener('change', () => {
-      window._autoPeriodo = leerPeriodo('auto-periodo') || periodo
+      const p = leerPeriodo('auto-periodo') || periodo
+      // Un solo período: el selector del header, la URL y las demás vistas
+      // siguen al que se elige aquí (antes solo movía esta vista).
+      aplicarPeriodoGlobal(p)
+      escribirHash(location.hash)
+      sincronizarSelectorPeriodo(p)
       renderRoute()
     })
 
     const btnRun = document.getElementById('auto-run')
-    if (btnRun) btnRun.addEventListener('click', () => ejecutarPipeline(eid, periodo))
+    if (btnRun) btnRun.addEventListener('click', () => confirmarPipeline(eid, periodo, estado))
 
     const btnSemilla = document.getElementById('auto-semilla')
     if (btnSemilla) btnSemilla.addEventListener('click', async () => {
@@ -131,6 +137,43 @@ function tarjetaResultado(res) {
        <a href="#propuestas" class="btn btn-secondary btn-sm">Revisar propuestas</a>
      </div>
    </div>`
+}
+
+/**
+ * Confirmación con ALCANCE antes de ejecutar (auditoría §2: el botón corría a
+ * ciegas). Muestra cuántos documentos entrarán en cada eslabón de la cadena y
+ * advierte cuando el período está cerrado; cancelar no envía ninguna petición.
+ */
+async function confirmarPipeline(eid, periodo, estado) {
+  const d = estado.documentos || {}
+  const n = (k) => d[k] || 0
+  const porClasificar = n('PENDIENTE') + n('REVISION')
+  const sinPropuesta = n('CLASIFICADO')
+  const porContabilizar = estado.propuestas_pendientes || 0
+  const total = porClasificar + sinPropuesta + porContabilizar
+  const cerrado = estado.periodo_abierto === false
+
+  if (total === 0) {
+    showToast(`No hay nada por contabilizar en ${perDisplay(periodo)}: sin documentos pendientes ni propuestas vivas`, 'info')
+    return
+  }
+
+  const confirmado = await UIEstado.confirmar({
+    titulo: `Contabilizar ${perDisplay(periodo)}`,
+    cuerpo: `
+      <dl>
+        ${UIEstado.dato('Documentos por clasificar', `<b class="mono">${porClasificar}</b>`)}
+        ${UIEstado.dato('Clasificados sin propuesta', `<b class="mono">${sinPropuesta}</b>`)}
+        ${UIEstado.dato('Propuestas por contabilizar', `<b class="mono">${porContabilizar}</b>`)}
+        ${UIEstado.dato('Período', cerrado ? 'CERRADO' : 'ABIERTO')}
+      </dl>
+      ${cerrado
+        ? '<p class="hint" style="color:var(--danger)">El período está cerrado: los asientos se van a omitir y el resultado dirá cuántos. Reabre el período si necesitas contabilizarlos.</p>'
+        : '<p class="hint">Se crearán asientos definitivos en partida doble (auditado). Nada se envía al SII.</p>'}`,
+    texto: `Contabilizar ${total}`,
+  })
+  if (!confirmado) return
+  await ejecutarPipeline(eid, periodo)
 }
 
 /** Ejecuta el pipeline: feedback de progreso y, al terminar, re-render con KPIs frescos + resumen. */

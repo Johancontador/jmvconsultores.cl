@@ -1120,6 +1120,9 @@ function aplicarPeriodoGlobal(p) {
   // quedaban en el mes del calendario aunque el header dijera otro. El
   // período es uno solo: el selector del shell y la URL también los mueven.
   window._ctaPeriodo = p; window._propPeriodo = p; window._librosPeriodo = p
+  // Contabilización y Pendientes leía `periodoActual()` (mes del calendario)
+  // y mostraba/ejecutaba otro mes que el del header y la URL.
+  window._autoPeriodo = p
 }
 
 let remontandoContexto = false
