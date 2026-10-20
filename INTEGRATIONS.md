@@ -54,7 +54,7 @@ const prueba = await require('./services/sii-rcv').probarConexion(rut, claveSii)
 - Caché persistente `rcv_cache` **solo para períodos cerrados** (el mes en curso siempre va al SII); invalidación por versión de formato (`meta.rcv_cache_version = 'v4'`).
 - Las credenciales SII de cada empresa viven cifradas (ver DATA_MODEL §B.7); se descifran solo para pasarlas a estas funciones.
 
-**Errores que el consumidor debe tratar:** `Clave SII incorrecta`, `Sesión SII expirada`, `Timeout — reintentar`, `Error SII: HTTP <n>`, `No se pudo obtener token de sesión RCV`. La ingesta los mapea a estado `ERROR` del documento/lote con mensaje legible.
+**Errores que el consumidor debe tratar:** `Clave SII incorrecta` (el SII devolvió al formulario de login: RUT/clave rechazados — no reintentar con un segundo flujo), `Sesión SII expirada`, `Timeout — reintentar`, `Error SII: HTTP <n>`, `No se pudo obtener token de sesión RCV`, `Red SII inaccesible (<código>)` (fallo de transporte DNS/TLS/reset, con el `cause` para diagnosticar; transitorio, se puede reintentar en la próxima corrida). La ingesta los mapea a estado `ERROR` del documento/lote con mensaje legible.
 
 ### 2.1 Frontera única: `documentos/ingesta` (fase 3 — el único código nuevo que llama al SII)
 

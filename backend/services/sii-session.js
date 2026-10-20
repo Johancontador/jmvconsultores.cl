@@ -76,12 +76,25 @@ async function fetchConCookies(url, options, jar, _hop = 0) {
   const cookieHeader = jar.header()
   if (cookieHeader) headers.Cookie = cookieHeader
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    redirect: 'manual',
-    signal: AbortSignal.timeout(options.timeout || 30000),
-  })
+  let res
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(options.timeout || 30000),
+    })
+  } catch (err) {
+    // Un fallo de transporte (DNS, TLS, reset) NO es "fetch failed" a secas:
+    // sin el cause la corrida del cron no distingue «el SII no responde» de
+    // «la clave es mala» y es imposible de diagnosticar desde el log.
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') throw err
+    const causa = err.cause?.code || err.cause?.errno || ''
+    const host = (() => {
+      try { return new URL(url).host } catch { return url }
+    })()
+    throw new Error(`Red SII inaccesible${causa ? ` (${causa})` : ''} al llamar a ${host}`)
+  }
 
   jar.setFromResponse(res)
 
@@ -141,11 +154,17 @@ async function loginSII(rut, clave) {
     `[SII] login → HTTP ${res.status}, cookies recibidas: [${[...jar.cookies.keys()].join(', ') || 'ninguna'}]`
   )
 
-  if (
-    texto.includes('IngresoRutClave') ||
-    texto.toLowerCase().includes('clave incorrecta') ||
-    texto.toLowerCase().includes('no existe')
-  ) {
+  // Credencial rechazada: el SII NO responde 401 ni un texto de error; redirige
+  // de vuelta al formulario. Si no se detecta aquí, el flujo sigue a
+  // obtenerTokenRCV y el 401 del facadeService se reporta como «sesión
+  // expirada», lo que hace que el reintento vuelva a autenticarse con la misma
+  // clave mala (2 logins por empresa y por corrida, con riesgo de bloqueo).
+  const urlFinal = res.url || ''
+  const volvioAlLogin = /IngresoRutClave/i.test(urlFinal) || /location\.replace\([^)]*IngresoRutClave/i.test(texto)
+  const mensajeRechazo = /clave incorrecta|clave tributaria ingresada no es correcta|no existe/i.test(texto)
+
+  if (volvioAlLogin || mensajeRechazo) {
+    console.log('[SII] login rechazado: el SII devolvió al formulario de autenticación (RUT/clave inválidos)')
     throw new Error('Clave SII incorrecta')
   }
 

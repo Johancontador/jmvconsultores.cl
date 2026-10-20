@@ -124,6 +124,10 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
       } catch (err) {
         detalle[flujo] = { error: err.message }
         fallo = true
+        // Credencial rechazada por el SII: el segundo flujo usaría la MISMA
+        // clave mala y provocaría otro login fallido — con el riesgo de que el
+        // SII bloquee la cuenta por intentos repetidos. Un error basta.
+        if (/Clave SII incorrecta/i.test(err.message)) break
       }
       await dormir(PAUSA_MS)
     }

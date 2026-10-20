@@ -253,3 +253,30 @@ test('T6: corrida sin usuario firma el admin del sistema (no aborta al cerrar)',
   const ultima = db.prepare(`SELECT usuario_id FROM auditoria WHERE accion = 'sync_diaria.ejecutar' ORDER BY id DESC LIMIT 1`).get()
   assert.strictEqual(ultima.usuario_id, sistema, 'atribuida al admin del sistema, no a null')
 })
+
+// ===== T7: credencial rechazada = 1 login, no 2 =====
+
+/**
+ * Con la clave SII rechazada, compras y ventas usan la MISMA credencial: el
+ * segundo flujo provocaba otro login fallido contra el SII (riesgo de bloqueo
+ * de la cuenta) y un error duplicado. Basta con un intento.
+ */
+test('T7: clave SII rechazada → se corta tras compras (no reintenta ventas)', async () => {
+  const E7 = Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES ('77777777-7', 'Sync Siete SpA', 'k7', 1)`).run().lastInsertRowid)
+  const boveda = require('../backend/core/boveda')
+  db.prepare(`UPDATE empresas SET clave_sii = ? WHERE id = ?`).run(boveda.cifrar('k7'), E7)
+
+  const previo = rcv.consultarRCV
+  const intentos = []
+  rcv.consultarRCV = async (rut, clave, tipo) => {
+    intentos.push(tipo)
+    throw new Error('Clave SII incorrecta')
+  }
+
+  const r = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [E7] })
+  rcv.consultarRCV = previo
+
+  assert.strictEqual(r.con_errores, 1)
+  assert.match(r.errores[E7] || '', /Clave SII incorrecta/)
+  assert.deepStrictEqual(intentos, ['compras'], 'no se reintenta ventas con la misma clave mala')
+})

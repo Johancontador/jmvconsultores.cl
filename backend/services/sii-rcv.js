@@ -1,6 +1,11 @@
 const db = require('../db')
 const { obtenerSesion, invalidarSesion, fetchConCookies, parseRut, siiFacadeHeaders, SII_RCV_UI } = require('./sii-session')
 const { sleep, INTERVALO_MS } = require('./simpleapi')
+// Helpers de caché de períodos cerrados: viven en rcv.js (que requiere este
+// módulo de forma diferida, dentro de consultarRCV) — sin ciclo al cargar.
+// Faltaban en este módulo y consultarResumen lanzaba ReferenceError desde la
+// primera línea (`periodoCerrado is not defined`) en TODA llamada.
+const { periodoCerrado, obtenerDeCache, guardarEnCache } = require('./rcv')
 
 let ultimaConsulta = 0
 
@@ -239,9 +244,10 @@ async function consultarResumen(rut, clave, periodo, tipo, reintento = false) {
 
   // Cache para períodos cerrados (no el mes actual)
   const cerrado = periodoCerrado(periodo)
+  // La clave de lectura debe ser EXACTAMENTE la que escribe el guardado de
+  // abajo (`resumen:${tipo}`); con una clave distinta la caché nunca acertaba.
   if (cerrado) {
-    const cacheKey = `resumen:${rut}:${periodo}:${tipo}`
-    const cached = obtenerDeCache('cache', periodo, cacheKey) || obtenerDeCache(rut, periodo, cacheKey)
+    const cached = obtenerDeCache(rut, periodo, `resumen:${tipo}`)
     if (cached) return cached
   }
 
