@@ -363,3 +363,78 @@ test('T10: navegación — secciones plegables con estado accesible y buscador p
   // etiquetas seguían en 10–11 px (medido a 768 px).
   assert.match(css, /@media \(max-width: 960px\)[\s\S]*?\.sys table\.tbl th,[\s\S]*?\.sys \.sys-kicker \{ font-size: 12px; \}/, 'piso de 12 px también en tableta')
 })
+
+// ---------- T11: F1 — empresa y período en la URL --------------------------
+test('T11: contexto de ruta — empresa y período viajan en el hash sin perder los filtros', () => {
+  const src = fs.readFileSync(path.join(FRONT, 'sistema', 'url-estado.js'), 'utf8')
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  const fiscal = fs.readFileSync(path.join(FRONT, 'sistema', 'views-fiscal.js'), 'utf8')
+  const html = fs.readFileSync(path.join(FRONT, 'sistema', 'index.html'), 'utf8')
+
+  // Módulo puro: se ejecuta sin navegador (mismo patrón que tema.js en T9).
+  const ctx = { window: {}, URLSearchParams }
+  vm.createContext(ctx)
+  vm.runInContext(src, ctx)
+  const { partes, contexto, conContexto, periodoValido } = ctx.window.UrlEstado
+  assert.ok(partes && contexto && conContexto && periodoValido, 'UrlEstado expone la API')
+
+  // Antes, el enlace copiado desde la Bandeja (#documentos?estado=PENDIENTE) se
+  // abría en la empresa y el mes de quien lo abría: el contexto no estaba en la
+  // URL. Ahora se suma a la query sin tocar las claves de la vista.
+  // El período del sistema es `YYYYMM` (formato de la URL real: 202609).
+  const compartido = conContexto('#documentos?estado=PENDIENTE&orden=fecha&dir=desc&p=3', { empresa: 7, periodo: '202609' })
+  const q = new URLSearchParams(compartido.split('?')[1])
+  const q2 = (k, hash) => new URLSearchParams(hash.split('?')[1]).get(k)
+  assert.strictEqual(compartido.split('?')[0], '#documentos', 'la vista no cambia')
+  assert.strictEqual(q.get('estado'), 'PENDIENTE', 'filtro de estado conservado')
+  assert.strictEqual(q.get('orden'), 'fecha', 'orden conservado')
+  assert.strictEqual(q.get('dir'), 'desc', 'sentido conservado')
+  assert.strictEqual(q.get('p'), '3', 'página conservada')
+  assert.strictEqual(q.get('empresa'), '7', 'empresa en la URL')
+  assert.strictEqual(q.get('periodo'), '202609', 'período en la URL')
+
+  // Un enlace compartido no se sobrescribe con la sesión: por defecto el
+  // contexto del hash manda y solo se rellenan las claves ausentes.
+  const propio = conContexto('#documentos?estado=PENDIENTE&empresa=9&periodo=202508', { empresa: 1, periodo: '202602' })
+  assert.strictEqual(q2('empresa', propio), '9', 'la empresa del enlace manda')
+  assert.strictEqual(q2('periodo', propio), '202508', 'el período del enlace manda')
+  const forzado = conContexto('#documentos?estado=PENDIENTE&empresa=9&periodo=202508', { empresa: 1, periodo: '202602' }, { forzar: true })
+  assert.strictEqual(q2('empresa', forzado), '1', 'forzar reemplaza la empresa')
+  assert.strictEqual(q2('periodo', forzado), '202602', 'forzar reemplaza el período')
+
+  // Cambiar de empresa reemplaza el valor, no lo duplica.
+  const cambiado = conContexto(compartido, { empresa: 4, periodo: '202610' }, { forzar: true })
+  assert.strictEqual((cambiado.match(/empresa=/g) || []).length, 1, 'una sola empresa')
+  assert.strictEqual(new URLSearchParams(cambiado.split('?')[1]).get('empresa'), '4')
+  assert.strictEqual(new URLSearchParams(cambiado.split('?')[1]).get('periodo'), '202610')
+  // Idempotente: reescribir dos veces no ensucia la URL.
+  assert.strictEqual(conContexto(cambiado, { empresa: 4, periodo: '202610' }, { forzar: true }), cambiado)
+
+  // Nada inventado: período inválido o empresa ausente no se escriben.
+  for (const malo of ['202613', '202600', '2026-09', 'septiembre', '', null, undefined, '20269']) {
+    assert.strictEqual(periodoValido(malo), false, `período inválido rechazado: ${malo}`)
+    const h = conContexto('#inicio', { empresa: 3, periodo: malo })
+    assert.ok(!h.includes('periodo='), `no se escribe período inválido: ${malo}`)
+  }
+  assert.ok(periodoValido('202601') && periodoValido('202612'), 'los doce meses son válidos')
+  assert.strictEqual(conContexto('#inicio', { empresa: null, periodo: null }), '#inicio', 'sin contexto no se toca el hash')
+  // (comparación por campo: el objeto viene de otro realm — vm — y
+  // deepStrictEqual compararía prototipos).
+  const vacio = contexto('#inicio')
+  assert.strictEqual(vacio.empresa, null, 'ruta pelada no inventa empresa')
+  assert.strictEqual(vacio.periodo, null, 'ruta pelada no inventa período')
+
+  // Integración: el router aplica el contexto antes de resolver la vista y la
+  // URL siempre sale con contexto; cambiar de empresa descarta el período
+  // anterior (el período es por empresa: si quedara en el hash, se reimpondría).
+  assert.match(app, /if \(aplicarContextoURL\(\) === 'remontar'\) return/, 'renderRoute aplica el contexto de la URL')
+  assert.match(app, /const e = S\.empresas\.find\(\(x\) => String\(x\.id\) === ctx\.empresa\)/, 'solo empresas del usuario')
+  assert.match(app, /function setEmpresa[\s\S]*?query\.delete\('periodo'\)/, 'setEmpresa descarta el período en la URL')
+  assert.match(app, /function navigate[\s\S]*?const destino = conContexto\(hash, \{ forzar: false \}\)/, 'navegar respeta el contexto del enlace destino')
+  assert.match(app, /function conContexto[\s\S]*?\{ forzar \}\s*\)/, 'el router puede forzar el contexto de la sesión')
+  assert.match(app, /aplicarPeriodoGlobal\(p\)[\s\S]*?escribirHash\(location\.hash\)/, 'el selector de período lo escribe en la URL')
+  // Las vistas que reescriben el hash con sus filtros deben preservarlo.
+  assert.match(fiscal, /return conContexto\(`#documentos\?\$\{q\.toString\(\)\}`\)/, 'docHash conserva el contexto')
+  // Carga antes de app.js (el router lo usa en la primera ruta).
+  assert.ok(html.indexOf('/sistema/url-estado.js') < html.indexOf('/sistema/app.js'), 'url-estado.js se carga antes de app.js')
+})

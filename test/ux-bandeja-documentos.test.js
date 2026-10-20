@@ -161,6 +161,10 @@ function crearSandbox({ permisos = ['documentos:ver', 'documentos:clasificar', '
     lee(path.join(FRONT, 'shared', 'format.js')),
     lee(path.join(FRONT, 'shared', 'uitoolkit.js')),
     lee(path.join(FRONT, 'sistema', 'ui.js')),
+    // La aritmética del contexto en el hash (empresa/período) vive aquí y la
+    // usan el router y `docHash`: sin este módulo el hash de la vista no se
+    // puede construir (mismo orden que index.html).
+    lee(path.join(FRONT, 'sistema', 'url-estado.js')),
     lee(path.join(FRONT, 'sistema', 'app.js')),
     lee(path.join(FRONT, 'sistema', 'views-fiscal.js')),
     ';(() => {',
@@ -617,8 +621,10 @@ test('B13: la URL se normaliza al entrar y los cambios discretos dejan historial
   env.location.hash = '#documentos'
   await render(env)
   // Entrar con #documentos pelado deja una entrada autodescriptiva: Atrás
-  // tiene a qué volver y Adelante no cae en un filtro indefinido.
-  assert.strictEqual(env.reemplazos.at(-1), '#documentos?estado=PENDIENTE')
+  // tiene a qué volver y Adelante no cae en un filtro indefinido. Desde F1 la
+  // entrada lleva además el contexto (empresa y período), para que el enlace
+  // copiado abra la misma empresa y el mismo mes.
+  assert.strictEqual(env.reemplazos.at(-1), '#documentos?estado=PENDIENTE&empresa=1&periodo=202609')
   assert.strictEqual(env.empujes.length, 0, 'entrar a la vista no ensucia el historial')
 
   // Cambio discreto (chip/select/orden/página) empuja una entrada nueva.

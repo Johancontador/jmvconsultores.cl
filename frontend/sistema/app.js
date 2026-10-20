@@ -165,8 +165,16 @@ function setEmpresa(id) {
   S.permisos = new Set(e?.permisos || [])
   S.cache = {}
   localStorage.removeItem('iva_periodo_activo') // cada empresa retoma su período
+  window._inicioPeriodo = null
   renderShell()
-  navigate(location.hash || hashInicial())
+  // El período es POR EMPRESA y la URL lo lleva: si se dejara el de la
+  // empresa anterior en el hash, `aplicarContextoURL` lo volvería a imponer
+  // al entrar a la vista. Se reemplaza la empresa y se descarta el período.
+  const { key, query } = hashPartes()
+  query.set('empresa', String(id))
+  query.delete('periodo')
+  const qs = query.toString()
+  navigate(`#${key}${qs ? `?${qs}` : ''}`)
 }
 
 /* ---------- login embebido (mismo template que la landing) ---------- */
@@ -802,36 +810,52 @@ function periodoGlobal() {
   return p
 }
 
+// Períodos registrados de la empresa actual (estado ABIERTO/CERRADO). Vive
+// fuera del conectar para que el router pueda refrescar el selector cuando el
+// período llega por la URL (navegación dentro de la misma página).
+let periodosEmpresa = []
+
+function pintarEstadoPeriodo(p) {
+  const est = document.getElementById('sys-periodo-estado')
+  if (!est) return
+  const row = periodosEmpresa.find((x) => String(x.periodo) === String(p))
+  est.innerHTML = row ? `<span class="chip ${row.estado === 'ABIERTO' ? 'clasificado' : 'neutral'}" title="Estado del período activo">${esc(row.estado)}</span>` : ''
+}
+
+/** Deja el selector del header en el período indicado (o en el global). */
+function sincronizarSelectorPeriodo(p = periodoGlobal()) {
+  const sel = document.getElementById('sys-periodo')
+  if (sel && sel.value !== String(p)) sel.value = String(p)
+  pintarEstadoPeriodo(p)
+}
+
 async function conectarSelectorPeriodo() {
   const sel = document.getElementById('sys-periodo')
   if (!sel) return
-  const est = document.getElementById('sys-periodo-estado')
   // Períodos registrados de la empresa (para el estado ABIERTO/CERRADO).
-  let periodos = []
-  try { periodos = (await apiGet(`/api/contable/empresas/${S.empresa.id}/periodos`)).periodos || [] }
+  periodosEmpresa = []
+  try { periodosEmpresa = (await apiGet(`/api/contable/empresas/${S.empresa.id}/periodos`)).periodos || [] }
   catch { /* sin permiso periodos:ver: el selector queda funcional igual */ }
+  // El shell pudo re-montarse mientras se esperaba la API: se escribe en el
+  // select vigente, no en el nodo que quedó fuera del documento.
+  const vivo = document.getElementById('sys-periodo')
+  if (!vivo) return
   // Opciones: últimos 24 meses + los períodos registrados (p.ej. cerrados).
   const opciones = [...new Set([
     ...ultimosPeriodos(24).map(String),
-    ...periodos.map((p) => String(p.periodo)),
+    ...periodosEmpresa.map((p) => String(p.periodo)),
   ])].sort()
-  sel.innerHTML = opciones.map((p) => `<option value="${p}">${esc(perDisplay(p))}</option>`).join('')
-  sel.value = periodoGlobal()
+  vivo.innerHTML = opciones.map((p) => `<option value="${p}">${esc(perDisplay(p))}</option>`).join('')
+  vivo.value = periodoGlobal()
   // El estado del período (ABIERTO/CERRADO) al lado del selector.
-  const pintarEstado = (p) => {
-    if (!est) return
-    const row = periodos.find((x) => String(x.periodo) === String(p))
-    est.innerHTML = row ? `<span class="chip ${row.estado === 'ABIERTO' ? 'clasificado' : 'neutral'}" title="Estado del período activo">${esc(row.estado)}</span>` : ''
-  }
-  pintarEstado(periodoGlobal())
-  sel.addEventListener('change', () => {
-    const p = sel.value || periodoActual()
-    localStorage.setItem('iva_periodo_activo', p)
-    pintarEstado(p)
-    window._inicioPeriodo = p // Inicio y las vistas con período propio lo siguen
-    window._repPeriodo = p; window._balance8Periodo = p; window._clasificadoPeriodo = p
-    window._situacionPeriodo = p; window._resultadosPeriodo = p; window._niifPeriodo = p
-    window._niifResPeriodo = p; window._asPeriodo = p; window._tesoPeriodo = p
+  pintarEstadoPeriodo(periodoGlobal())
+  vivo.addEventListener('change', () => {
+    const p = vivo.value || periodoActual()
+    aplicarPeriodoGlobal(p)
+    pintarEstadoPeriodo(p)
+    // El período queda en la URL (replaceState: cambiar de mes no es una
+    // navegación, no debe llenar el historial ni perder los filtros abiertos).
+    escribirHash(location.hash)
     renderRoute()
   })
 }
@@ -1022,10 +1046,104 @@ function conectarBuscadorMenu() {
   inp.addEventListener('search', aplicar)
 }
 
+/* ---------- contexto compartible: empresa y período en la URL ----------
+ * Empresa y período vivían SOLO en localStorage: el enlace que se copiaba
+ * (`#documentos?estado=PENDIENTE`) se abría en la empresa o en el mes de quien
+ * lo abría, y Atrás/Adelante no restauraba el contexto. Ahora viajan en la
+ * query del hash —el mismo lugar donde cada vista ya guarda sus filtros— sin
+ * tocar sus claves: los filtros de la vista se conservan tal cual (`estado`,
+ * `tipo`, `p`…). La URL es la fuente de verdad al cargar; localStorage sigue
+ * siendo el respaldo para un `#ruta` pelado.
+ */
+// La aritmética del hash vive en `url-estado.js` (pura y testeable en la
+// suite); aquí solo se le inyecta el contexto de la sesión.
+function hashPartes(hash = location.hash) { return window.UrlEstado.partes(hash) }
+function contextoEnURL(hash = location.hash) { return window.UrlEstado.contexto(hash) }
+
+/**
+ * Hash de la vista + el contexto vigente (empresa y período).
+ * `forzar` (por defecto) sobrescribe el contexto que traiga el hash: es lo que
+ * el router usa al normalizar una URL con empresa ajena o período inválido.
+ * `forzar:false` RESPETA el contexto del hash — necesario al navegar a un
+ * enlace compartido, cuyo empresa/período deben mandar sobre la sesión.
+ */
+function conContexto(hash, { forzar = true } = {}) {
+  return window.UrlEstado.conContexto(hash, {
+    empresa: S.empresa ? S.empresa.id : null,
+    periodo: periodoGlobal(),
+  }, { forzar })
+}
+
+/** Escribe la URL con contexto. `historial` crea entrada (Atrás la restaura). */
+function escribirHash(hash, { historial = false } = {}) {
+  const destino = conContexto(hash)
+  if (location.hash === destino) return
+  try {
+    if (historial) history.pushState(null, '', destino)
+    else history.replaceState(null, '', destino)
+  } catch { location.hash = destino }
+}
+
+/** Fija el período activo en TODOS los puntos donde lo leen las vistas. */
+function aplicarPeriodoGlobal(p) {
+  localStorage.setItem('iva_periodo_activo', p)
+  window._inicioPeriodo = p
+  window._repPeriodo = p; window._balance8Periodo = p; window._clasificadoPeriodo = p
+  window._situacionPeriodo = p; window._resultadosPeriodo = p; window._niifPeriodo = p
+  window._niifResPeriodo = p; window._asPeriodo = p; window._tesoPeriodo = p
+}
+
+let remontandoContexto = false
+
+/**
+ * Aplica el contexto que trae la URL antes de resolver la ruta.
+ * Devuelve 'remontar' cuando cambió la empresa: selector, permisos y licencia
+ * son de la empresa, así que hay que rehacer el shell antes de pintar.
+ * La empresa de la URL solo se acepta si el usuario tiene acceso a ella; si no
+ * (enlace de otro despacho, empresa dada de baja) se ignora y la URL se
+ * reescribe con el contexto real — nunca se abre una vista en empresa ajena.
+ */
+function aplicarContextoURL() {
+  const ctx = contextoEnURL()
+  const periodoValido = ctx.periodo && window.UrlEstado.periodoValido(ctx.periodo) ? ctx.periodo : null
+  if (ctx.empresa && String(S.empresa?.id) !== ctx.empresa && !remontandoContexto) {
+    const e = S.empresas.find((x) => String(x.id) === ctx.empresa)
+    if (e) {
+      localStorage.setItem('iva_empresa_activa', String(e.id))
+      S.empresa = e
+      S.licencia = e.licencia || null
+      S.permisos = new Set(e.permisos || [])
+      S.cache = {}
+      if (periodoValido) aplicarPeriodoGlobal(periodoValido)
+      else { localStorage.removeItem('iva_periodo_activo'); window._inicioPeriodo = null }
+      remontandoContexto = true
+      try { renderShell(); navigate(location.hash) } finally { remontandoContexto = false }
+      return 'remontar'
+    }
+  }
+  if (periodoValido && periodoValido !== periodoGlobal()) {
+    aplicarPeriodoGlobal(periodoValido)
+    // Navegar dentro de la misma página (hashchange) no re-monta el shell: el
+    // selector del header quedaría mostrando el mes anterior aunque la vista
+    // ya use el de la URL.
+    sincronizarSelectorPeriodo(periodoValido)
+  }
+  // La URL siempre sale con contexto: un enlace copiado desde cualquier vista
+  // —o desde un filtro que reescribe el hash— no lo pierde.
+  const destino = conContexto(location.hash)
+  if (location.hash !== destino) {
+    try { history.replaceState(null, '', destino) } catch { /* hash raro */ }
+  }
+  return 'ok'
+}
+
 /* ---------- router ---------- */
 
 function navigate(hash) {
-  if (location.hash !== hash) { location.hash = hash; return } // dispara hashchange
+  // Sin forzar: si la ruta destino trae empresa/período (enlace compartido,
+  // historial), esos mandan y `aplicarContextoURL` los aplica al renderizar.
+  const destino = conContexto(hash, { forzar: false })
+  if (location.hash !== destino) { location.hash = destino; return } // dispara hashchange
   renderRoute()
 }
 
@@ -1033,6 +1151,7 @@ window.addEventListener('hashchange', renderRoute)
 
 function renderRoute() {
   if (!S.user) return
+  if (aplicarContextoURL() === 'remontar') return
   // La query de la vista (p. ej. #dte?tipo=33) es estado de la ruta, no parte
   // de la clave: sin este split, un filtro te expulsa a la vista Inicio.
   const key0 = (location.hash || '#inicio').slice(1).split('?')[0]

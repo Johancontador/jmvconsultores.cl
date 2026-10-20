@@ -441,7 +441,10 @@ function docHash(f) {
   if (f.rut) q.set('rut', f.rut)
   if (f.orden) { q.set('orden', f.orden); q.set('dir', f.dir || 'asc') }
   if (f.pagina > 1) q.set('p', String(f.pagina))
-  return `#documentos?${q.toString()}`
+  // `conContexto` (app.js) suma empresa y período: reescribir el hash con los
+  // filtros NO debe borrar el contexto de la sesión ni el de un enlace
+  // compartido.
+  return conContexto(`#documentos?${q.toString()}`)
 }
 
 /**
