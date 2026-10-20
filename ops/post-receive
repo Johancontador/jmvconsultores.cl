@@ -52,8 +52,12 @@ if ! git checkout -f master >>"$LOG" 2>&1; then
 fi
 
 if git diff --name-only "$OLD" "$NEW" | grep -qvE '^(docs/|.*\.md$)'; then
-  echo "código nuevo → rebuild desacoplado del commit $(git rev-parse --short "$NEW") (detalle en $BUILD)" >>"$LOG"
-  echo "$OLD" >"$ROLLBACK"
+  # El objetivo de rollback es el CÓDIGO que estaba corriendo, no el HEAD previo:
+  # tras un push de documentación OLD apunta a un commit que nunca llegó a la
+  # imagen, y volver a él no restauraría nada. Manda el registro si existe.
+  anterior=$(sed -n 's/^ *"commit": *"\([^"]*\)".*/\1/p' /home/johan/deploy-state.json 2>/dev/null | head -1)
+  echo "${anterior:-$OLD}" >"$ROLLBACK"
+  echo "código nuevo → rebuild desacoplado del commit $(git rev-parse --short "$NEW") (detalle en $BUILD; rollback a $(cut -c1-7 "$ROLLBACK"))" >>"$LOG"
   DEPLOY_COMMIT=$NEW DEPLOY_ORIGEN=push \
     setsid nohup bash "$GIT_WORK_TREE/ops/deploy.sh" >>"$BUILD" 2>&1 </dev/null &
 else
