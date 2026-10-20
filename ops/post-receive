@@ -18,6 +18,13 @@
 # El log es la fuente de verdad:
 #   /home/johan/deploy-hook.log    qué decidió el hook en cada push
 #   /home/johan/deploy-build.log   build, arranque y verificación de salud
+#   /home/johan/deploy-state.json  commit + imagen del último deploy sano
+#                                  (lo escribe ops/deploy.sh, lo lee
+#                                   ops/estado-deploy.sh)
+#
+# El hook le pasa a deploy.sh el commit que se despliega (DEPLOY_COMMIT): sin
+# eso, un push de solo documentación posterior dejaría a HEAD y al registro
+# contando historias distintas sin forma de distinguirlas.
 
 set -uo pipefail
 
@@ -45,11 +52,14 @@ if ! git checkout -f master >>"$LOG" 2>&1; then
 fi
 
 if git diff --name-only "$OLD" "$NEW" | grep -qvE '^(docs/|.*\.md$)'; then
-  echo "código nuevo → rebuild desacoplado (detalle en $BUILD)" >>"$LOG"
+  echo "código nuevo → rebuild desacoplado del commit $(git rev-parse --short "$NEW") (detalle en $BUILD)" >>"$LOG"
   echo "$OLD" >"$ROLLBACK"
-  setsid nohup bash "$GIT_WORK_TREE/ops/deploy.sh" >>"$BUILD" 2>&1 </dev/null &
+  DEPLOY_COMMIT=$NEW DEPLOY_ORIGEN=push \
+    setsid nohup bash "$GIT_WORK_TREE/ops/deploy.sh" >>"$BUILD" 2>&1 </dev/null &
 else
-  echo "solo documentación → NO se reconstruye el contenedor" >>"$LOG"
+  desplegado=$(sed -n 's/^ *"commit": *"\([^"]*\)".*/\1/p' /home/johan/deploy-state.json 2>/dev/null | head -1)
+  [ -n "$desplegado" ] || desplegado='desconocido'
+  echo "solo documentación → NO se reconstruye el contenedor (sigue corriendo ${desplegado:0:7})" >>"$LOG"
 fi
 
 exit 0
