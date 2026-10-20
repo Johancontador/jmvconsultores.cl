@@ -21,14 +21,34 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # Antes enumeraba 10 archivos a mano: cada suite nueva quedaba fuera de CI
+      # (las fases UX F1–F5 corrían en local y en producción, pero no aquí). El
+      # script `test` de package.json es la lista autoritativa; CI ejecuta eso.
+      - name: Tests (npm test)
+        run: npm test
+
+      # La sintaxis cubre TODO el JavaScript servido, incluido frontend/sistema
+      # (la SPA): un error ahí no lo veía ningún paso del CI.
       - name: Sintaxis (node --check en backend y frontend JS)
         run: |
-          find backend -name "*.js" -exec node --check {} \;
-          find frontend/js frontend/shared -name "*.js" -exec node --check {} \;
+          set -euo pipefail
+          find backend -name "*.js" -print0 | xargs -0 -n1 node --check
+          find frontend -name "*.js" -not -path "*/node_modules/*" -print0 | xargs -0 -n1 node --check
 
-      - name: Tests (node:test)
+      # Regla del proyecto: el nginx del VPS fija max-age=14400 a .js/.css, así
+      # que cada cambio de frontend debe re-sembrar los ?v=<sha1> del contenido.
+      # Este paso falla si alguien lo olvidó (el script es idempotente: sin
+      # cambios no toca ningún archivo).
+      - name: Anti-caché — referencias ?v= al día
         run: |
-          node --test test/calculos.test.js test/db-schema.test.js test/export-fecha.test.js test/informe-listar.test.js test/fase1.test.js test/fase2.test.js test/fase3.test.js test/fase4.test.js test/fase5.test.js test/saas1.test.js
+          npm run seed:v
+          if ! git diff --quiet; then
+            echo "❌ Hay referencias ?v= desactualizadas en HTML."
+            echo "   Corre 'npm run seed:v' y commitea el resultado antes de subir."
+            git diff --stat
+            exit 1
+          fi
+          echo "✅ Las referencias ?v= corresponden al contenido actual"
 
   seguridad:
     runs-on: ubuntu-latest
