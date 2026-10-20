@@ -118,6 +118,32 @@ host no tiene `node_modules` propios.
 > backup, detectado al revisar el log). `ops/deploy.sh` ahora comprueba la
 > escritura de `/app/data` y `/app/data/backups` al terminar cada despliegue.
 
+## Consultar qué código corre en producción
+
+```bash
+ssh johan@100.116.109.54 'bash /home/johan/apps/iva-mensual/ops/estado-deploy.sh'
+# exit 0 = todo cuadra · exit 1 = hay algo que revisar (sirve en un cron o un &&)
+```
+
+Responde la pregunta que antes solo se podía deducir a mano: **un push de solo
+`docs/` o `*.md` no reconstruye el contenedor**, así que `git rev-parse HEAD` puede
+quedar por delante del código que realmente está corriendo.
+
+| archivo | quién lo escribe | qué contiene |
+|---|---|---|
+| `/home/johan/deploy-state.json` | `ops/deploy.sh`, **solo si el contenedor quedó `healthy`** | commit desplegado, origen (`push`/`manual`), id de imagen, salud, verificación de escritura y fecha |
+| `/home/johan/deploy-hook.log` | `ops/post-receive` | qué decidió el hook en cada push (rebuild o solo documentación, y a qué commit volvería un rollback) |
+| `/home/johan/deploy-build.log` | `ops/deploy.sh` | build, arranque, salud y registro del estado |
+| `/home/johan/rollback-target.txt` | `ops/post-receive` | el **código que estaba corriendo** antes del rebuild (no el HEAD previo: tras un push de documentación coincidiría con un commit que nunca llegó a la imagen) |
+
+El verificador contrasta registro ↔ HEAD ↔ contenedor y distingue tres casos que
+antes se veían iguales: commits de **solo documentación** por delante (esperado,
+`ESTADO: OK`), commits con **código sin desplegar** (`ESTADO: REVISAR`, nombrando un
+archivo), y un contenedor que **no es la imagen registrada** (alguien recreó el
+servicio por fuera del hook). Los scripts se instalan en el VPS con
+`install -m 755 ops/post-receive /home/johan/repos/iva-mensual.git/hooks/post-receive`;
+`ops/deploy.sh` y `ops/estado-deploy.sh` se ejecutan desde el árbol de trabajo.
+
 ## Opción B — PaaS (Render / Railway / Fly.io)
 
 **Por qué:** cero administración, deploy desde GitHub automático.
