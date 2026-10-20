@@ -294,3 +294,34 @@ test('T8: móvil — rejillas con min() , piso de 12 px y tarjetas del Centro si
   assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.sys \.centro-card-head \{ flex-wrap: wrap; \}/, 'cabecera de tarjeta envuelve en teléfono')
   assert.match(sitio, /@media \(max-width: 420px\)[\s\S]*?\.pv-kpis \{ grid-template-columns: 1fr; \}/, 'KPIs del sitio en una columna en pantallas angostas')
 })
+
+// ---------- T9: F0 — tema claro por defecto y shell accesible --------------
+test('T9: tema claro por defecto (la preferencia guardada manda) y shell accesible', () => {
+  const temaSrc = fs.readFileSync(path.join(FRONT, 'sistema', 'tema.js'), 'utf8')
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
+
+  // Antes el defecto seguía al SO: en un equipo con tema oscuro la app
+  // arrancaba oscura (AUDITORIA-UX-UI §7, decisión D1: claro por defecto).
+  function cargarTema(guardado) {
+    const ctx = {
+      localStorage: { getItem: (k) => (k === 'jmv_tema' ? guardado : null), setItem() {} },
+      document: { documentElement: { setAttribute() {} } },
+      window: {},
+      CustomEvent: class {},
+    }
+    vm.createContext(ctx)
+    vm.runInContext(temaSrc, ctx)
+    return ctx.window.Tema
+  }
+  assert.strictEqual(cargarTema(null).resolver(), 'light', 'sin preferencia arranca claro')
+  assert.strictEqual(cargarTema('dark').resolver(), 'dark', 'la elección guardada manda')
+  assert.strictEqual(cargarTema('light').resolver(), 'light')
+
+  // Accesibilidad mínima del shell (la auditoría medía 0 skip-link y 0 aria-live).
+  assert.match(app, /class="skip-link" href="#sys-contenido"/, 'enlace de salto al contenido')
+  assert.match(app, /<main class="sys-main" id="sys-contenido" tabindex="-1">/, 'main es el destino enfocable del salto')
+  assert.match(app, /id="sys-anuncio" class="sr-only" role="status" aria-live="polite"/, 'región viva para anunciar la vista')
+  assert.match(app, /anuncio\.textContent = `Vista: /, 'cada cambio de ruta se anuncia')
+  assert.match(css, /\.sys \.skip-link:focus \{ top:/, 'el enlace de salto se ve al enfocar')
+})

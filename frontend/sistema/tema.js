@@ -1,17 +1,20 @@
 /**
- * SISTEMA CONTABLE JMV — tema (claro/oscuro/sistema).
+ * SISTEMA CONTABLE JMV — tema (claro/oscuro).
  *
- * Tres estados: null (sigue al sistema operativo), 'light', 'dark'.
- * Persistido en localStorage bajo 'jmv_tema'. Aplica data-theme en <html>;
- * todo el CSS usa variables, así que el cambio es instantáneo y global.
+ * Estados: 'light' (por defecto), 'dark', guardados en localStorage bajo
+ * 'jmv_tema'. Antes el defecto seguía al sistema operativo y en equipos con
+ * tema oscuro la app arrancaba oscura (AUDITORIA-UX-UI §7 / D1: el brief pide
+ * claro). Aplica data-theme en <html>; todo el CSS usa variables, así que el
+ * cambio es instantáneo y global. La preferencia guardada del usuario manda.
  */
 (function () {
   const KEY = 'jmv_tema'
+  const DEFECTO = 'light'
 
   function resolver() {
     const guardado = localStorage.getItem(KEY)
     if (guardado === 'light' || guardado === 'dark') return guardado
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+    return DEFECTO
   }
 
   function aplicar() {
@@ -36,11 +39,10 @@
     })
   }
 
-  // Aplicar antes del primer paint para evitar flash.
+  // Aplicar antes del primer paint para evitar flash. Ya no se escucha
+  // `prefers-color-scheme`: el defecto es explícito (claro) y solo cambia con
+  // la elección del usuario, no cuando el SO cambia de tema a media sesión.
   aplicar()
-  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-    if (!localStorage.getItem(KEY)) aplicar()
-  })
 
   window.Tema = { resolver, aplicar, botonHTML, conectar }
 })()

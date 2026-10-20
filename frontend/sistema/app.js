@@ -677,6 +677,7 @@ function renderShell() {
 
   $app().innerHTML = `
    <div class="sys">
+     <a class="skip-link" href="#sys-contenido">Saltar al contenido</a>
      <aside class="sys-side" id="sys-side">
        <div class="sys-side-top">
          <div class="sys-logo">
@@ -702,7 +703,8 @@ function renderShell() {
        </div>
      </aside>
      <div class="sys-menu-back" id="sys-menu-back" hidden></div>
-     <main class="sys-main">
+     <main class="sys-main" id="sys-contenido" tabindex="-1">
+       <div id="sys-anuncio" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
        <div class="sys-header">
          <button type="button" class="sys-menu-btn" id="sys-menu-btn" aria-expanded="false" aria-controls="sys-nav" aria-label="Abrir el menú de secciones">Menú</button>
          <nav class="sys-breadcrumb" id="sys-breadcrumb" aria-label="Ruta"></nav>
@@ -962,6 +964,11 @@ function renderRoute() {
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
+  // Anuncio para lectores de pantalla: la navegación cambia el contenido sin
+  // recargar la página, así que sin aria-live el cambio es invisible al foco
+  // virtual. Se anuncia la vista, no cada repintado interno.
+  const anuncio = document.getElementById('sys-anuncio')
+  if (anuncio) anuncio.textContent = `Vista: ${view.titulo || route.label}`
   // Contexto persistente: empresa y RUT bajo el título, sin repetirlo en cada
   // vista. El período tiene su propio selector a la derecha.
   const kicker = document.getElementById('sys-kicker')
