@@ -34,6 +34,25 @@ const TASA_IVA_UI = 0.19 // espejo de calcularMontos (TASA_IVA, D.L. 825)
  * en #dte-sync-out, renderRoute() lo borra de inmediato y el contador jamás
  * ve qué hizo la sincronización (bug hallado por /qa).
  */
+/**
+ * Alcance REAL de la sincronización DTE → contabilidad, antes de ejecutarla.
+ * Antes el botón corría a ciegas: no había forma de saber cuántos documentos
+ * iba a crear ni cuánto dinero había en juego (auditoría UX §2.4).
+ * `sinVinculo` usa el MISMO criterio que el KPI de la bandeja (aceptado y sin
+ * `asiento_id`); el backend resume todo lo demás de forma idempotente.
+ */
+async function dteAlcanceSincronizacion(eid) {
+  const r = await apiGet(`/api/dte/empresas/${eid}/dtes?estado=ACEPTADO&limit=500`)
+  const dtes = r.dtes || []
+  const sinVinculo = dtes.filter((d) => !d.asiento_id)
+  return {
+    aceptados: dtes.length,
+    pendientes: sinVinculo.length,
+    conDocumento: sinVinculo.filter((d) => d.documento_id).length,
+    monto: sinVinculo.reduce((a, d) => a + (d.monto_total || 0), 0),
+  }
+}
+
 function dteSyncTarjetaHTML(s) {
   const fila = (label, v) => `<div class="checkline ok">${esc(label)}: <b>&nbsp;${v}</b></div>`
   return `
@@ -200,6 +219,31 @@ VIEWS.dte = {
     if (syncBtn) syncBtn.addEventListener('click', async () => {
       syncBtn.disabled = true
       try {
+        // 1) Alcance real consultado ANTES de escribir: cuántos aceptados hay,
+        //    cuántos siguen sin vínculo contable y cuánto suman.
+        const alcance = await dteAlcanceSincronizacion(eid)
+        if (!alcance.aceptados) {
+          showToast('No hay DTEs aceptados por el SII: nada que sincronizar', 'info')
+          syncBtn.disabled = false
+          return
+        }
+        // 2) Confirmación con el alcance: la sincronización crea documentos,
+        //    propuestas y enlaces contables — no es una consulta.
+        const ok = await UIEstado.confirmar({
+          titulo: 'Sincronizar los DTE aceptados con la contabilidad',
+          texto: `Sincronizar ${alcance.aceptados}`,
+          idBoton: 'dte-sync-ok',
+          cuerpo: `
+            <p>Se recorren los DTE <b>aceptados por el SII</b> de ${esc(S.empresa.nombre)}: cada uno se lleva a la bandeja como documento, se clasifica con tus reglas y genera una propuesta que <b>tú</b> confirmas después.</p>
+            <dl>
+              ${UIEstado.dato('Aceptados por el SII', `<b class="mono">${alcance.aceptados}</b>`)}
+              ${UIEstado.dato('Sin vínculo contable', `<b class="mono">${alcance.pendientes}</b>`)}
+              ${UIEstado.dato('Ya con documento en la bandeja', `<span class="mono">${alcance.conDocumento}</span>`)}
+              ${UIEstado.dato('Monto de los no vinculados', `<b class="mono">${fmtM(alcance.monto)}</b>`)}
+            </dl>
+            <p class="hint mt">Idempotente: lo ya sincronizado no se duplica (misma clave de dedupe del RCV). Nada se contabiliza aquí: las propuestas esperan tu confirmación.</p>`,
+        })
+        if (!ok) { syncBtn.disabled = false; return }
         const r = await apiPost(`/api/dte/empresas/${eid}/sincronizar-contabilidad`, {})
         const s = r.sincronizacion || {}
         window._dteSyncResultado = { empresaId: eid, s }
@@ -237,6 +281,21 @@ VIEWS.dte = {
   },
 }
 
+/** Etiqueta legible de las acciones del emisor que se muestran en su historial. */
+function dteAccionLegible(accion) {
+  if (accion === 'dte.config.guardar') return 'Ficha del emisor'
+  if (accion === 'dte.caf.guardar') return 'CAF de folios'
+  return accion
+}
+
+/** Campos que tocó un cambio auditado (el backend guarda `despues.campos`). */
+function dteCamposAuditoria(json) {
+  try {
+    const d = JSON.parse(json || '{}')
+    return Array.isArray(d.campos) ? d.campos.filter((c) => c !== 'cert_pass').join(', ') : ''
+  } catch { return '' }
+}
+
 VIEWS['dte-config'] = {
   titulo: 'Configuración del Emisor',
   async render(cont) {
@@ -255,6 +314,19 @@ VIEWS['dte-config'] = {
     const puede = tiene('dte:configurar')
     const v = (x) => esc(x ?? '')
     const siNo = (b) => (b ? '<span class="chip contabilizado">Sí</span>' : '<span class="chip error">No</span>')
+
+    // Historial de cambios del emisor: la bitácora ya existe, pero hasta ahora
+    // no había forma de ver desde aquí quién cambió el certificado, los CAFs o
+    // el ambiente (auditoría UX §2.4). Se muestran los últimos movimientos
+    // filtrados de la propia empresa; no se pide un endpoint nuevo.
+    let historial = []
+    let historialError = ''
+    if (tiene('auditoria:ver')) {
+      try {
+        const regs = (await apiGet(`/api/contable/empresas/${eid}/auditoria?limit=200`)).registros || []
+        historial = regs.filter((r) => /^dte\.(config|caf)\./.test(String(r.accion))).slice(0, 5)
+      } catch (err) { historialError = err.message }
+    }
 
     cont.innerHTML = `
      <div class="frm-row mb"><span class="spacer"></span><a class="btn btn-secondary" href="#dte">Volver a la bandeja</a></div>
@@ -284,12 +356,16 @@ VIEWS['dte-config'] = {
            <label class="muted">Fecha resolución (FchResol)<input class="form-input" id="dc-fch" placeholder="YYYY-MM-DD" value="${v(c && c.fch_resol)}"></label>
            <label class="muted">Nº resolución (NroResol)<input class="form-input" id="dc-nro" value="${v(c && c.nro_resol)}"></label>
          </div>
-         <div class="grid-2 mt">
-           <label class="muted">Certificado .pfx (subir archivo)<input type="file" class="form-input" id="dc-pfx" accept=".pfx,.p12"></label>
-           <label class="muted">Contraseña del certificado<input type="password" class="form-input" id="dc-pass" placeholder="${c && c.tiene_certificado ? 'sin cambio — dejar vacío conserva la actual' : 'requerida con el certificado'}"></label>
-         </div>
          <button class="btn btn-primary mt" id="dc-guardar">Guardar ficha</button>
-         <p class="hint mt">El certificado y su contraseña se guardan CIFRADOS en el servidor (bóveda AES-256-GCM) y jamás vuelven al browser. Dejar la contraseña vacía la mantiene sin cambio.</p>
+         <div class="card mt" style="border-color:var(--danger)">
+           <h4 style="margin:0 0 var(--space-1);font-family:var(--font-display)">Certificado de firma — zona de alto riesgo</h4>
+           <p class="hint" style="margin-top:0">Con este certificado se firman TODOS los DTE de la empresa. Reemplazarlo por uno equivocado deja la emisión fallando hasta corregirlo, y se pide confirmación escribiendo el RUT de la empresa.</p>
+           <div class="grid-2">
+             <label class="muted">Certificado .pfx (subir archivo)<input type="file" class="form-input" id="dc-pfx" accept=".pfx,.p12"></label>
+             <label class="muted">Contraseña del certificado<input type="password" class="form-input" id="dc-pass" autocomplete="new-password" placeholder="${c && c.tiene_certificado ? 'sin cambio — dejar vacío conserva la actual' : 'requerida con el certificado'}"></label>
+           </div>
+           <p class="hint mt">Certificado y contraseña se guardan CIFRADOS (bóveda AES-256-GCM) y jamás vuelven al navegador. «Guardar ficha» aplica también lo que subas aquí.</p>
+         </div>
         </div>
 
         <div class="card">
@@ -316,6 +392,21 @@ VIEWS['dte-config'] = {
          </div>
         </div>
        </div>
+       ${tiene('auditoria:ver') ? `
+       <div class="card mt">
+         <h3>Últimos cambios del emisor</h3>
+          ${historialError ? `<p class="hint" style="color:var(--warning)">No se pudo leer la auditoría: ${esc(historialError)}</p>`
+            : historial.length ? `<div class="tbl-wrap"><table class="tbl">
+           <thead><tr><th>Fecha</th><th>Cambio</th><th>Campos</th><th>Usuario</th></tr></thead>
+           <tbody>${historial.map((r) => `<tr>
+             <td class="sub mono">${esc(String(r.creado_en || '').replace('T', ' ').slice(0, 16))}</td>
+             <td>${esc(dteAccionLegible(r.accion))}</td>
+             <td class="sub">${esc(dteCamposAuditoria(r.despues_json) || '—')}</td>
+             <td class="sub">${esc(r.username || '—')}</td>
+           </tr>`).join('')}</tbody>
+         </table></div><p class="hint mt">De la bitácora de la empresa (últimos 200 movimientos, filtrados a la configuración de emisión). Solo lectura.</p>`
+            : '<p class="hint">Sin cambios registrados de la ficha ni de los CAFs.</p>'}
+       </div>` : ''}
       ` : `
        <div class="card">
          <h3>Ficha del emisor (solo lectura)</h3>
@@ -372,6 +463,30 @@ VIEWS['dte-config'] = {
             : 'La ficha está vacía: completa al menos un dato del emisor', 'warning')
           return
         }
+        // Reemplazar el certificado es la acción más delicada del módulo: se
+        // confirma tecleando el RUT de la empresa (antes se guardaba con un
+        // clic, mezclado con los campos comunes — auditoría §2.4).
+        if (pfxB64 || pass) {
+          const archivo = document.getElementById('dc-pfx').files && document.getElementById('dc-pfx').files[0]
+          const rutEmpresa = formatRut(S.empresa.rut || '')
+          const ok = await UIEstado.confirmar({
+            titulo: 'Reemplazar el certificado de firma',
+            texto: 'Reemplazar certificado',
+            peligro: true,
+            requiere: rutEmpresa,
+            idBoton: 'dc-cert-ok',
+            cuerpo: `
+              <p>El certificado vigente de <b>${esc(S.empresa.nombre)}</b> se reemplaza por el que acabas de subir. Todos los DTE se firmarán con el nuevo.</p>
+              <dl>
+                ${UIEstado.dato('Archivo', esc(archivo ? archivo.name : 'sin archivo (solo contraseña)'))}
+                ${UIEstado.dato('Contraseña', pass ? 'se reemplaza' : 'sin cambio')}
+                ${UIEstado.dato('Ambiente', esc(body.ambiente))}
+                ${UIEstado.dato('Certificado actual', c && c.tiene_certificado ? 'cargado — se reemplaza' : 'no había')}
+              </dl>
+              <p class="hint mt">Si la contraseña no calza con el .pfx, la emisión fallará hasta corregirlo: no hay forma de probarlo sin emitir.</p>`,
+          })
+          if (!ok) return
+        }
         btn.disabled = true
         await apiPut(`/api/dte/empresas/${eid}/config`, body)
         showToast('Ficha del emisor guardada', 'success')
@@ -396,6 +511,36 @@ VIEWS['dte-config'] = {
       }
     })
   },
+}
+
+/* ---------------- borrador local del formulario de emisión ----------------
+ * El formulario es largo (receptor + ítems + referencia) y antes se perdía
+ * todo al cambiar de ruta o cerrar la pestaña (auditoría UX §2.4). El borrador
+ * vive SOLO en este navegador y por empresa; se borra al emitir o al pedirlo.
+ * No guarda secretos ni el certificado: solo lo que el usuario escribió.
+ */
+
+const DTE_BORRADOR_PREFIJO = 'jmv.dte.borrador'
+
+function dteBorradorKey(eid) {
+  return `${DTE_BORRADOR_PREFIJO}.${eid}`
+}
+
+function dteBorradorLeer(eid) {
+  try {
+    const raw = localStorage.getItem(dteBorradorKey(eid))
+    const b = raw ? JSON.parse(raw) : null
+    return b && typeof b === 'object' ? b : null
+  } catch { return null }
+}
+
+function dteBorradorGuardar(eid, datos) {
+  try { localStorage.setItem(dteBorradorKey(eid), JSON.stringify({ ...datos, guardado_en: new Date().toISOString() })) }
+  catch { /* cuota o modo privado del navegador: el borrador es una comodidad, el formulario sigue usable */ }
+}
+
+function dteBorradorBorrar(eid) {
+  try { localStorage.removeItem(dteBorradorKey(eid)) } catch { /* idem */ }
 }
 
 VIEWS['dte-emision'] = {
@@ -430,6 +575,7 @@ VIEWS['dte-emision'] = {
 
      <div class="card">
        <h3>Nuevo documento</h3>
+       <div id="de-borrador"></div>
        <div class="frm-row mb">
          <label class="muted">Tipo de documento
            <select class="form-input" id="de-tipo" style="width:auto">
@@ -536,6 +682,91 @@ VIEWS['dte-emision'] = {
     document.getElementById('de-tipo').addEventListener('change', recalc)
     recalc()
 
+    // ---- borrador: restaurar, guardar solo si el usuario escribe, descartar ----
+    const leerCampos = () => ({
+      tipo: tSel(),
+      receptor: {
+        rut: document.getElementById('de-rut').value,
+        razon_social: document.getElementById('de-rz').value,
+        giro: document.getElementById('de-giro').value,
+        direccion: document.getElementById('de-dir').value,
+        comuna: document.getElementById('de-com').value,
+      },
+      items: [...document.querySelectorAll('#de-items tr')].map((tr) => ({
+        nombre: tr.querySelector('.de-nombre').value,
+        cantidad: tr.querySelector('.de-cant').value,
+        precio: tr.querySelector('.de-precio').value,
+        exento: tr.querySelector('.de-exento').checked,
+      })),
+      referencia: esNotaSel() ? {
+        tipo: document.getElementById('de-ref-tpo').value,
+        folio: document.getElementById('de-ref-folio').value,
+        fecha: document.getElementById('de-ref-fch').value,
+        cod: document.getElementById('de-ref-cod').value,
+        razon: document.getElementById('de-ref-razon').value,
+      } : null,
+    })
+
+    const aplicarBorrador = (b) => {
+      if (b.tipo && ETIQUETA_TIPO_DTE[b.tipo]) {
+        document.getElementById('de-tipo').value = String(b.tipo)
+        syncRef()
+      }
+      const rec = b.receptor || {}
+      document.getElementById('de-rut').value = rec.rut || ''
+      document.getElementById('de-rz').value = rec.razon_social || ''
+      document.getElementById('de-giro').value = rec.giro || ''
+      document.getElementById('de-dir').value = rec.direccion || ''
+      document.getElementById('de-com').value = rec.comuna || ''
+      if (Array.isArray(b.items) && b.items.length && document.getElementById('de-items')) {
+        document.getElementById('de-items').innerHTML = b.items.map((it) => `
+          <tr>
+            <td><input class="form-input de-nombre" value="${esc(it.nombre || '')}"></td>
+            <td><input class="form-input de-cant num" type="number" min="0" step="any" value="${esc(it.cantidad ?? 1)}"></td>
+            <td><input class="form-input de-precio num" type="number" min="0" step="any" value="${esc(it.precio ?? 0)}"></td>
+            <td><input type="checkbox" class="de-exento"${it.exento ? ' checked' : ''}></td>
+            <td><button class="btn btn-ghost btn-sm de-del">Quitar</button></td>
+          </tr>`).join('')
+      }
+      const ref = b.referencia
+      if (ref && esNotaSel()) {
+        document.getElementById('de-ref-tpo').value = String(ref.tipo || '33')
+        document.getElementById('de-ref-folio').value = ref.folio || ''
+        document.getElementById('de-ref-fch').value = ref.fecha || ''
+        document.getElementById('de-ref-cod').value = String(ref.cod || '1')
+        document.getElementById('de-ref-razon').value = ref.razon || ''
+      }
+      recalc()
+    }
+
+    const borrador = dteBorradorLeer(eid)
+    const tieneContenido = borrador && (
+      (borrador.receptor && (borrador.receptor.rut || borrador.receptor.razon_social))
+      || (Array.isArray(borrador.items) && borrador.items.some((it) => String(it.nombre || '').trim()))
+    )
+    if (tieneContenido) {
+      aplicarBorrador(borrador)
+      const aviso = document.getElementById('de-borrador')
+      aviso.innerHTML = `
+        <div class="banner-lic" style="background:var(--accent-soft);color:var(--accent)">
+          Borrador restaurado${borrador.guardado_en ? ` (guardado el ${esc(String(borrador.guardado_en).slice(0, 16).replace('T', ' '))})` : ''}. Nada se ha enviado al SII.
+          <button class="btn btn-secondary btn-sm" id="de-borrador-x" style="margin-left:var(--space-3)">Descartar borrador</button>
+        </div>`
+      document.getElementById('de-borrador-x').addEventListener('click', () => {
+        dteBorradorBorrar(eid)
+        showToast('Borrador descartado', 'info')
+        renderRoute()
+      })
+    }
+
+    let guardadoTimer = null
+    const programarGuardado = () => {
+      clearTimeout(guardadoTimer)
+      guardadoTimer = setTimeout(() => dteBorradorGuardar(eid, leerCampos()), 400)
+    }
+    cont.addEventListener('input', programarGuardado)
+    cont.addEventListener('change', programarGuardado)
+
     // Clave de idempotencia por INTENTO de emisión: sobrevive doble click y
     // reintentos del navegador; se renueva al reabrir el formulario (nuevo DTE).
     const idempotencia = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -571,6 +802,25 @@ VIEWS['dte-emision'] = {
           ...(document.getElementById('de-ref-fch').value.trim() ? { FchRef: document.getElementById('de-ref-fch').value.trim() } : {}),
         }
       }
+      // Emitir consume un folio del CAF y firma contra el SII: se dice qué se
+      // manda (documento, receptor y totales) antes de gastar el folio.
+      const ok = await UIEstado.confirmar({
+        titulo: `Emitir ${ETIQUETA_TIPO_DTE[body.tipo] || 'DTE'} al SII`,
+        texto: 'Emitir DTE',
+        idBoton: 'de-emitir-ok',
+        cuerpo: `
+          <p>Se firmará el documento y se enviará al SII en ambiente <b>${esc(data.config && data.config.ambiente ? data.config.ambiente : 'sin ficha')}</b>. Consume un folio del CAF y no se puede deshacer.</p>
+          <dl>
+            ${UIEstado.dato('Tipo', `${body.tipo} — ${esc(ETIQUETA_TIPO_DTE[body.tipo] || '')}`)}
+            ${UIEstado.dato('Receptor', `${esc(receptor.razon_social || '—')}<br><span class="sub mono">${esc(receptor.rut || 'sin RUT')}</span>`)}
+            ${UIEstado.dato('Ítems', String(items.length))}
+            ${UIEstado.dato('Neto', `<span class="mono">${document.getElementById('de-neto').textContent}</span>`)}
+            ${UIEstado.dato('IVA', `<span class="mono">${document.getElementById('de-iva').textContent}</span>`)}
+            ${UIEstado.dato('Exento', `<span class="mono">${document.getElementById('de-exento').textContent}</span>`)}
+            ${UIEstado.dato('Total', `<b class="mono">${document.getElementById('de-total').textContent}</b>`)}
+          </dl>`,
+      })
+      if (!ok) return
       btn.disabled = true
       try {
         const r = await apiPost(`/api/dte/empresas/${eid}/emitir`, body)
@@ -579,6 +829,8 @@ VIEWS['dte-emision'] = {
         } else {
           showToast(`DTE ${r.dte.tipo_dte} folio ${r.dte.folio}: ${r.dte.estado}${r.dte.track_id ? ` — track ${r.dte.track_id}` : ''}`, 'success')
         }
+        // Emitido (o deduplicado) → el borrador ya no representa trabajo pendiente.
+        dteBorradorBorrar(eid)
         location.hash = '#dte'
       } catch (err) {
         btn.disabled = false
