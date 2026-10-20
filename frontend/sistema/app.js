@@ -648,6 +648,29 @@ function resolverRouteKey(key) {
 
 const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
 
+/* ---------- secciones plegables del menú ----------
+ * El menú mide 44 ítems en 9 secciones: desplegado ocupa 2576 px de alto en
+ * un teléfono (medido a 390 px), así que la mitad de las secciones quedaba a
+ * dos pantallas de scroll. Cada sección se pliega y el estado se recuerda por
+ * usuario; la sección de la ruta activa se abre siempre.
+ */
+let navCerradas = new Set()
+
+function claveNavCerradas() {
+  return `jmv.nav.cerradas.${S.user?.id || 'anon'}`
+}
+
+function leerNavCerradas() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(claveNavCerradas()) || '[]')
+    return new Set(Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [])
+  } catch { return new Set() }
+}
+
+function guardarNavCerradas() {
+  try { localStorage.setItem(claveNavCerradas(), JSON.stringify([...navCerradas])) } catch { /* modo privado */ }
+}
+
 function renderShell() {
   if (!S.empresa) {
     // BUGFIX QA (CYESISTEMA1): el no-admin SIN empresa aterriza en onboarding
@@ -671,9 +694,21 @@ function renderShell() {
     banner = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">${esc(lic.mensaje || `Licencia ${lic.estado}: puedes consultar, pero no registrar movimientos`)}</div>`
   }
 
-  const itemHTML = (i) => (!i.permiso || tiene(i.permiso)
-    ? `<a href="#${i.key}" data-route="${i.key}">${esc(i.label)}<span class="pill" data-pill="${i.pill || i.key}"></span></a>`
+  const itemHTML = (i, seccion) => (!i.permiso || tiene(i.permiso)
+    ? `<a href="#${i.key}" data-route="${i.key}" data-seccion="${esc(seccion)}">${esc(i.label)}<span class="pill" data-pill="${i.pill || i.key}"></span></a>`
     : '')
+
+  // La sección de la ruta activa nunca arranca plegada: el usuario que entra
+  // por URL (o por el buscador global) ve dónde está sin abrir nada.
+  // Primer uso (sin preferencia guardada): todo plegado salvo esa sección;
+  // si no, el menú sigue midiendo 2576 px y no se gana nada.
+  const guardadoNav = localStorage.getItem(claveNavCerradas())
+  navCerradas = guardadoNav === null ? new Set(MENU.map((m) => m.seccion)) : leerNavCerradas()
+  const rutaActiva = (location.hash || '#inicio').slice(1).split('?')[0]
+  const seccionActiva = MENU.find((m) => m.items.some((i) => i.key === rutaActiva))?.seccion
+  // Ojo: no se saca la sección activa de navCerradas. Si se saca, el set deja
+  // de reflejar la preferencia y al navegar la sección anterior queda abierta
+  // para siempre. La apertura por ruta se resuelve solo al pintar.
 
   $app().innerHTML = `
    <div class="sys">
@@ -693,9 +728,17 @@ function renderShell() {
          <div class="nav-search" style="margin-bottom:var(--space-2)">
            <input id="nav-buscar" type="search" placeholder="Buscar sección…" aria-label="Buscar sección del menú">
          </div>
-          ${menuVisible().map((sec) => `
-           <div class="nav-seccion">${esc(sec.seccion)}</div>
-            ${sec.items.map(itemHTML).join('')}`).join('')}
+          ${menuVisible().map((sec, idx) => {
+            const id = `nav-g-${idx}`
+            const abierta = !navCerradas.has(sec.seccion) || sec.seccion === seccionActiva
+            return `<div class="nav-grupo" data-seccion="${esc(sec.seccion)}" data-cerrado="${abierta ? '0' : '1'}">
+             <button type="button" class="nav-seccion" data-nav-seccion="${esc(sec.seccion)}" aria-expanded="${abierta}" aria-controls="${id}">
+               <span class="nav-seccion-t">${esc(sec.seccion)}</span><span class="nav-chev" aria-hidden="true"></span>
+             </button>
+             <div class="nav-items" id="${id}">${sec.items.map((i) => itemHTML(i, sec.seccion)).join('')}</div>
+           </div>`
+          }).join('')}
+          <div class="nav-vacio" id="nav-vacio" hidden>Sin secciones que coincidan</div>
        </nav>
        <div class="sys-side-foot">
          <div class="u-name">${esc(S.user.username)}${S.superAdmin ? ' · super admin' : ''}</div>
@@ -732,6 +775,7 @@ function renderShell() {
   if (window.Tema) window.Tema.conectar()
   observarTablas()
   conectarMenuMovil()
+  conectarSeccionesNav()
   conectarBuscadorMenu()
   conectarBusquedaGlobal()
   conectarNotificaciones()
@@ -900,35 +944,82 @@ function marcarTablasDesplazables(cont) {
   })
 }
 
+/* ---------- secciones plegables ----------
+ * El botón de sección es el único control del pliegue: no hay estado oculto
+ * fuera del DOM (aria-expanded + data-cerrado) para que el teclado y el
+ * lector de pantalla vean lo mismo que la vista.
+ */
+
+function plegarSeccion(grupo, abierta, { persistir = true } = {}) {
+  const btn = grupo.querySelector('.nav-seccion')
+  grupo.dataset.cerrado = abierta ? '0' : '1'
+  if (btn) btn.setAttribute('aria-expanded', String(abierta))
+  if (!persistir) return
+  const nombre = btn?.dataset.navSeccion || grupo.dataset.seccion
+  if (!nombre) return
+  if (abierta) navCerradas.delete(nombre)
+  else navCerradas.add(nombre)
+  guardarNavCerradas()
+}
+
+function conectarSeccionesNav() {
+  const nav = document.getElementById('sys-nav')
+  if (!nav) return
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-seccion')
+    const grupo = btn?.closest('.nav-grupo')
+    if (!btn || !grupo) return
+    plegarSeccion(grupo, grupo.dataset.cerrado === '1')
+  })
+}
+
+/* La ruta activa (URL, buscador global, «Recientes» del Centro) abre su
+ * sección aunque el usuario la hubiera plegado antes. Al cambiar de ruta se
+ * reaplica el estado base, para que la sección de la vista anterior vuelva a
+ * plegarse en vez de acumular secciones abiertas.
+ * Abrir por navegación NO se guarda: si no, recorrer las 9 secciones deja todo
+ * desplegado (2807 px) y el pliegue deja de servir. */
+function abrirSeccionDeRuta(key) {
+  document.querySelectorAll('#sys-nav .nav-grupo').forEach((grupo) => {
+    const propia = Boolean(grupo.querySelector(`a[data-route="${key}"]`))
+    const abierta = propia || !navCerradas.has(grupo.dataset.seccion)
+    if ((grupo.dataset.cerrado === '0') !== abierta) plegarSeccion(grupo, abierta, { persistir: false })
+  })
+}
+
 /* ---------- buscador del menú ---------- */
 
 function conectarBuscadorMenu() {
   const inp = document.getElementById('nav-buscar')
   if (!inp) return
-  inp.addEventListener('input', () => {
+  const aplicar = () => {
     const q = inp.value.trim().toLowerCase()
+    let total = 0
     // Se compara también con el RÓTULO DE SECCIÓN: buscar «tesor» debe
     // encontrar «Bancos, Libro Banco y Conciliación» (medido: antes la
     // búsqueda devolvía 0 resultados porque el nombre vive en el rótulo).
-    const seccionDe = (a) => {
-      let n = a.previousElementSibling
-      while (n && !n.classList.contains('nav-seccion')) n = n.previousElementSibling
-      return n ? n.textContent.toLowerCase() : ''
-    }
-    document.querySelectorAll('#sys-nav a').forEach((a) => {
-      a.classList.toggle('oculto', q && !a.textContent.toLowerCase().includes(q) && !seccionDe(a).includes(q))
+    // El rótulo se lee del grupo, no del hermano anterior del enlace: con el
+    // menú plegado el enlace ya no es hermano del rótulo.
+    document.querySelectorAll('#sys-nav .nav-grupo').forEach((grupo) => {
+      const seccion = (grupo.dataset.seccion || '').toLowerCase()
+      let visibles = 0
+      grupo.querySelectorAll('a').forEach((a) => {
+        const coincide = !q || a.textContent.toLowerCase().includes(q) || seccion.includes(q)
+        a.classList.toggle('oculto', Boolean(q) && !coincide)
+        if (coincide) visibles++
+      })
+      const oculto = Boolean(q) && visibles === 0
+      grupo.classList.toggle('oculta', oculto)
+      // Buscando, los grupos con coincidencias se muestran desplegados para
+      // que el resultado no quede escondido tras un pliegue previo.
+      grupo.classList.toggle('buscando', Boolean(q) && visibles > 0)
+      total += visibles
     })
-    document.querySelectorAll('#sys-nav .nav-seccion').forEach((sec) => {
-      const el = sec.nextElementSibling
-      let hayVisible = false
-      let nodo = el
-      while (nodo && !nodo.classList.contains('nav-seccion')) {
-        if (nodo.tagName === 'A' && !nodo.classList.contains('oculto')) { hayVisible = true; break }
-        nodo = nodo.nextElementSibling
-      }
-      sec.classList.toggle('oculta', q && !hayVisible)
-    })
-  })
+    const vacio = document.getElementById('nav-vacio')
+    if (vacio) vacio.hidden = !(q && total === 0)
+  }
+  inp.addEventListener('input', aplicar)
+  inp.addEventListener('search', aplicar)
 }
 
 /* ---------- router ---------- */
@@ -962,6 +1053,7 @@ function renderRoute() {
 
   const activos = new Set([route.key])
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
+  abrirSeccionDeRuta(route.key)
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
   // Anuncio para lectores de pantalla: la navegación cambia el contenido sin

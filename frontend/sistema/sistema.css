@@ -35,12 +35,32 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
 }
 
 .sys-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+/* Sección plegable: el rótulo es botón (aria-expanded), no un div decorativo.
+   Con 44 ítems el menú desplegado mide 2576 px en un teléfono; plegado baja
+   a ~9 filas y la sección activa se abre sola. */
+.nav-grupo { display: flex; flex-direction: column; }
+.nav-items { display: flex; flex-direction: column; gap: 1px; }
+.nav-grupo[data-cerrado='1']:not(.buscando) > .nav-items { display: none; }
+.nav-grupo.oculta { display: none; }
 .nav-seccion {
-  margin: var(--space-4) 0 var(--space-1); padding: 0 var(--space-3);
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  width: 100%; min-height: 32px; margin: var(--space-4) 0 var(--space-1); padding: 6px var(--space-3);
+  background: none; border: 0; border-radius: var(--radius-sm);
+  font: inherit; font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
   color: var(--fg-muted); font-weight: var(--fw-semibold);
+  text-align: left; cursor: pointer;
 }
-.sys-nav > .nav-seccion:first-child { margin-top: 0; }
+.nav-seccion:hover { background: var(--bg-hover); color: var(--fg-primary); }
+.nav-seccion:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nav-chev {
+  flex: none; width: 7px; height: 7px; margin-right: 4px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.nav-grupo[data-cerrado='1'] > .nav-seccion .nav-chev { transform: rotate(-45deg); }
+.nav-vacio { padding: var(--space-3); font-size: var(--fs-sm); color: var(--fg-muted); }
+.nav-grupo:first-child > .nav-seccion { margin-top: 0; }
 .sys-nav a {
   display: flex; align-items: center; gap: var(--space-2);
   padding: 7px var(--space-3); border-radius: var(--radius-md);
@@ -599,7 +619,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sys { grid-template-columns: 264px minmax(0, 1fr); }
 }
 .sys-side { background: var(--bg-canvas); padding: var(--space-6) var(--space-4); }
-.nav-seccion { letter-spacing: 0.14em; margin: var(--space-5) 0 var(--space-1); font-size: 10px; }
+.nav-seccion { letter-spacing: 0.12em; margin: var(--space-5) 0 var(--space-1); font-size: 11px; }
 .sys-nav a { border-left: none; padding: 6px var(--space-3); }
 .sys-nav a.active { font-weight: var(--fw-semibold); }
 
@@ -1052,8 +1072,8 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .nav-seccion {
   margin: var(--space-4) 0 2px;
-  font-size: 10px;
-  letter-spacing: 0.09em;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   color: var(--fg-muted);
 }
 
@@ -1076,8 +1096,8 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .sys-title-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sys-kicker {
-  font-size: 10px; font-weight: var(--fw-semibold);
-  letter-spacing: 0.09em; text-transform: uppercase;
+  font-size: 11px; font-weight: var(--fw-semibold);
+  letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--fg-muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -1178,12 +1198,11 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 /* ---------- Tablas: cabecera fija, densidad y pie diferenciado ---------- */
-.tbl-wrap { border-radius: var(--radius-md); }
-.tbl th {
-  position: sticky; top: 0; z-index: 1;
-  background: var(--bg-surface);
-  padding: 9px var(--space-4);
-  font-size: 10px; letter-spacing: 0.07em;
+.tbl-wrap { border-radius: var(--radius-md); }  .tbl th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--bg-surface);
+    padding: 9px var(--space-4);
+    font-size: 11px; letter-spacing: 0.06em;
   /* --fg-muted sobre superficie oscura queda ~3:1; --fg-secondary supera AA. */
   color: var(--fg-secondary);
   border-bottom: 1px solid var(--border-default);
@@ -1206,7 +1225,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-sm { height: 30px; padding: 0 var(--space-3); font-size: var(--fs-xs); }
 .form-input, select.form-input, textarea.form-input { border-radius: var(--radius-sm); }
-.frm-label { font-size: 10px; letter-spacing: 0.08em; }
+.frm-label { font-size: 11px; letter-spacing: 0.07em; }
 
 /* ---------- Estados compartidos ---------- */
 .ui-empty {
@@ -1338,7 +1357,7 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sys-side.abierto .sys-nav { display: flex; }
   .sys-side.abierto .nav-search { display: block; margin: var(--space-3) 0 var(--space-1); }
   .sys-side.abierto .nav-search input { height: 40px; font-size: 16px; }
-  .sys-side.abierto .nav-seccion { display: block; width: auto; margin: var(--space-4) 0 2px; }
+  .sys-side.abierto .nav-seccion { display: flex; width: 100%; min-height: 40px; margin: var(--space-4) 0 2px; }
   .sys-nav a {
     min-height: 44px; padding: 10px var(--space-3);
     white-space: normal; border-radius: var(--radius-md);
@@ -1401,6 +1420,18 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sys .doc-f select, .sys .doc-f input, .sys .tbl-toolbar input { height: 44px; }
   .sys .doc-menu-item { padding: 12px; min-height: 44px; }
   .sys .btn { min-height: 40px; }
+  /* Selects de filtro propios de una vista (Cobranza: .ccb-banco medía 30 px
+     de alto a 390 px, por debajo del objetivo táctil). */
+  .sys select.form-input { min-height: 40px; }
+  /* Enlaces de acción dentro de tablas (Bandeja DTE): el texto ocupa 15 px de
+     alto; el relleno vertical da un objetivo de ~32 px sin cambiar la fila. */
+  .sys .tbl-wrap a:not(.btn):not(.chip) { display: inline-flex; align-items: center; min-height: 32px; }
+  /* Piso de legibilidad también en tableta (641–960 px): rótulos de tabla,
+     etiquetas de formulario y metadatos seguían en 10–11 px (medido a 768 px). */
+  .sys table.tbl th,
+  .sys .frm-label,
+  .sys small,
+  .sys .sys-kicker { font-size: 12px; }
   /* Pestañas y segmentos también son objetivos de toque. */
   .sys .tabs button, .sys .crm-tab, .sys .crm-seg-btn { min-height: 40px; }
   /* Chips que son enlaces (Centro: recientes y accesos por grupo) medían 22 px. */

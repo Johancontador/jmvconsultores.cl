@@ -325,3 +325,41 @@ test('T9: tema claro por defecto (la preferencia guardada manda) y shell accesib
   assert.match(app, /anuncio\.textContent = `Vista: /, 'cada cambio de ruta se anuncia')
   assert.match(css, /\.sys \.skip-link:focus \{ top:/, 'el enlace de salto se ve al enfocar')
 })
+
+// ---------- T10: F1 — menú por secciones plegables -------------------------
+test('T10: navegación — secciones plegables con estado accesible y buscador por grupo', () => {
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
+
+  // 44 ítems desplegados = 2576 px de alto en un teléfono (medido a 390 px).
+  // El rótulo de sección pasa a botón con aria-expanded y controla su lista.
+  assert.match(app, /<div class="nav-grupo" data-seccion="[^>]*data-cerrado="\$\{abierta \? '0' : '1'\}"/, 'cada sección es un grupo con estado')
+  assert.match(app, /<button type="button" class="nav-seccion"[^>]*aria-expanded="\$\{abierta\}"[^>]*aria-controls="\$\{id\}"/, 'rótulo como botón accesible')
+  assert.match(app, /<div class="nav-items" id="\$\{id\}">/, 'lista de la sección con id apuntado por aria-controls')
+  assert.match(app, /data-seccion="\$\{esc\(seccion\)\}"[^>]*>\$\{esc\(i\.label\)\}/, 'cada enlace conoce su sección')
+
+  // Estado por usuario (no global): dos usuarios en el mismo navegador no se
+  // pisan el pliegue.
+  assert.match(app, /`jmv\.nav\.cerradas\.\$\{S\.user\?\.id \|\| 'anon'\}`/, 'pliegue persistido por usuario')
+  assert.match(app, /function conectarSeccionesNav/, 'conexión del toggle')
+  assert.match(app, /plegarSeccion\(grupo, grupo\.dataset\.cerrado === '1'\)/, 'clic alterna el pliegue')
+  assert.match(app, /function abrirSeccionDeRuta/, 'la ruta activa abre su sección')
+  assert.match(app, /abrirSeccionDeRuta\(route\.key\)/, 'renderRoute abre la sección activa')
+
+  // Buscador: el rótulo se lee del grupo. Antes se buscaba el hermano anterior
+  // del enlace; al envolver los ítems en un contenedor eso deja de existir.
+  const buscador = app.slice(app.indexOf('function conectarBuscadorMenu'), app.indexOf('/* ---------- router ----------'))
+  assert.ok(buscador.length > 0, 'se encuentra el buscador del menú')
+  assert.ok(!/previousElementSibling|nextElementSibling/.test(buscador), 'el filtro ya no depende de hermanos del DOM')
+  assert.match(app, /grupo\.querySelectorAll\('a'\)/, 'filtra dentro del grupo')
+  assert.match(css, /\.nav-grupo\.oculta \{ display: none; \}/, 'grupo sin coincidencias se oculta')
+
+  // Con el pliegue, buscar debe mostrar los resultados aunque la sección
+  // estuviera cerrada; si no, el buscador devuelve 0 visibles.
+  assert.match(css, /\.nav-grupo\[data-cerrado='1'\]:not\(\.buscando\) > \.nav-items \{ display: none; \}/, 'plegado oculta la lista salvo en búsqueda')
+  assert.match(css, /\.nav-grupo\[data-cerrado='1'\] > \.nav-seccion \.nav-chev \{ transform: rotate\(-45deg\); \}/, 'el chevron indica el estado')
+
+  // Piso de legibilidad en tableta: a 641–960 px los rótulos de tabla y las
+  // etiquetas seguían en 10–11 px (medido a 768 px).
+  assert.match(css, /@media \(max-width: 960px\)[\s\S]*?\.sys table\.tbl th,[\s\S]*?\.sys \.sys-kicker \{ font-size: 12px; \}/, 'piso de 12 px también en tableta')
+})
