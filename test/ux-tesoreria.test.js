@@ -242,6 +242,18 @@ test('T1b: sin bancos:conciliar no se consulta el catálogo ni se ofrece el mape
   assert.ok(!/data-fmt=/.test(htmlDe(env, 'teso-body')), 'no hay acciones de mapeo para quien no concilia')
 })
 
+test('T1c: un formato elegido en otra empresa no se aplica en esta cartera', async () => {
+  const env = crearSandbox({ permisos: ['tesoreria:ver', 'bancos:conciliar'] })
+  // Mismo NOMBRE de formato, pero recordado con otra empresa (cambio de cartera).
+  env.sandbox.window._tesoFormatoCartola = { empresa: 99, nombre: 'Banco de Chile — cartola' }
+  env.sandbox.window._tesoTab = 'conciliacion'
+  await env.sandbox.VIEWS.tesoreria.render(env.el())
+
+  const html = htmlDe(env, 'teso-body')
+  assert.match(html, /data-fmt="Banco de Chile — cartola"/, 'el formato sigue disponible para elegirlo')
+  assert.ok(!/chip clasificado">elegido/.test(html), 'no se marca como elegido un formato de otra empresa')
+})
+
 // ---------- T2: aplicaciones del documento ----------
 
 test('T2: «Aplicaciones» muestra con qué movimientos se cobró el documento', async () => {
@@ -387,9 +399,22 @@ test('T5b: forzar con pendientes lo dice y exige la misma confirmación', async 
 
 test('T5c: cancelar el cierre no ejecuta nada', async () => {
   const env = crearSandbox({ permisos: ['periodos:ver', 'periodos:cerrar'] })
-  const promesa = env.sandbox.confirmarCierre({ eid: 1, periodo: '202609', cierre: CIERRE, claves: [], forzar: false })
+  const promesa = env.sandbox.confirmarCierre({ eid: 1, periodo: '202609', cierre: CIERRE, claves: ['IVA'], forzar: false })
   await env.porId.get('ui-conf-no').disparar('click')
 
   assert.strictEqual(await promesa, null)
   assert.ok(!env.urls.some((u) => u.startsWith('POST')), 'cancelar no cierra el período')
+})
+
+// Regresión de la revisión del diff: `claves: []` NO significa «todos».
+// El backend cierra el período sin asientos de cierre y el diálogo los habría
+// mostrado todos: se bloquearía el período con un resumen falso.
+test('T5d: sin asientos seleccionados no se abre el diálogo ni se cierra el período', async () => {
+  const env = crearSandbox({ permisos: ['periodos:ver', 'periodos:cerrar'] })
+  const r = await env.sandbox.confirmarCierre({ eid: 1, periodo: '202609', cierre: CIERRE, claves: [], forzar: false })
+
+  assert.strictEqual(r, null)
+  assert.ok(!env.htmls.some((h) => h.includes('id="ci-conf-ok"')), 'no hay diálogo que confirme algo falso')
+  assert.ok(!env.urls.some((u) => u.startsWith('POST')), 'no se cerró el período')
+  assert.ok(env.toasts.some((t) => /No hay asientos de cierre seleccionados/.test(t.msg)), 'explica por qué no hizo nada')
 })

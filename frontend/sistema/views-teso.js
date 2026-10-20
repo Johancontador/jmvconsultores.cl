@@ -276,7 +276,13 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
     try { formatos = (await apiGet(`/api/contable/empresas/${eid}/tesoreria/cartola-formatos`)).formatos || [] }
     catch (err) { formatosError = err.message }
   }
-  const formatoElegido = () => formatos.find((f) => f.nombre === window._tesoFormatoCartola) || null
+  // El formato elegido se recuerda CON la empresa: al cambiar de empresa un
+  // nombre homónimo de otra cartera no debe aplicarse en silencio.
+  const formatoElegido = () => {
+    const sel = window._tesoFormatoCartola
+    if (!sel || String(sel.empresa) !== String(eid)) return null
+    return formatos.find((f) => f.nombre === sel.nombre) || null
+  }
 
   cont.innerHTML = `
     ${modoSimple ? `<div class="banner-lic" style="background:var(--accent-soft);color:var(--accent)">Modo simple activo: tus compras y ventas se netean automáticamente contra la cuenta regular — la conciliación bancaria es opcional. Cámbialo en <a href="#memoria" style="font-weight:600">Memoria de Contabilización</a>.</div>` : ''}
@@ -309,7 +315,7 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
        <div class="tbl-wrap"><table class="tbl">
          <thead><tr><th>Formato</th><th>Columnas</th><th>Guardado</th><th></th></tr></thead>
          <tbody>${formatos.map((f) => `<tr>
-           <td><b>${esc(f.nombre)}</b>${window._tesoFormatoCartola === f.nombre ? ' <span class="chip clasificado">elegido</span>' : ''}</td>
+           <td><b>${esc(f.nombre)}</b>${formatoElegido()?.nombre === f.nombre ? ' <span class="chip clasificado">elegido</span>' : ''}</td>
            <td class="sub mono">${esc(describirMapeoCartola(f.mapeo))}</td>
            <td class="sub">${esc(String(f.creado_en || '').slice(0, 10) || '—')}</td>
            <td><button class="btn btn-secondary btn-sm" data-fmt="${esc(f.nombre)}">Usar</button></td>
@@ -363,6 +369,9 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
   let archivoBase64 = null
   let archivoNombre = ''
   let ultimoResultado = null
+  // El formato que REALMENTE se aplicó a esta preview (no el meramente
+  // seleccionado): así la etiqueta no atribuye un mapeo manual a un formato.
+  let formatoAplicado = null
 
   if (inputArchivo) {
     inputArchivo.addEventListener('change', () => {
@@ -388,6 +397,7 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
   async function analizarArchivo() {
     if (!archivoBase64) { showToast('Elige primero el archivo', 'error'); return }
     const elegido = formatoElegido()
+    formatoAplicado = elegido ? elegido.nombre : null
     outArchivo.innerHTML = `<p class="hint mt">Analizando archivo${elegido ? ` con el formato «${esc(elegido.nombre)}»` : ''}…</p>`
     try {
       // Un formato guardado manda sobre la detección automática: es el mapeo
@@ -399,10 +409,9 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
   }
 
   function pintarPreview(r) {
-    const elegido = formatoElegido()
     const fuente = r.fuente_mapeo === 'encabezado' ? 'detectado por encabezado'
       : r.fuente_mapeo === 'estadistico' ? 'detectado por estructura de columnas'
-      : r.fuente_mapeo === 'manual' ? (elegido ? `formato guardado «${elegido.nombre}»` : 'mapeo manual tuyo') : 'no reconocido'
+      : r.fuente_mapeo === 'manual' ? (formatoAplicado ? `formato guardado «${formatoAplicado}»` : 'mapeo manual tuyo') : 'no reconocido'
     outArchivo.innerHTML = `
      <p class="hint mt">Archivo <b>${esc(archivoNombre)}</b> (${esc(r.tipo_archivo)}) — formato: <b>${esc(fuente)}</b>. Detectadas <b>${r.filas_detectadas}</b> de ${r.filas_totales} fila(s)${r.saltadas.length ? `, ${r.saltadas.length} saltada(s) con motivo` : ''}.</p>
       ${r.filas.length ? `
@@ -431,6 +440,7 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
       }
       try {
         const nombre = document.getElementById('cm-nombre').value.trim()
+        formatoAplicado = null // mapeo manual: no es un formato guardado
         const r2 = await pedirParseo({ mapeo: mapeoReal, guardar_formato: nombre || undefined })
         ultimoResultado = r2
         pintarPreview(r2)
@@ -456,7 +466,7 @@ async function renderConciliacion(cont, { eid, puedeConciliar }) {
   // Elegir un formato guardado: se aplica al próximo análisis (o al archivo ya
   // elegido, sin esperar otro clic). No escribe nada por sí solo.
   cont.querySelectorAll('[data-fmt]').forEach((b) => b.addEventListener('click', async () => {
-    window._tesoFormatoCartola = b.dataset.fmt
+    window._tesoFormatoCartola = { empresa: eid, nombre: b.dataset.fmt }
     const f = formatoElegido()
     if (!f) return
     showToast(`Formato «${f.nombre}» elegido`, 'info')

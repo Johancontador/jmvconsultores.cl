@@ -85,6 +85,8 @@
       if (requiere) {
         const input = document.getElementById(idInput)
         input.addEventListener('input', () => { boton.disabled = input.value.trim() !== requiere })
+        // Enter confirma si ya está habilitado; nunca salta la validación.
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !boton.disabled) fin(true) })
       }
     })
   }

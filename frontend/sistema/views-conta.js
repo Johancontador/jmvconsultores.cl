@@ -605,6 +605,13 @@ async function vistaCierre(body, periodo) {
 
   const ejecutar = async (forzar) => {
     const claves = [...body.querySelectorAll('.ci-clave:checked')].map((c) => c.value)
+    // Con propuestas en pantalla, cerrar con CERO seleccionados cerraría el
+    // período sin asientos de cierre (el backend acepta `claves: []`). No es
+    // un cierre válido para el usuario: se le dice y no se abre el diálogo.
+    if (!claves.length && (cierre.cierres_propuestos || []).length) {
+      showToast('Selecciona al menos un asiento de cierre antes de cerrar el período', 'error')
+      return
+    }
     try {
       const r = await confirmarCierre({ eid, periodo, cierre, claves, forzar })
       if (!r) return // cancelado: no se envió nada
@@ -632,7 +639,13 @@ async function vistaCierre(body, periodo) {
  * No escribe nada por sí solo: devuelve el resultado del POST o null.
  */
 async function confirmarCierre({ eid, periodo, cierre, claves = [], forzar = false }) {
-  const propuestos = (cierre.cierres_propuestos || []).filter((c) => !claves.length || claves.includes(c.clave))
+  // Solo lo SELECCIONADO: un `claves: []` NO significa "todos" (el backend lo
+  // interpreta como "ninguno" y cerraría el período sin asientos de cierre).
+  const propuestos = (cierre.cierres_propuestos || []).filter((c) => claves.includes(c.clave))
+  if (!propuestos.length && (cierre.cierres_propuestos || []).length) {
+    showToast('No hay asientos de cierre seleccionados: el período no se cierra sin asientos', 'error')
+    return null
+  }
   const totalDebe = propuestos.reduce((s, c) => s + (c.lineas || []).reduce((a, l) => a + (l.debe || 0), 0), 0)
   const ch = cierre.checklist || {}
   const ok = await UIEstado.confirmar({
