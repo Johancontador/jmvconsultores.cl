@@ -46,10 +46,11 @@ const archivoDe = (ruta) => {
   return path.join(FRONT, ...rel.split('/'), 'index.html')
 }
 /** Pantallas que NUNCA deben indexarse (internas o de acceso). */
+// Las 7 pantallas heredadas (index/dashboard/informe/proceso/libro/
+// exportacion-masiva/configuracion) ya NO existen como páginas: se retiraron y
+// su URL redirige a la SPA. Su contrato vive en test/legado-retirado.test.js.
 const PRIVADAS = [
-  'login.html', 'registro.html', 'index.html', 'dashboard.html',
-  'informe.html', 'libro.html', 'proceso.html', 'configuracion.html',
-  'exportacion-masiva.html', 'sistema/index.html',
+  'login.html', 'registro.html', 'sistema/index.html',
 ]
 
 const robots = () => leer('robots.txt')

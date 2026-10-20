@@ -551,7 +551,12 @@ VIEWS.comprobacion = {
   async render(cont) {
     cont.innerHTML = '<div class="empty">Cargando…</div>'
     const body = cont
-    const periodo = vistaPeriodoPlantilla(body, 'Balance de comprobación — cuadre ΣD = ΣH, mes y acumulado', 'comprobacion')
+    const periodo = vistaPeriodoPlantilla(
+      body,
+      'Balance de comprobación — cuadre ΣD = ΣH, mes y acumulado',
+      'comprobacion',
+      'Es un <b>control de cuadre</b>, no un estado financiero: muestra sumas y saldos por cuenta. Para la hoja de trabajo con Pérdida/Utilidad abre el <a href="#balance8">Balance de 8 columnas</a>.',
+    )
     let r
     try { r = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/balance/${periodo}`)).balance }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
@@ -771,10 +776,14 @@ VIEWS.reportes = {
         { hash: '#cierre', label: 'Cierre del período', desc: 'Checklist, asientos de cierre propuestos y cierre auditado' },
       ] },
       { titulo: 'Estados financieros', items: [
-        { hash: '#situacion', label: 'Estado de situación financiera', desc: 'A = P + Patrimonio, con saldos bancarios' },
+        // La jerarquía se dice en la tarjeta: la presentación OFICIAL es la
+        // situación financiera; las otras dos son la misma información abierta
+        // para análisis/presentación (auditoría §5: tres vistas que parecían
+        // tres verdades distintas).
+        { hash: '#situacion', label: 'Estado de situación financiera', desc: 'Presentación oficial · A = P + Patrimonio, con saldos bancarios' },
         { hash: '#resultados', label: 'Estado de resultados', desc: 'Por período y acumulado, con detalle por cuenta' },
-        { hash: '#clasificado', label: 'Balance clasificado', desc: 'Corriente / no corriente + capital de trabajo' },
-        { hash: '#niif', label: 'Estados NIIF por rubros', desc: 'Presentación por rubros con mapeo editable' },
+        { hash: '#clasificado', label: 'Balance clasificado', desc: 'Variante oficial: corriente / no corriente + capital de trabajo' },
+        { hash: '#niif', label: 'Estados NIIF por rubros', desc: 'Variante de presentación por rubros, con mapeo editable' },
       ] },
       { titulo: 'Tributarios', items: [
         { hash: '#analitica', label: 'IVA — dashboard tributario', desc: 'Débito, crédito, determinado anual y por mes' },
@@ -825,6 +834,7 @@ VIEWS.reportes = {
        <div style="min-width:220px"><span class="frm-label">Buscar reporte</span><input id="rep-buscar" type="search" class="form-input" placeholder="p. ej. balance, IVA, clientes…" style="width:100%"></div>
        <span class="hint" style="align-self:end">Los reportes abren con este período preseleccionado.</span>
      </div>
+     <p class="hint" id="rep-jerarquia">Este Centro es el catálogo único de reportes: cada uno se abre desde aquí con el período ya puesto. En los estados financieros, la <b>presentación oficial</b> es la Situación Financiera; el Balance clasificado y los estados NIIF son variantes de la misma información.</p>
      <div id="rep-filas">
      ${favs.length ? `
        <div class="card mb">
@@ -1381,13 +1391,14 @@ VIEWS.memoria = {
 
 /* ========================= REPORTES NUEVOS ========================= */
 
-function vistaPeriodoPlantilla(body, titulo, vistaKey) {
+function vistaPeriodoPlantilla(body, titulo, vistaKey, nota = '') {
   const periodo = window[`_${vistaKey}Periodo`] || window._repPeriodo || periodoGlobal()
   body.innerHTML = `
    <div class="frm-row mb">
      <div><span class="frm-label">Período</span>${inputPeriodoHTML('rep-periodo', periodo)}</div>
      <span class="sub">${esc(titulo)} — acumulado al último día del mes</span>
    </div>
+   ${nota ? `<p class="hint" id="rep-nota">${nota}</p>` : ''}
    <div id="rep-body"></div>`
   document.getElementById('rep-periodo').addEventListener('change', (e) => {
     window[`_${vistaKey}Periodo`] = leerPeriodo('rep-periodo') || periodo
@@ -1401,7 +1412,12 @@ VIEWS.balance8 = {
   async render(cont) {
     cont.innerHTML = '<div class="frm-row mb"><div class="tbl-wrap" style="flex:1;padding:var(--space-5)">Cargando…</div></div>'
     const body = cont
-    const periodo = vistaPeriodoPlantilla(body, 'Balance de 8 columnas', 'balance8')
+    const periodo = vistaPeriodoPlantilla(
+      body,
+      'Balance de 8 columnas',
+      'balance8',
+      'Es la <b>hoja de trabajo</b> (saldos, movimientos y resultado). Si solo necesitas verificar que el mayor cuadra, usa el <a href="#comprobacion">Balance de comprobación</a>.',
+    )
     let b
     try { b = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/balance8/${periodo}`)).balance8 }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
@@ -1458,7 +1474,12 @@ VIEWS.clasificado = {
   async render(cont) {
     cont.innerHTML = '<div class="empty">Cargando…</div>'
     const body = cont
-    const periodo = vistaPeriodoPlantilla(body, 'Balance clasificado', 'clasificado')
+    const periodo = vistaPeriodoPlantilla(
+      body,
+      'Balance clasificado',
+      'clasificado',
+      'Mismos saldos que la <a href="#situacion">Situación Financiera</a> (la presentación oficial), abiertos en corriente / no corriente con capital de trabajo.',
+    )
     let c
     try { c = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/clasificado/${periodo}`)).clasificado }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }
@@ -1507,7 +1528,12 @@ VIEWS.situacion = {
   async render(cont) {
     cont.innerHTML = '<div class="empty">Cargando…</div>'
     const body = cont
-    const periodo = vistaPeriodoPlantilla(body, 'Estado de situación financiera', 'situacion')
+    const periodo = vistaPeriodoPlantilla(
+      body,
+      'Estado de situación financiera',
+      'situacion',
+      'Es la <b>presentación oficial</b> (A = P + Patrimonio). El <a href="#clasificado">Balance clasificado</a> y los <a href="#niif">estados NIIF por rubros</a> son variantes de la misma información para análisis y presentación.',
+    )
     let s
     try { s = (await apiGet(`/api/contable/empresas/${S.empresa.id}/reportes/situacion/${periodo}`)).situacion }
     catch (err) { document.getElementById('rep-body').innerHTML = `<div class="empty">${esc(err.message)}</div>`; return }

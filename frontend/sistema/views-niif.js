@@ -17,6 +17,7 @@ VIEWS.niif = {
        <button data-t="resultados" class="${tab === 'resultados' ? 'active' : ''}">Resultados (por naturaleza)</button>
        <button data-t="mapeo" class="${tab === 'mapeo' ? 'active' : ''}">Mapeo de cuentas</button>
      </div>
+     <p class="hint" id="niif-nota">Presentación por rubros NIIF de los saldos del mayor. La presentación <b>oficial</b> del estado es la <a href="#situacion">Situación Financiera</a>; el <a href="#clasificado">Balance clasificado</a> es la variante corriente/no corriente.</p>
      <div id="niif-body"></div>`
 
     cont.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {

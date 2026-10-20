@@ -193,4 +193,4 @@ Ya incluido en el repo:
 - [ ] Túnel Cloudflare activo + dominio resolvendo
 - [ ] Login probado desde Internet + rate-limit verificado
 - [ ] Backup de `data/` programado (cron + rclone cifrado)
-- [ ] Landing pública revisada (`/`), panel protegido (`/dashboard.html`)
+- [ ] Landing pública revisada (`/`), panel protegido (`/sistema/`). Las pantallas heredadas (`/dashboard.html`, `/libro.html`, `/informe.html`, `/proceso.html`, `/exportacion-masiva.html`, `/configuracion.html`, `/index.html`) responden 302 hacia su vista de la SPA.

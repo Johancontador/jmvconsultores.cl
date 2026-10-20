@@ -35,12 +35,29 @@ test('T1: menú — keys únicos y toda vista con entrada de menú', () => {
   const menuKeys = [...app.matchAll(/key: '([\w-]+)'/g)].map((m) => m[1])
   assert.ok(menuKeys.length >= 30, `menú tiene ${menuKeys.length} ítems`)
   assert.strictEqual(menuKeys.length, new Set(menuKeys).size, 'sin ítems duplicados')
-  // cada VIEWS definida está en el menú
+  // Cada VIEWS es alcanzable: por el MENÚ o por el Centro de Reportes.
+  // Desde el rediseño de solapamientos (auditoría §5) el menú tiene UN catálogo
+  // de reportes y los 14 reportes se abren desde el Centro (#reportes); los
+  // anchors siguen vivos. Exigir entrada de menú a cada reporte era justamente
+  // el modelo duplicado que se eliminó.
   const vistas2 = [...all.matchAll(/VIEWS\.([\w\w]+)\s*=/g)].map((m) => m[1])
     .concat([...all.matchAll(/VIEWS\['([\w-]+)'\]\s*=/g)].map((m) => m[1]))
+  const contaSrc = fs.readFileSync(path.join(FRONT, 'sistema', 'views-conta.js'), 'utf8')
+  const inicioHub = contaSrc.indexOf('VIEWS.reportes = {')
+  assert.ok(inicioHub > 0, 'existe el Centro de Reportes')
+  const finHub = contaSrc.indexOf('\nVIEWS.', inicioHub + 10)
+  const bloqueHub = contaSrc.slice(inicioHub, finHub > 0 ? finHub : undefined)
+  const hubAnchors = new Set([...bloqueHub.matchAll(/hash: '#([\w-]+)'/g)].map((m) => m[1]))
+
   const menuSet = new Set(menuKeys)
-  const sinMenu = vistas2.filter((v) => !menuSet.has(v))
-  assert.strictEqual(sinMenu.length, 0, `vistas sin entrada de menú: ${sinMenu.join(',')}`)
+  assert.ok(menuSet.has('reportes'), 'el Centro tiene su entrada en el menú')
+  const sinMenu = vistas2.filter((v) => !menuSet.has(v) && !hubAnchors.has(v))
+  assert.strictEqual(sinMenu.length, 0, `vistas sin entrada de menú ni tarjeta en el Centro: ${sinMenu.join(',')}`)
+
+  // CONTROL: la tarjeta del Centro no puede apuntar a una vista inexistente.
+  const vistasSet = new Set(vistas2)
+  const tarjetasRotas = [...hubAnchors].filter((h) => !vistasSet.has(h))
+  assert.deepStrictEqual(tarjetasRotas, [], `tarjetas del Centro sin vista: ${tarjetasRotas.join(',')}`)
 })
 
 // ---------- T12: CRM exclusivo del despacho ----------

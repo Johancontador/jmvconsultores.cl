@@ -104,9 +104,9 @@ Roles iniciales (tabla `roles` + `usuario_empresa(rol)`), extensible sin cambios
 
 ## 6. Frontend (evolución del shell actual)
 
-- Mismo shell vanilla (dashboard.html + `shared/layout.js` NAV_ITEMS + router hash + módulos `window.*`). **Sin build, sin framework nuevo.**
+- Shell vanilla único: la SPA `/sistema/` (`frontend/sistema/app.js` con `MENU` + router hash + módulos `window.VIEWS`). **Sin build, sin framework nuevo.** Las pantallas heredadas (`dashboard.html`, `libro.html`, `informe.html`, `proceso.html`, `exportacion-masiva.html`, `configuracion.html`, `index.html`) se retiraron el 2026-10-20: sus URLs redirigen (302) a la vista equivalente de la SPA.
 - Nuevo grupo de nav **📚 Contabilidad** (desbloqueado por permisos desde `GET /api/auth/me`, que pasará a incluir `{ rol, empresas, permisos }`): Dashboard contable, Documentos (bandeja), Clasificación/Reglas, Asientos, Libro Diario, Libro Mayor, Reportes (Balance/ER), Períodos y Cierres, Configuración (plan de cuentas, centros de costo).
-- Reutilización directa de `shared/`: `datagrid.js`, `filters.js`, `table.js`, `rango.js` (períodos), `export.js` (Excel), `toast.js`, `format.js` (extendido con `fmtEntero` para montos INTEGER).
+- Reutilización de `shared/`: `api.js`, `format.js` (incluye `fmtEntero` para montos INTEGER), `toast.js`, `uitoolkit.js` (UITabla: orden, búsqueda, paginación y exportación CSV/XLS) y, para el sitio público, `sitio-nav.js`/`sitio-social.js`/`login-auth.js`. Los módulos de la capa heredada (`datagrid`, `filters`, `table`, `rango`, `export`, `layout`, `shell-router`, `shell-state`) se retiraron junto con sus pantallas.
 - El nav tributario/herramientas actual sigue existiendo; el portafolio muestra ambas caras (tributaria y contable) por empresa.
 - Nada se muestra como terminado si no existe (regla 42 del PROMPT MAESTRO): el nav se genera desde la lista de capacidades reales del usuario.
 

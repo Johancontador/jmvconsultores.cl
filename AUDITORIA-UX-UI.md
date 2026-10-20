@@ -204,6 +204,8 @@ Todo lo listado en §2 salvo la calculadora. La suite cubre: cálculos IVA/PPM/F
 | Alertas / campana de notificaciones | nav + header | Dos bandejas de pendientes con la misma fuente |
 | Tres capas de frontend | `frontend/js` (heredado), `frontend/shared` (parcial), `frontend/sistema` (SPA) | 7 páginas HTML heredadas siguen publicadas y sin enlaces desde la SPA (`/index.html`, `/informe.html`, `/proceso.html`, `/libro.html`, `/dashboard.html`, `/exportacion-masiva.html`, `/configuracion.html`), lo que duplica funciones ya migradas |
 
+> **Estado al 2026-10-20:** los dos solapamientos estructurales de esta tabla están cerrados — el menú quedó con **un solo catálogo de reportes** (Centro + Cierre) y los 14 reportes se abren desde el Centro, con la jerarquía oficial/variante dicha en pantalla; y la **capa de frontend heredado se retiró** (7 pantallas + 10 módulos `js/*` + 8 `shared/*`), con sus URLs redirigiendo 302 a la SPA y las 3 herramientas que no eran duplicado (informe por rango, F29 masivo, ZIP) portadas a `#informe-rango`, `#proceso-masivo` y `#exportacion-masiva`. Detalle y evidencia en `CURRENT_STATE.md` §9.
+
 **Inconsistencias de lenguaje**: “Contabilización” vs “Automatización” vs “Propuestas” para el mismo flujo; “memoria” para reglas; “Centro de Aplicaciones” vs “Centro de Reportes”; estados `REVISION` en dominio y `REVISIÓN` en pantalla (documentado en el código).
 
 ---

@@ -630,15 +630,26 @@ const MENU = [
     ]
   },
   {
+    // UN SOLO MODELO (auditoría §5): el Centro de Reportes es el catálogo y
+    // la puerta de entrada a los 14 reportes; el menú NO repite cada uno. Los
+    // anchors (#situacion, #balance8, #niif…) siguen vivos y el Centro los
+    // abre preseleccionando el período. El cierre no es un reporte: es un
+    // proceso, por eso conserva su entrada propia.
     seccion: 'Informes y control', items: [
       { key: 'reportes', label: 'Centro de Reportes', permiso: 'reportes:ver' },
-      { key: 'comprobacion', label: 'Balance de Comprobación', permiso: 'reportes:ver' },
-      { key: 'balance8', label: 'Balance de 8 Columnas', permiso: 'reportes:ver' },
-      { key: 'clasificado', label: 'Balance Clasificado', permiso: 'reportes:ver' },
-      { key: 'situacion', label: 'Situación Financiera', permiso: 'reportes:ver' },
-      { key: 'resultados', label: 'Estado de Resultados', permiso: 'reportes:ver' },
-      { key: 'niif', label: 'NIIF — Estados por Rubros', permiso: 'reportes:ver' },
       { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
+    ]
+  },
+  {
+    // Herramientas CROSS-PORTAFOLIO del despacho (portadas desde las pantallas
+    // heredadas informe/proceso/exportacion-masiva). Mismo público que el CRM:
+    // `crm:ver` solo lo tienen contador y super_admin, así que el dueño de una
+    // empresa no ve herramientas que operan sobre la cartera completa.
+    seccion: 'Lote del despacho', items: [
+      { key: 'portafolio', label: 'Clientes del portafolio', permiso: 'crm:ver' },
+      { key: 'informe-rango', label: 'Informe por rango', permiso: 'crm:ver' },
+      { key: 'proceso-masivo', label: 'Proceso masivo (F29 del mes)', permiso: 'crm:ver' },
+      { key: 'exportacion-masiva', label: 'Reporte masivo (ZIP)', permiso: 'crm:ver' },
     ]
   },
   {

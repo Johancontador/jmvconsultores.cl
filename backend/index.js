@@ -58,6 +58,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/landing.html'))
 })
 
+// PANTALLAS HEREDADAS RETIRADAS: la capa vieja de UI se retiró (sus funciones
+// viven en la SPA). La tabla y el motivo del 302 están en el módulo, y va ANTES
+// de los estáticos para que un archivo viejo no tape el redirect.
+require('./core/pantallas-heredadas').montarRedirects(app)
+
 app.use(express.static(path.join(__dirname, '../frontend')))
 
 app.use('/api/clientes', requireAuth, require('./routes/clientes'))

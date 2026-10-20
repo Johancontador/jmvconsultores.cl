@@ -26,8 +26,8 @@ const TIPOS_NOTA_CREDITO = new Set([60, 61])
 // El SII no entrega siempre las mismas columnas de "monto" — varía por
 // cliente/rubro (IVA No Recuperable, Activo Fijo, Uso Común, Tabacos, Otro
 // Impuesto, etc.). Estas ya se muestran aparte con su propio campo
-// normalizado; el resto se agrega como columnas dinámicas — igual que hace
-// el Libro Compra/Venta interactivo (frontend/js/reportes.js).
+// normalizado; el resto se agrega como columnas dinámicas, con el mismo
+// criterio que el Libro Compra/Venta de la SPA (frontend/sistema/views-fiscal.js).
 const _MONTOS_YA_CUBIERTOS = /exento|^monto\s*neto$|^monto\s*total$|^monto\s*iva$|^monto\s*iva\s*recuperable$/i
 
 function columnasMontosGestion(docs) {
