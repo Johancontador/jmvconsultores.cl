@@ -254,6 +254,45 @@ test('T6: corrida sin usuario firma el admin del sistema (no aborta al cerrar)',
   assert.strictEqual(ultima.usuario_id, sistema, 'atribuida al admin del sistema, no a null')
 })
 
+// ===== T8: ficha SII automática al conectar =====
+
+/**
+ * El usuario pidió que CADA empresa tenga su ficha al establecer conexión con
+ * el SII. El hook vive al final de la corrida (después del RCV):
+ *  - si la ficha está vigente, no se gasta otra sesión en el SII («vigente»);
+ *  - si el RCV falló, no se intenta la ficha (con la clave rechazada el login
+ *    fallaría igual y se duplicaría el intento fallido contra el SII).
+ * La descarga real (ficha ausente/vencida) se prueba en
+ * test/salud-tributaria.test.js T12, sin red.
+ */
+test('T8: la corrida deja la ficha SII resuelta (vigente) y no la busca con RCV fallido', async () => {
+  const boveda = require('../backend/core/boveda')
+  const rut = '77999000-2'
+  const E8 = Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES (?, 'Sync Ficha SpA', 'k8', 1)`).run(rut).lastInsertRowid)
+  db.prepare(`UPDATE empresas SET clave_sii = ? WHERE id = ?`).run(boveda.cifrar('k8'), E8)
+
+  const archivo = path.join(process.cwd(), 'data', 'sii-fichas', `${rut}.json`)
+  fs.mkdirSync(path.dirname(archivo), { recursive: true })
+  fs.writeFileSync(archivo, JSON.stringify({ contribuyente: { rut } }))
+
+  try {
+    mockearRCV()
+    const r = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [E8] })
+    assert.strictEqual(r.ok, 1, 'el RCV se sincronizó')
+    assert.strictEqual(r.fichas[E8], 'vigente', 'ficha recién guardada: no se vuelve a pedir al SII')
+
+    // RCV con error → el hook de ficha NO se ejecuta (no hay entrada).
+    const E9 = Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES ('77999000-3', 'Sync Ficha Dos SpA', 'k9', 1)`).run().lastInsertRowid)
+    db.prepare(`UPDATE empresas SET clave_sii = ? WHERE id = ?`).run(boveda.cifrar('k9'), E9)
+    mockearRCV({ error: true })
+    const r2 = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [E9] })
+    assert.strictEqual(r2.con_errores, 1)
+    assert.ok(!r2.fichas || r2.fichas[E9] === undefined, 'con el RCV fallido no se intenta la ficha')
+  } finally {
+    fs.rmSync(archivo, { force: true })
+  }
+})
+
 // ===== T7: credencial rechazada = 1 login, no 2 =====
 
 /**
