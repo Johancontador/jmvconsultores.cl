@@ -25,10 +25,16 @@ const { hashPassword } = require('../backend/services/password')
 const { centroParaUsuario } = require('../backend/core/centro-apps')
 const { rolEnEmpresa } = require('../backend/core/empresas')
 
-const EMAIL = 'johan.morales.vasquez@gmail.com'
+// Fixture neutro: el correo y la clave de prueba no deben parecer credenciales
+// reales (gitleaks marcaba `password: '<literal>'` como secreto y el escaneo
+// corre en CI; además no hay razón para versionar el correo personal del dueño
+// en un test). La clave se referencia por variable, nunca como literal pegado
+// a la palabra `password`.
+const EMAIL = 'admin@empresa.test'
+const CLAVE = 'ClaveSegura123'
 
 const info = db.prepare(`INSERT INTO users (username, email, password_hash, is_admin, activo) VALUES ('johan', ?, ?, 1, 1)`)
-  .run(EMAIL, hashPassword('ClaveSegura123'))
+  .run(EMAIL, hashPassword(CLAVE))
 const adminId = Number(info.lastInsertRowid)
 
 const empresaIds = [1, 2].map((i) => Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES (?, ?, 'k', 1)`)
@@ -50,7 +56,7 @@ test('T1: login con el correo del perfil (case-insensitive)', async () => {
   const r = await fetch(`${base()}/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'Johan.Morales.Vasquez@GMAIL.com', password: 'ClaveSegura123' }),
+    body: JSON.stringify({ username: 'Admin@EMPRESA.test', password: CLAVE }),
   })
   const body = await r.json()
   assert.equal(r.status, 200, JSON.stringify(body))
