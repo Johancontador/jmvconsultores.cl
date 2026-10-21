@@ -373,6 +373,8 @@ require('./core/migraciones').migracionesDte(db)
 require('./core/migraciones').migracionesDte2(db)
 // ACCESO ADMIN: users.debe_cambiar_clave para el flujo admin→usuario temporal.
 require('./core/migraciones').migracionesUsuarioTemporal(db)
+require('./core/migraciones').migracionesPerfilYSalud(db)
+require('./core/migraciones').migracionesDeclaracionesSii(db)
 // CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
 require('./core/migraciones').migracionesCrm(db)
 // CRM comercial (rediseño 2026-10-15): fichas, contactos, prospectos,

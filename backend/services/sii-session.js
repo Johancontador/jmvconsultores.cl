@@ -167,9 +167,24 @@ async function loginSII(rut, clave) {
   const urlFinal = res.url || ''
   const volvioAlLogin = /IngresoRutClave/i.test(urlFinal) || /location\.replace\([^)]*IngresoRutClave/i.test(texto)
   const mensajeRechazo = /clave incorrecta|clave tributaria ingresada no es correcta|no existe/i.test(texto)
+  // Tope de sesiones simultáneas del SII (código 01.01.2xx.500.720.27): NO es
+  // una clave mala. Se confunde con ella porque también responde 200 sin
+  // cookies de sesión. Sin este mensaje, el usuario cambiaba la clave en vano
+  // y cada reintento automático consumía otra ventana de espera.
+  const topeSesiones = /m[aá]ximo de sesiones autenticadas/i.test(texto)
   const cookiesSesion = [...jar.cookies.keys()].filter((k) =>
     /^(TOKEN|CSESSIONID|RUT_NS|DV_NS)$|^(NETSCAPE_LIVEWIRE|X-SII-STATE)[.-]/.test(k)
   )
+
+  if (topeSesiones) {
+    console.log('[SII] login rechazado: tope de sesiones autenticadas simultáneas')
+    const err = new Error(
+      'El SII rechazó el ingreso por tope de sesiones abiertas (no es la clave). ' +
+      'Cierra sesión en el sitio del SII —incluidas las sesiones que quedaron abiertas desde otros equipos— y reintenta en unos minutos.'
+    )
+    err.codigo = 'SII_TOPE_SESIONES'
+    throw err
+  }
 
   if (volvioAlLogin || mensajeRechazo || cookiesSesion.length === 0) {
     console.log(
@@ -246,11 +261,32 @@ async function obtenerTokenRCV(jar, rut) {
   )
 }
 
+/**
+ * Cierra la sesión EN EL SII (no solo en memoria).
+ *
+ * El SII limita las sesiones simultáneas por RUT (código 01.01.2xx.500.720.27)
+ * y NO las libera al cerrar el navegador: solo al presionar «Cerrar Sesión» o
+ * cuando expiran por inactividad. No hacerlo dejaba una sesión colgada por
+ * cada sincronización y, tras varias corridas, el cliente quedaba bloqueado
+ * sin poder ingresar ni con la clave correcta.
+ */
+async function cerrarJar(jar) {
+  if (!jar) return
+  try {
+    await fetchConCookies('https://zeusr.sii.cl/cgi_AUT2000/autTermino.cgi', { method: 'GET' }, jar)
+  } catch { /* el cierre nunca debe romper la operación en curso */ }
+}
+
 async function obtenerSesion(rut, clave) {
   const key = parseRut(rut).completo
   const cached = sesiones.get(key)
   if (cached && Date.now() - cached.ts < TTL_MS) {
     return cached
+  }
+  // Sesión vencida: se cierra en el SII antes de pedir otra, para no acumular.
+  if (cached) {
+    sesiones.delete(key)
+    await cerrarJar(cached.jar)
   }
 
   const jar = await loginSII(rut, clave)
@@ -260,8 +296,18 @@ async function obtenerSesion(rut, clave) {
   return sesion
 }
 
-function invalidarSesion(rut) {
-  sesiones.delete(parseRut(rut).completo)
+async function invalidarSesion(rut) {
+  const key = parseRut(rut).completo
+  const s = sesiones.get(key)
+  sesiones.delete(key)
+  await cerrarJar(s && s.jar)
+}
+
+/** Cierra todas las sesiones SII abiertas por este proceso. */
+async function cerrarTodas() {
+  const abiertas = [...sesiones.values()]
+  sesiones.clear()
+  await Promise.all(abiertas.map((s) => cerrarJar(s.jar)))
 }
 
 module.exports = {
@@ -270,6 +316,8 @@ module.exports = {
   loginSII,
   obtenerSesion,
   invalidarSesion,
+  cerrarTodas,
+  cerrarJar,
   fetchConCookies,
   siiFacadeHeaders,
   SII_RCV_UI,

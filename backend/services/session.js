@@ -17,7 +17,7 @@ function obtenerSesion(sessionId) {
 
   const row = db
     .prepare(
-      `SELECT s.expires_at, u.id as user_id, u.username, u.is_admin
+      `SELECT s.expires_at, u.id as user_id, u.username, u.email, u.is_admin
        FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.id = ? AND u.activo = 1`
     )
@@ -30,7 +30,9 @@ function obtenerSesion(sessionId) {
     return null
   }
 
-  return { id: row.user_id, username: row.username, is_admin: !!row.is_admin }
+  // `email` es la identidad de contacto del perfil (users.email). Puede ser
+  // null en cuentas antiguas: el login por username sigue funcionando igual.
+  return { id: row.user_id, username: row.username, email: row.email || null, is_admin: !!row.is_admin }
 }
 
 function destruirSesion(sessionId) {

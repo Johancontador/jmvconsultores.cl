@@ -69,7 +69,15 @@ router.post('/login', rlDb.middleware('login', {
   // (validarFormulario normaliza), pero el login comparaba exacto: escribir
   // CYESISTEMA daba 401 aunque la clave fuera correcta. La comparación es
   // case-insensitive por diseño (SQLite en ASCII — đủ para el alfabeto admitido).
-  const user = db.prepare(`SELECT * FROM users WHERE username = ? COLLATE NOCASE AND activo = 1`).get(String(username).trim())
+  // El identificador puede ser el username O el correo del perfil
+  // (users.email). Ambos se comparan sin distinguir mayúsculas: el correo es
+  // la identidad natural del cliente y escribir Johan@… no debe fallar.
+  const identificador = String(username).trim()
+  const user = db.prepare(`
+    SELECT * FROM users
+    WHERE activo = 1
+      AND (username = ? COLLATE NOCASE OR (email IS NOT NULL AND email = ? COLLATE NOCASE))
+  `).get(identificador, identificador)
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ ok: false, error: 'Usuario o contraseña incorrectos' })
   }
@@ -88,7 +96,7 @@ router.post('/login', rlDb.middleware('login', {
     secure: isSecure, // Solo en producción (HTTPS)
     maxAge: SESSION_TTL_MS,
   })
-  res.json({ ok: true, user: { username: user.username, is_admin: !!user.is_admin, debe_cambiar_clave: !!user.debe_cambiar_clave } })
+  res.json({ ok: true, user: { username: user.username, email: user.email || null, is_admin: !!user.is_admin, debe_cambiar_clave: !!user.debe_cambiar_clave } })
 
   // AUTO-SYNC (petición arquitecto 2026-10-11): cada login exitoso dispara la
   // sincronización RCV del período en curso para SU empresa fire-and-forget —
@@ -99,9 +107,11 @@ router.post('/login', rlDb.middleware('login', {
   setImmediate(() => {
     Promise.resolve().then(async () => {
       const sync = require('../core/sync-diaria')
-      const asignaciones = db.prepare(`
-        SELECT ue.empresa_id FROM usuario_empresa ue WHERE ue.usuario_id = ? AND ue.activo = 1
-      `).all(user.id)
+      // asignacionesDeUsuario respeta el rol GLOBAL del super admin: leer la
+      // tabla directo dejaba al admin sin auto-sync cuando no tiene filas
+      // redundantes (que es el estado correcto desde 2026-10-21).
+      const { asignacionesDeUsuario } = require('../core/empresas')
+      const { asignaciones } = asignacionesDeUsuario(db, user.id)
       if (asignaciones.length) {
         await sync.ejecutarSyncDiaria(db, {
           usuarioId: user.id,
@@ -353,7 +363,7 @@ router.get('/centro', requireAuth, (req, res) => {
 
 router.get('/usuarios', requireAuth, requireAdmin, (req, res) => {
   const usuarios = db
-    .prepare(`SELECT id, username, is_admin, activo, creado_en FROM users ORDER BY creado_en`)
+    .prepare(`SELECT id, username, email, is_admin, activo, creado_en FROM users ORDER BY creado_en`)
     .all()
   res.json({ ok: true, usuarios })
 })

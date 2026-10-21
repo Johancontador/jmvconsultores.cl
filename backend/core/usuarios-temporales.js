@@ -88,10 +88,13 @@ function crearUsuarioTemporal(db, { adminId, username, ip = null }) {
 
   const claveProvisional = generarClaveProvisional()
   const tx = db.transaction(() => {
+    // Si el identificador es un correo, también se guarda como email del
+    // perfil: /me lo devuelve y el índice único evita duplicados por
+    // mayúsculas. Un username simple deja email NULL.
     const info = db.prepare(`
-      INSERT INTO users (username, password_hash, is_admin, activo, debe_cambiar_clave)
-      VALUES (?, ?, 0, 1, 1)
-    `).run(user, hashPassword(claveProvisional))
+      INSERT INTO users (username, email, password_hash, is_admin, activo, debe_cambiar_clave)
+      VALUES (?, ?, ?, 0, 1, 1)
+    `).run(user, user.includes('@') ? user : null, hashPassword(claveProvisional))
     const usuarioId = info.lastInsertRowid
     registrarAccion(db, {
       empresaId: null, usuarioId: adminId,

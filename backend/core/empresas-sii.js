@@ -21,6 +21,18 @@ const { obtenerSesion, loginSII, fetchConCookies, parseRut } = require('../servi
 const empresas = require('./empresas')
 const onboarding = require('./onboarding')
 
+// Códigos de atributo del SII → opción EXACTA del formulario de onboarding.
+// El SII usa 14D1 (no 14GG) para Pro Pyme General: con el mapeo anterior el
+// régimen quedaba null en TODAS las fichas reales (verificado 2026-10-21 en
+// data/sii-fichas: 14D1 = «REGIMEN PRO PYME GENERAL (14D)»).
+// 14GG se conserva por compatibilidad con capturas antiguas.
+const REGIMEN_POR_ATRIBUTO = {
+  '14TT': 'Pro Pyme Transparente (14 D)',
+  '14D1': 'Pro Pyme General (14 D)',
+  '14GG': 'Pro Pyme General (14 D)',
+  '14A': 'Régimen General (14 A)',
+}
+
 const SII_HOME = process.env.SII_HOME_URL || 'https://misiir.sii.cl/cgi_misii/siihome.cgi'
 
 /** Extrae el objeto JSON embebido tras `marcador` con llaves balanceadas. */
@@ -59,27 +71,146 @@ function fichaSiiARegistro(ficha) {
   if (!c.rut || !nombre) {
     throw new Error('La ficha SII no trae RUT ni nombre/razón social — no se puede registrar la empresa')
   }
-  // Régimen desde atributos: 14TT = Pro Pyme Transparente; 14GG = Pro Pyme General.
-  // El valor debe calzar EXACTO con las opciones del formulario de onboarding.
+  // Régimen desde atributos (ver REGIMEN_POR_ATRIBUTO). El valor debe calzar
+  // EXACTO con las opciones del formulario de onboarding.
   const atributos = Array.isArray(ficha.atributos) ? ficha.atributos : []
-  const tiene14TT = atributos.some((a) => a.atrCodigo === '14TT')
-  const tiene14GG = atributos.some((a) => a.atrCodigo === '14GG')
-  const regimen = tiene14TT
-    ? 'Pro Pyme Transparente (14 D)'
-    : (tiene14GG ? 'Pro Pyme General (14 D)' : null)
+  const atributoRegimen = atributos.find((a) => REGIMEN_POR_ATRIBUTO[a.atrCodigo] && !a.fechaTermino)
+  const regimen = atributoRegimen ? REGIMEN_POR_ATRIBUTO[atributoRegimen.atrCodigo] : null
+
+  // Dirección: el SII puede traer varias; la primera es el domicilio vigente.
+  const direcciones = (Array.isArray(ficha.direcciones) ? ficha.direcciones : []).map((d) => ({
+    tipo: d.tipoDomicilioDescripcion || null,
+    calle: d.calle || null,
+    numero: d.numero || null,
+    departamento: d.departamento || null,
+    villa: d.villaPoblacion || null,
+    comuna: d.comunaDescripcion || null,
+    region: d.regionDescripcion || null,
+    telefono: d.telefono || null,
+    mail: d.mail || d.correo || null,
+  }))
+  const dom = direcciones[0] || {}
+  const direccion = [dom.calle, dom.numero, dom.departamento, dom.villa, dom.comuna]
+    .filter(Boolean).join(', ') || null
 
   return {
     rut: `${c.rut}-${c.dv}`,
     nombre,
     inicioActividades: String(c.fechaInicioActividades || '').slice(0, 10) || null,
+    terminoGiro: String(c.fechaTerminoGiro || '').slice(0, 10) || null,
     regimen,
+    regimenAtributo: atributoRegimen
+      ? { codigo: atributoRegimen.atrCodigo, descripcion: atributoRegimen.descAtrCodigo }
+      : null,
     actividades: c.glosaActividad ? [String(c.glosaActividad)] : [],
     telefono: String(c.telefonoMovil || '').trim(),
     email: String(c.eMail || '').trim(),
     tipoContribuyente: c.tipoContribuyenteDescripcion || null,
+    subtipoContribuyente: c.subtipoContribuyenteDescrip || null,
     fechaConstitucion: String(c.fechaConstitucion || '').slice(0, 10) || null,
+    fechaNacimiento: String(c.fechaNacimiento || '').slice(0, 10) || null,
+    segmento: c.segmentoDescripcion || null,
+    personaEmpresa: c.personaEmpresa || null,
+    // Capital en MILES de pesos (así lo entrega el SII: capitalEnterado 1000
+    // = $1.000.000). Se conserva el valor crudo y se nombra la unidad.
+    capital: {
+      enterado_miles_clp: Number(c.capitalEnterado) || 0,
+      por_enterar_miles_clp: Number(c.capitalPorEnterar) || 0,
+    },
+    unidadOperativa: c.unidadOperativaDescripcion
+      ? { codigo: c.unidadOperativaCodigo, descripcion: c.unidadOperativaDescripcion }
+      : null,
+    direccion,
+    direcciones,
+    // Alertas y bloqueos del SII, VERBATIM: son la única fuente de verdad de
+    // un término de giro o una anotación vigente (ej. «Periodo de Termino de
+    // Giro es…»). No se interpretan ni se descartan.
+    alertas: Array.isArray(ficha.alertas) ? ficha.alertas : [],
+    atributos: atributos.map((a) => ({
+      codigo: a.atrCodigo,
+      descripcion: a.descAtrCodigo,
+      valor: a.valor,
+      fechaInicio: a.fechaInicio || null,
+      fechaTermino: a.fechaTermino || null,
+    })),
     fichaCruda: ficha,
   }
+}
+
+/** Guarda la ficha cruda en data/sii-fichas/<rut>.json (fuera del repo). */
+function guardarFichaCruda(rut, ficha) {
+  try {
+    const dir = path.join(process.cwd(), 'data', 'sii-fichas')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, `${rut}.json`), JSON.stringify(ficha, null, 2))
+  } catch (e) {
+    console.warn(`[SII-ALTA] No se pudo guardar la ficha cruda de ${rut}: ${e.message}`)
+  }
+}
+
+/**
+ * Lee la ficha guardada de una empresa (sin red). Devuelve null si no existe.
+ * La usa Salud Tributaria para no depender de una consulta en vivo al render.
+ */
+function leerFichaGuardada(rut) {
+  try {
+    const file = path.join(process.cwd(), 'data', 'sii-fichas', `${rut}.json`)
+    if (!fs.existsSync(file)) return null
+    return fichaSiiARegistro(JSON.parse(fs.readFileSync(file, 'utf8')))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Sincroniza la ficha oficial del SII de una empresa YA existente.
+ * Reutiliza el login de sii-session (con fallback a login básico si la cuenta
+ * no habilita RCV), valida que la ficha corresponda al RUT y persiste los
+ * datos que el SII entrega. Nunca inventa: lo que no viene queda como estaba.
+ */
+async function consultarFichaSii(db, { usuarioId, empresaId, ip = null }) {
+  const emp = db.prepare(`SELECT id, rut FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!emp) throw new Error('Empresa no encontrada')
+  const clave = empresas.claveSiiDescifrada(db, empresaId)
+  if (!clave) throw new Error('La empresa no tiene clave SII configurada')
+
+  let jar
+  try {
+    const ses = await obtenerSesion(emp.rut, clave)
+    jar = ses.jar
+  } catch (e) {
+    if (!/token de sesión RCV|no habilita el RCV/i.test(e.message)) throw e
+    jar = await loginSII(emp.rut, clave)
+  }
+
+  const res = await fetchConCookies(SII_HOME, { method: 'GET' }, jar)
+  const html = await res.text()
+  const ficha = extraerJsonEmbebido(html, 'DatosCntrNow = ')
+  if (!ficha?.contribuyente?.rut) {
+    if (/location\.replace\([^)]*IngresoRutClave/i.test(html) || /Clave Tributaria ingresada no es correcta/i.test(html)) {
+      throw new Error('Clave SII incorrecta para este RUT')
+    }
+    throw new Error('El SII no entregó la ficha del contribuyente (login válido, home sin datos)')
+  }
+
+  const datos = fichaSiiARegistro(ficha)
+  const { completo } = parseRut(emp.rut)
+  if (datos.rut !== completo) {
+    throw new Error(`La ficha SII corresponde al RUT ${datos.rut}, no a ${completo}`)
+  }
+
+  onboarding.confirmarFicha(db, {
+    empresaId,
+    usuarioId,
+    razonSocialSii: datos.nombre,
+    inicioActividades: datos.inicioActividades,
+    actividades: datos.actividades,
+    regimenTributario: datos.regimen,
+    ip,
+  })
+  guardarFichaCruda(datos.rut, ficha)
+
+  return { ok: true, datos, ficha }
 }
 
 /**
@@ -151,13 +282,7 @@ async function crearDesdeSii(db, { usuarioId, rut, clave, tasaPpm = 0.01, ip = n
   })
 
   // 4) Ficha SII cruda a data/sii-fichas/ (fuera del repo, junto a la BD)
-  try {
-    const dir = path.join(process.cwd(), 'data', 'sii-fichas')
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, `${datos.rut}.json`), JSON.stringify(ficha, null, 2))
-  } catch (e) {
-    console.warn(`[SII-ALTA] No se pudo guardar la ficha cruda de ${datos.rut}: ${e.message}`)
-  }
+  guardarFichaCruda(datos.rut, ficha)
 
   return {
     empresaId,
@@ -172,4 +297,4 @@ async function crearDesdeSii(db, { usuarioId, rut, clave, tasaPpm = 0.01, ip = n
   }
 }
 
-module.exports = { crearDesdeSii, fichaSiiARegistro, extraerJsonEmbebido }
+module.exports = { crearDesdeSii, consultarFichaSii, fichaSiiARegistro, leerFichaGuardada, extraerJsonEmbebido, REGIMEN_POR_ATRIBUTO }

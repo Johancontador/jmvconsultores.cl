@@ -158,6 +158,12 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
     despues: { procesadas: resumen.procesadas, ok: resumen.ok, con_errores: resumen.con_errores, saltadas: resumen.saltadas },
     ip,
   })
+
+  // Higiene de sesiones: el SII limita las sesiones simultáneas por RUT y no
+  // las libera solo. Cerrar al terminar la corrida evita que la sync diaria
+  // deje al cliente bloqueado tras varios días.
+  try { await require('../services/sii-session').cerrarTodas() } catch { /* no fatal */ }
+
   return resumen
 }
 

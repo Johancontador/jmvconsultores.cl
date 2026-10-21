@@ -108,6 +108,16 @@ const CATALOGO_APPS = [
     ],
   },
   {
+    key: 'salud-tributaria',
+    titulo: 'Salud Tributaria',
+    descripcion: 'Antecedentes verificables de la empresa (ficha SII, régimen, dirección, capital, actividad), ingresos por año desde el RCV y una opinión automatizada que declara lo que aún no está conectado.',
+    icono: 'escudo',
+    orden: 8,
+    secciones: [
+      { grupo: 'Inicio', ruta: 'salud', capacidad: 'salud:ver' },
+    ],
+  },
+  {
     key: 'administracion',
     titulo: 'Administración',
     descripcion: 'Área restringida: usuarios, auditoría, integraciones, suscripción y configuración de la empresa. Visible solo para roles autorizados.',
@@ -144,7 +154,7 @@ function validarCatalogo() {
 function centroParaUsuario(db, usuarioId, empresaId = null) {
   validarCatalogo()
 
-  const filas = db.prepare(`
+  let filas = db.prepare(`
     SELECT ue.empresa_id, e.rut, e.nombre, r.codigo AS rol
     FROM usuario_empresa ue
     JOIN empresas e ON e.id = ue.empresa_id AND e.activo = 1
@@ -152,9 +162,21 @@ function centroParaUsuario(db, usuarioId, empresaId = null) {
     WHERE ue.usuario_id = ? AND ue.activo = 1
     ORDER BY e.nombre
   `).all(usuarioId)
-  if (!filas.length) return { empresas: [], empresa_activa: null, apps: [] }
 
   const usuario = db.prepare(`SELECT is_admin FROM users WHERE id = ?`).get(usuarioId)
+
+  // SUPER ADMIN: el rol es GLOBAL, no una lista de asignaciones. Las filas de
+  // usuario_empresa con rol super_admin eran redundantes (y una empresa nueva
+  // no aparecía hasta asignarla a mano). Se completa SIEMPRE con todas las
+  // empresas activas, igual que empresas.asignacionesDeUsuario.
+  if (usuario && usuario.is_admin) {
+    const mapa = new Map(filas.map((f) => [Number(f.empresa_id), f]))
+    for (const e of db.prepare(`SELECT id, rut, nombre FROM empresas WHERE activo = 1`).all()) {
+      if (!mapa.has(Number(e.id))) mapa.set(Number(e.id), { empresa_id: e.id, rut: e.rut, nombre: e.nombre, rol: 'super_admin' })
+    }
+    filas = [...mapa.values()].sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)))
+  }
+  if (!filas.length) return { empresas: [], empresa_activa: null, apps: [] }
 
   const activa = empresaId != null
     ? filas.find((f) => Number(f.empresa_id) === Number(empresaId))
@@ -168,9 +190,12 @@ function centroParaUsuario(db, usuarioId, empresaId = null) {
     WHERE ue.usuario_id = ? AND ue.empresa_id = ? AND ue.activo = 1
   `)
   const capacidadesDe = (eid) => {
+    // El super admin tiene TODAS las capacidades por rol global, tenga o no
+    // una fila en usuario_empresa. Antes el `if (!fila) return new Set()`
+    // corría primero y dejaba al admin sin apps al limpiar sus asignaciones.
+    if (usuario && usuario.is_admin) return new Set(Object.keys(CATALOGO_CAPACIDADES))
     const fila = permisosDb.get(usuarioId, eid)
     if (!fila) return new Set()
-    if (usuario && usuario.is_admin) return new Set(Object.keys(CATALOGO_CAPACIDADES))
     const rbac = require('./permisos')
     return rbac.permisosDeRol(fila.rol)
   }

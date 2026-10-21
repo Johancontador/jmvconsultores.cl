@@ -943,6 +943,73 @@ function migracionesTesoreriaAplicaciones(db) {
 }
 
 // ============================================================
+// PERFIL DE USUARIO + SALUD TRIBUTARIA (2026-10-21)
+//
+// users.email: identidad de contacto del perfil. El login acepta username o
+// email (routes/auth.js); el índice UNIQUE es sobre lower(email) para que
+// «Johan@…» y «johan@…» no creen dos cuentas. Sin backfill automático: la
+// asignación del correo del admin es un dato del negocio, no del esquema.
+//
+// salud_tributaria_snapshots: cada informe de Salud Tributaria se conserva
+// como evidencia con la opinión emitida y el score. Aditivo; nunca se
+// reescribe un snapshot anterior.
+// ============================================================
+function migracionesPerfilYSalud(db) {
+  const cols = db.prepare(`PRAGMA table_info(users)`).all()
+  if (cols.length && !cols.some((c) => c.name === 'email')) {
+    db.exec(`ALTER TABLE users ADD COLUMN email TEXT`)
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
+      ON users(lower(email)) WHERE email IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS salud_tributaria_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      periodo TEXT NOT NULL,
+      generado_por INTEGER REFERENCES users(id),
+      generado_en TEXT DEFAULT (datetime('now')),
+      opinion_nivel TEXT NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      datos_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_salud_snap_empresa
+      ON salud_tributaria_snapshots(empresa_id, periodo, generado_en);
+  `)
+}
+
+// ============================================================
+// Declaraciones oficiales del SII (2026-10-21).
+//
+// Guarda lo que el contribuyente YA declaró, leído del portal autenticado
+// (Consulta Integral F29/F22, Declaraciones Juradas y Boleta de Honorarios).
+// Es la contraparte OFICIAL del F29 estimado desde el RCV: sin esta tabla el
+// informe de salud tributaria solo podía estimar. Una fila por empresa, tipo
+// y período; se re-consulta y actualiza (UPSERT) porque una declaración puede
+// rectificarse. `datos_json` conserva la respuesta cruda como evidencia.
+// ============================================================
+function migracionesDeclaracionesSii(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS declaraciones_sii (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      rut TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      periodo TEXT NOT NULL,
+      estado TEXT,
+      folio TEXT,
+      fecha_presentacion TEXT,
+      monto_total INTEGER,
+      origen TEXT NOT NULL DEFAULT 'sii_consulta_integral',
+      datos_json TEXT NOT NULL,
+      consultado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, tipo, periodo)
+    );
+    CREATE INDEX IF NOT EXISTS idx_declaraciones_sii_empresa
+      ON declaraciones_sii(empresa_id, tipo, periodo);
+  `)
+}
+
+// ============================================================
 // CRM (Fase B): pipeline de clientes, recordatorios y campañas.
 // ============================================================
 function migracionesCrm(db) {
@@ -960,4 +1027,4 @@ function migracionesCrmComercial(db) {
   require('./crm-comercial').migracionesCrmComercial(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }

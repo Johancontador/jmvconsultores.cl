@@ -2,10 +2,17 @@ FROM node:24-bookworm-slim
 
 WORKDIR /app
 
-# build-essential deps for better-sqlite3 in case no prebuilt binary matches
+# build-essential deps for better-sqlite3 in case no prebuilt binary matches.
+# chromium: core/declaraciones-sii.js lee el portal del SII (Consulta Integral
+# F29 y boletas) con un navegador real; sin él la sincronización de
+# declaraciones responde SII_SIN_NAVEGADOR. puppeteer-core no descarga browser,
+# usa este binario del sistema (CHROME_PATH).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
+  && apt-get install -y --no-install-recommends python3 make g++ chromium \
   && rm -rf /var/lib/apt/lists/*
+
+ENV CHROME_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 
 # El usuario 'node' (uid 1000) necesita escribir /app para instalar las
 # dependencias: el chown es NO recursivo (un solo inodo, instantáneo).

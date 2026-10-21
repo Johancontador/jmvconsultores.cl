@@ -142,7 +142,14 @@ Auxiliares del receptor (FASE 9.1):
 
 ## 7. Integraciones explícitamente FUERA de alcance
 
-- SII: cualquier otra cosa distinta al RCV (boletas de honorarios electrónicas SII-web, F22, cartolas bancos) — fase futura, requiere decisión expresa.
+- SII: renta F22 y declaraciones juradas — fase futura, requiere decisión expresa.
+  - **Salud Tributaria (2026-10-21)** sí amplió la cobertura por instrucción
+    expresa del usuario: `core/declaraciones-sii.js` lee del portal autenticado
+    el **estado/monto del F29** (Consulta Integral + Buscar Formulario) y las
+    **boletas de honorarios** anuales (emitidas y recibidas). No inventa APIs:
+    automatiza el portal del SII con Chrome headless usando la sesión existente.
+    F22 y juradas siguen `no_integrado`. Ver
+    `docs/AUDITORIA-PERFIL-Y-SALUD-TRIBUTARIA.md` §2.3.
 - Bancos: la cartola del portal entra como ARCHIVO con conector por formato — ✅ IMPLEMENTADO (FASE 9.2: `core/tesoreria-cartola-formatos.js`, detección por encabezado/estructura + mapeo manual guardado; cero scraping, el humano descarga el archivo). La integración directa vía agregador (XuMi) queda bajo decisión expresa del dueño (ROADMAP §9.3).
 - ~~Facturación emisora COMO FUNCIÓN PARA CLIENTES~~ → **IMPLEMENTADA como BLOQUE 2 (§8)** con la misma librería del §6.2: cada empresa emite SUS DTEs con SU certificado y SUS folios. Se mantiene la regla de fondo: nada de scraping ni APIs inventadas — solo los servicios web del SII vía @devlas/dte-sii.
 

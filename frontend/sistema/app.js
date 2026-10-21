@@ -579,6 +579,9 @@ const MENU = [
     seccion: 'Inicio', items: [
       { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
       { key: 'inicio', label: 'Panel del período', permiso: null },
+      // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV.
+      // Lo no integrado (F29 oficial, F22, juradas, boletas) se declara.
+      { key: 'salud', label: 'Consulta Salud Tributaria', permiso: 'salud:ver' },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
     ]
   },

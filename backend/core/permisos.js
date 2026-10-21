@@ -36,6 +36,11 @@ const CATALOGO_CAPACIDADES = {
   'conciliacion:ejecutar': 'Ejecutar la conciliación de un período',
   'onboarding:ejecutar': 'Consultar el SII y confirmar la ficha tributaria + ingesta del histórico (onboarding autónomo)',
   'reportes:ver': 'Ver reportes financieros',
+  // SALUD TRIBUTARIA: informe de antecedentes + opinión automatizada. La
+  // lectura NUNCA se bloquea por licencia; sincronizar (que llama al SII y
+  // escribe la ficha/snapshot) sí exige licencia operativa.
+  'salud:ver': 'Ver el informe de Salud Tributaria de la empresa',
+  'salud:sincronizar': 'Sincronizar la ficha SII y generar el informe de Salud Tributaria',
   // CRM COMERCIAL: exclusivo del despacho. No es una capacidad de la empresa
   // cliente sino del equipo JMV — el dueño (admin_empresa), el auditor o
   // tesorería JAMÁS lo ven en el menú ni pueden abrir #crm. La API revalida con
@@ -77,6 +82,7 @@ const PERMISOS_POR_ROL = {
     'conciliacion:ver', 'conciliacion:ejecutar',
     'onboarding:ejecutar',
     'reportes:ver', 'crm:ver', 'config:editar',
+    'salud:ver', 'salud:sincronizar',
     // Fase 6: el contador opera tesorería completa (puede delegarla al rol TESORERÍA)
     'tesoreria:ver', 'tesoreria:operar', 'bancos:conciliar',
     // Fase 7: activos fijos y depreciación mensual
@@ -99,6 +105,9 @@ const PERMISOS_POR_ROL = {
     'conciliacion:ver',
     'onboarding:ejecutar',
     'reportes:ver', 'config:editar',
+    // Salud Tributaria: el dueño consulta sus antecedentes y puede refrescar
+    // su propia ficha SII (la credencial ya está en la bóveda de su empresa).
+    'salud:ver', 'salud:sincronizar',
     // Fase 7: el dueño ve sus activos y depreciaciones, sin operarlos
     'activos:ver',
     // SAAS-3: el dueño ve y PAGA su suscripción — el pago jamás queda bloqueado
@@ -120,6 +129,8 @@ const PERMISOS_POR_ROL = {
     'propuestas:ver',
     'conciliacion:ver',
     'reportes:ver',
+    // Salud Tributaria: el auditor lee, nunca sincroniza.
+    'salud:ver',
     // Fase 6: el auditor ve el libro banco pero no opera ni concilia
     'tesoreria:ver',
     // Fase 7: el auditor ve activos fijos pero no opera
