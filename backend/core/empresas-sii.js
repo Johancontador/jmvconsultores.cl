@@ -162,6 +162,50 @@ function leerFichaGuardada(rut) {
   }
 }
 
+/** Fecha (ISO) en que se guardó la ficha cruda, o null si no existe. */
+function fichaGuardadaEn(rut) {
+  try {
+    const file = path.join(process.cwd(), 'data', 'sii-fichas', `${rut}.json`)
+    return fs.existsSync(file) ? fs.statSync(file).mtime.toISOString() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * FICHA AUTOMÁTICA (2026-10-21): al conectar con el SII, la empresa debe quedar
+ * con su ficha oficial. La llama la sincronización diaria: si la ficha no
+ * existe o tiene más de `dias`, se descarga; si el SII falla se devuelve el
+ * motivo y NUNCA se propaga el error (un problema de ficha no puede tumbar la
+ * corrida que sí trajo documentos).
+ *
+ * `consultar` se inyecta para probar sin red.
+ */
+async function asegurarFicha(db, { empresaId, usuarioId = null, ip = null, dias = 7, consultar = consultarFichaSii, ahora = Date.now() } = {}) {
+  const emp = db.prepare(`SELECT id, rut FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!emp) return { actualizada: false, motivo: 'empresa_no_encontrada' }
+
+  const guardadaEn = fichaGuardadaEn(emp.rut)
+  const edadDias = guardadaEn ? Math.floor((ahora - Date.parse(guardadaEn)) / 86400000) : null
+  if (guardadaEn && edadDias < dias) {
+    return { actualizada: false, motivo: 'vigente', edad_dias: edadDias }
+  }
+
+  try {
+    const r = await consultar(db, { usuarioId, empresaId, ip })
+    return {
+      actualizada: true,
+      motivo: guardadaEn ? 'vencida' : 'ausente',
+      edad_dias: edadDias,
+      regimen: r && r.datos ? r.datos.regimen || null : null,
+    }
+  } catch (err) {
+    // Se nombra el fallo (y su código SII_SIN_NAVEGADOR / SII_TOPE_SESIONES)
+    // para que el resumen de la corrida lo muestre; no rompe el sync.
+    return { actualizada: false, motivo: 'error', error: err.message, codigo: err.codigo || null }
+  }
+}
+
 /**
  * Sincroniza la ficha oficial del SII de una empresa YA existente.
  * Reutiliza el login de sii-session (con fallback a login básico si la cuenta
@@ -297,4 +341,7 @@ async function crearDesdeSii(db, { usuarioId, rut, clave, tasaPpm = 0.01, ip = n
   }
 }
 
-module.exports = { crearDesdeSii, consultarFichaSii, fichaSiiARegistro, leerFichaGuardada, extraerJsonEmbebido, REGIMEN_POR_ATRIBUTO }
+module.exports = {
+  crearDesdeSii, consultarFichaSii, asegurarFicha, fichaSiiARegistro,
+  leerFichaGuardada, fichaGuardadaEn, extraerJsonEmbebido, REGIMEN_POR_ATRIBUTO,
+}

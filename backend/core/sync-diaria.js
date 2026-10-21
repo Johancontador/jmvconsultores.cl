@@ -35,6 +35,8 @@ const { registrarAccion } = require('./auditoria')
 const jobsP = require('./jobs-persistentes')
 const licencias = require('./licencias')
 const rcv = require('../services/rcv')
+const empresasSii = require('./empresas-sii')
+const saludTributaria = require('./salud-tributaria')
 
 const PAUSA_MS = Number(process.env.SII_PAUSA_MS || 2000)   // entre consultas al SII
 const MAX_EMPRESAS = Number(process.env.SII_MAX_EMPRESAS || 20) // techo por corrida
@@ -149,6 +151,22 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
       jobsP.finalizar(db, job.id, 'completado')
       resumen.ok += 1
     }
+    // FICHA AUTOMÁTICA: al conectar con el SII la empresa debe quedar con su
+    // ficha oficial. Solo si el RCV de esta corrida no falló (con la clave
+    // rechazada la ficha fallaría igual y duplicaría el intento fallido del
+    // SII). Si la ficha falla, se anota en el resumen y la corrida sigue.
+    if (!fallo) {
+      const ficha = await empresasSii.asegurarFicha(db, { empresaId: emp.id, usuarioId: actor, ip })
+      resumen.fichas = resumen.fichas || {}
+      resumen.fichas[emp.id] = ficha.actualizada
+        ? 'actualizada'
+        : (ficha.motivo === 'error' ? `error: ${ficha.error}` : ficha.motivo)
+      if (ficha.actualizada) {
+        // El informe de salud ya mostrado en el panel deja de valer.
+        saludTributaria.olvidarResumen(emp.id)
+      }
+    }
+
     resumen.procesadas += 1
   }
 

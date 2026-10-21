@@ -580,8 +580,9 @@ const MENU = [
       { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
       { key: 'inicio', label: 'Panel del período', permiso: null },
       // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV.
-      // Lo no integrado (F29 oficial, F22, juradas, boletas) se declara.
-      { key: 'salud', label: 'Consulta Salud Tributaria', permiso: 'salud:ver' },
+      // Lo no integrado (F22, juradas) se declara. `pill: 'salud'` pinta el
+      // score en el menú (y «!» cuando requiere revisión).
+      { key: 'salud', label: 'Consulta Salud Tributaria', permiso: 'salud:ver', pill: 'salud' },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
     ]
   },
@@ -1247,6 +1248,7 @@ function renderRoute() {
   }
 
   cerrarMenuMovil()
+  refrescarPillSalud()
   const cont = document.getElementById('sys-view')
   cont.innerHTML = `<div class="empty">Cargando…</div>`
   Promise.resolve(view.render(cont))
@@ -1257,6 +1259,26 @@ function renderRoute() {
 }
 
 /* ---------- pill de documentos pendientes en el nav ---------- */
+
+/* ---------- pill de salud tributaria en el nav ---------- */
+
+// El dueño ve el estado de SU empresa sin abrir la vista: el score si está al
+// día y «!» cuando requiere revisión. El endpoint está cacheado 60 s en el
+// servidor, así que navegar no lo vuelve a calcular.
+async function refrescarPillSalud() {
+  if (!S.empresa || !tiene('salud:ver')) return
+  const a = document.querySelector('[data-pill="salud"]')
+  if (!a) return
+  try {
+    const r = await apiGet(`/api/contable/empresas/${S.empresa.id}/salud-tributaria/resumen?periodo=${periodoGlobal()}&meses=12`)
+    const s = r.resumen
+    const alerta = s.nivel === 'REQUIERE_REVISION' || s.nivel === 'SIN_INFORMACION'
+    a.dataset.nivel = s.nivel
+    a.textContent = alerta ? '!' : String(s.score)
+    a.title = `${s.titulo} · ${s.score}/100 · ${s.hallazgos} hallazgo(s)`
+    a.setAttribute('aria-label', `Salud tributaria: ${s.titulo}, ${s.score} de 100, ${s.hallazgos} hallazgos`)
+  } catch { /* el pill es informativo: nunca rompe la navegación */ }
+}
 
 async function refrescarPillDocs() {
   if (!S.empresa || !tiene('documentos:ver')) return

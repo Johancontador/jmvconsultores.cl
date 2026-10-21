@@ -25,6 +25,7 @@ process.env.DB_PATH = dbFile
 
 const db = require('../backend/db')
 const salud = require('../backend/core/salud-tributaria')
+const empresasSii = require('../backend/core/empresas-sii')
 
 test.after(() => {
   try { db.close() } catch { /* ya cerrada */ }
@@ -195,6 +196,92 @@ test('T10: la ventana admite 5 años (60 meses) y las anuales traen F22/BHE', ()
   assert.equal(anio.f22.estado, 'declarada')
   assert.equal(anio.boletas_honorarios.emitidas.totales.honorario_bruto, 3000000)
   assert.equal(inf.declaraciones_anuales.totales_boletas.recibidas, 500000)
+})
+
+// T11: el resumen que alimenta el KPI del panel y el pill del menú es el MISMO
+// informe (no una segunda opinión) y se cachea hasta que algo lo invalide.
+test('T11: resumen del panel = informe, con caché y invalidación', () => {
+  const eid = empresa({ rut: '76222333-4' })
+  doc(eid, { periodo: '202610', tipo: 33, neto: 100000, iva: 19000, folio: 'RES-1' })
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+
+  const r1 = salud.resumenInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(r1.cache, false)
+  assert.equal(r1.nivel, inf.opinion.nivel)
+  assert.equal(r1.score, inf.opinion.score)
+  assert.equal(r1.titulo, inf.opinion.titulo)
+  assert.equal(r1.hallazgos, inf.opinion.hallazgos.length)
+  assert.equal(r1.hallazgos_altos, inf.opinion.hallazgos.filter((h) => h.severidad === 'alta').length)
+  assert.equal(r1.cobertura.con_datos, inf.cobertura.con_datos)
+  assert.equal(r1.f29_oficial, false)
+  assert.equal(r1.ficha, true)
+
+  // Segunda lectura dentro de la ventana: mismo valor, sin recalcular.
+  const r2 = salud.resumenInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(r2.cache, true)
+  assert.equal(r2.score, r1.score)
+
+  // Una sincronización invalida: vuelve a calcular con lo nuevo.
+  salud.olvidarResumen(eid)
+  db.prepare(`
+    INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, monto_total, datos_json)
+    VALUES (?, '76222333-4', 'F29', '202610', 'declarada', '999', 1000, '{}')
+  `).run(eid)
+  const r3 = salud.resumenInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(r3.cache, false)
+  assert.equal(r3.f29_oficial, true, 'tras consultar el F29 el resumen debe reflejarlo')
+})
+
+// T12: FICHA AUTOMÁTICA. Reglas: falta → se descarga; vigente → no se toca (no
+// se gasta otra sesión SII); vencida → se refresca; error del SII → se reporta
+// y NUNCA se propaga (la corrida que sí trajo documentos no puede caerse por
+// la ficha). `consultar` se inyecta: estos tests no tocan la red.
+test('T12: ficha automática — ausente, vigente, vencida y error', async () => {
+  const rut = '76999000-1'
+  const eid = empresa({ rut })
+  const archivo = path.join(process.cwd(), 'data', 'sii-fichas', `${rut}.json`)
+  const limpiar = () => { try { fs.rmSync(archivo, { force: true }) } catch { /* nada */ } }
+  limpiar()
+
+  let llamadas = 0
+  const ok = async () => { llamadas++; return { datos: { regimen: 'Pro Pyme General (14 D)' } } }
+
+  // 1) Sin ficha → descarga.
+  const r1 = await empresasSii.asegurarFicha(db, { empresaId: eid, consultar: ok })
+  assert.equal(r1.actualizada, true)
+  assert.equal(r1.motivo, 'ausente')
+  assert.equal(llamadas, 1)
+
+  // Se materializa la ficha en disco para simular la descarga real.
+  fs.mkdirSync(path.dirname(archivo), { recursive: true })
+  fs.writeFileSync(archivo, JSON.stringify({ contribuyente: { rut } }))
+
+  // 2) Ficha vigente (recién escrita) → NO se consulta el SII.
+  const noLlamar = async () => { llamadas++; throw new Error('no debía llamarse') }
+  const r2 = await empresasSii.asegurarFicha(db, { empresaId: eid, consultar: noLlamar })
+  assert.equal(r2.actualizada, false)
+  assert.equal(r2.motivo, 'vigente')
+  assert.equal(llamadas, 1, 'una ficha vigente no gasta otra sesión en el SII')
+
+  // 3) Ficha vencida (>7 días) → se refresca.
+  const viejo = new Date(Date.now() - 30 * 86400000)
+  fs.utimesSync(archivo, viejo, viejo)
+  const r3 = await empresasSii.asegurarFicha(db, { empresaId: eid, consultar: ok })
+  assert.equal(r3.actualizada, true)
+  assert.equal(r3.motivo, 'vencida')
+  assert.equal(r3.edad_dias, 30)
+  assert.equal(r3.regimen, 'Pro Pyme General (14 D)')
+
+  // 4) El SII falla → motivo 'error' con el mensaje, sin lanzar.
+  limpiar()
+  const falla = async () => { const e = new Error('Red SII inaccesible (ENOTFOUND)'); e.codigo = 'SII_SIN_NAVEGADOR'; throw e }
+  const r4 = await empresasSii.asegurarFicha(db, { empresaId: eid, consultar: falla })
+  assert.equal(r4.actualizada, false)
+  assert.equal(r4.motivo, 'error')
+  assert.equal(r4.codigo, 'SII_SIN_NAVEGADOR')
+  assert.match(r4.error, /inaccesible/)
+
+  limpiar()
 })
 
 test('T7: el snapshot guarda la opinión como evidencia inmutable', () => {

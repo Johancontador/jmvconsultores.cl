@@ -75,6 +75,11 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
 }
 .sys-nav .pill { margin-left: auto; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--warning); }
 .sys-nav .pill:empty { display: none; }
+/* Pill de salud tributaria: el score cuando está al día y un aviso rojo cuando
+   la empresa requiere revisión o no hay información suficiente para opinar. */
+.sys-nav .pill[data-nivel="AL_DIA"] { color: var(--success); }
+.sys-nav .pill[data-nivel="REQUIERE_REVISION"],
+.sys-nav .pill[data-nivel="SIN_INFORMACION"] { color: var(--danger); }
 
 .sys-side-foot {
   border-top: 1px solid var(--border-subtle); padding-top: var(--space-3);

@@ -34,6 +34,29 @@ router.get('/salud-tributaria/capacidades', (req, res) => {
   res.json({ ok: true, capacidades_sii: salud.CAPACIDADES_SII })
 })
 
+// Resumen para el KPI del panel y el pill del menú: mismo informe, sin el
+// detalle. Cacheado 60 s en el core (la empresa más grande tarda ~0,8 s).
+router.get('/empresas/:empresaId/salud-tributaria/resumen', requirePermiso('salud:ver'), (req, res) => {
+  try {
+    const empresaId = req.empresaId
+    const periodo = String(req.query.periodo || PERIODO_ACTUAL())
+    if (!salud.periodoValido(periodo)) {
+      return res.status(400).json({ ok: false, error: 'Período inválido (YYYYMM)' })
+    }
+    const emp = db.prepare(`SELECT rut FROM empresas WHERE id = ?`).get(empresaId)
+    if (!emp) return res.status(404).json({ ok: false, error: 'Empresa no encontrada' })
+    const resumen = salud.resumenInforme(db, {
+      empresaId,
+      periodo,
+      meses: leerMeses(req.query.meses, 12),
+      ficha: leerFichaGuardada(emp.rut),
+    })
+    res.json({ ok: true, resumen })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 router.get('/empresas/:empresaId/salud-tributaria', requirePermiso('salud:ver'), (req, res) => {
   try {
     const empresaId = req.empresaId
@@ -103,6 +126,9 @@ router.post('/empresas/:empresaId/salud-tributaria/sincronizar', requirePermiso(
     }
   }
 
+  // La ficha cambió (o pudo cambiar) y el RCV puede haber entrado: el resumen
+  // cacheado ya no sirve.
+  salud.olvidarResumen(empresaId)
   try {
     const informe = salud.construirInforme(db, { empresaId, periodo, meses, ficha })
     const snapshotId = salud.guardarSnapshot(db, {
@@ -157,6 +183,7 @@ router.post('/empresas/:empresaId/salud-tributaria/declaraciones', requirePermis
     // vista no tenga que hacer una segunda llamada.
     const emp = db.prepare(`SELECT rut FROM empresas WHERE id = ?`).get(empresaId)
     const ficha = emp ? leerFichaGuardada(emp.rut) : null
+    salud.olvidarResumen(empresaId)
     const informe = salud.construirInforme(db, { empresaId, periodo, meses: 12 * anios, ficha })
     res.json({ ok: true, resultado: r.resultado, aviso: r.aviso || null, informe })
   } catch (err) {

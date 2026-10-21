@@ -10,7 +10,7 @@ VIEWS.inicio = {
   async render(cont) {
     const eid = S.empresa.id
     const pedido = window._inicioPeriodo || null
-    let d, cobranzaRes = null
+    let d, cobranzaRes = null, saludRes = null
     try {
       const r = await apiGet(`/api/contable/empresas/${eid}/dashboard${pedido ? `?periodo=${pedido}` : ''}`)
       d = r.dashboard
@@ -20,6 +20,11 @@ VIEWS.inicio = {
       // dejaba un 403 en la consola (sin romper la vista, pero ruido real).
       if (tiene('tesoreria:ver')) {
         try { cobranzaRes = await apiGet(`/api/contable/empresas/${eid}/cobranza?limit=1`) } catch { /* el KPI es opcional: el panel sigue */ }
+      }
+      // Destacado: salud tributaria del período (score + hallazgos + acceso).
+      // Resumen cacheado 60 s en el servidor: no encarece el panel.
+      if (tiene('salud:ver')) {
+        try { saludRes = (await apiGet(`/api/contable/empresas/${eid}/salud-tributaria/resumen?periodo=${periodoGlobal()}&meses=12`)).resumen } catch { /* opcional */ }
       }
     } catch (err) {
       cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
@@ -46,6 +51,26 @@ VIEWS.inicio = {
        <div class="kpi ${k.resultado >= 0 ? 'up' : 'bad'}"><small>Resultado ${perDisplay(d.periodo)}</small><strong>${fmtCorto(k.resultado)}</strong><span class="sub">acumulado año: ${fmtCorto(k.resultado_acum)}</span></div>
        <div class="kpi acc"><small>IVA determinado</small><strong>${fmtCorto(k.iva_determinado)}</strong><span class="sub">débito − crédito del RCV</span></div>
      </div>
+
+     ${saludRes ? `
+     <div class="card mt" id="inicio-salud">
+       <div class="flex" style="justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap">
+         <div style="min-width:0">
+           <span class="sys-kicker">Salud tributaria · ${perDisplay(saludRes.periodo)}</span>
+           <h3 style="margin:var(--space-1) 0">${esc(saludRes.titulo)} <span class="chip ${({ AL_DIA: 'contabilizado', CON_OBSERVACIONES: 'propuesto', REQUIERE_REVISION: 'error', SIN_INFORMACION: 'neutral' })[saludRes.nivel] || 'neutral'}">${esc(saludRes.nivel.replaceAll('_', ' '))}</span></h3>
+           <p class="sub" style="margin:0">
+             ${saludRes.hallazgos} hallazgo(s)${saludRes.hallazgos_altos ? ` · <b style="color:var(--danger)">${saludRes.hallazgos_altos} de atención alta</b>` : ''}
+             · RCV ${saludRes.cobertura.con_datos}/12 mes(es)${saludRes.cobertura.sin_datos ? ` · ${saludRes.cobertura.sin_datos} sin sincronizar` : ''}
+             · ${saludRes.f29_oficial ? 'F29 oficial consultado' : 'F29 oficial sin consultar'}
+             ${saludRes.ficha ? '' : ' · <b>ficha SII pendiente</b>'}
+           </p>
+         </div>
+         <div class="flex" style="align-items:center;gap:var(--space-3)">
+           <div class="kpi ${saludRes.score >= 80 ? 'up' : saludRes.score >= 50 ? '' : 'bad'}" style="min-width:110px"><small>Score</small><strong>${saludRes.score}/100</strong></div>
+           <a class="btn btn-primary" href="#salud">Ver informe de salud</a>
+         </div>
+       </div>
+     </div>` : ''}
 
      <div class="kpi-grid mt">
        ${cobranzaRes ? `<div class="kpi ${cobranzaRes.total_pendiente > 0 ? 'warn' : 'up'}" style="cursor:pointer" onclick="location.hash='#cobranza'"><small>Cobranza pendiente</small><strong>${fmtCorto(cobranzaRes.total_pendiente || 0)}</strong><span class="sub">${(cobranzaRes.clientes || []).length} cliente(s) en mora → Cobranza</span></div>` : ''}

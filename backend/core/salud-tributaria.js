@@ -634,6 +634,56 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
   }
 }
 
+// ============================================================
+// RESUMEN PARA EL PANEL Y EL MENÚ (KPI + pill)
+// ============================================================
+// Construir el informe completo cuesta ~0,8 s en la empresa más grande
+// (13.000 documentos, 12 meses). El panel del período y el menú lo pedirían en
+// CADA navegación, así que el resumen se cachea 60 s por empresa+período: sigue
+// siendo el mismo dato y la vista de detalle nunca lee este caché. Cualquier
+// sincronización llama a `olvidarResumen` y lo invalida de inmediato.
+const CACHE_RESUMEN_MS = 60 * 1000
+const cacheResumen = new Map()
+
+function resumenInforme(db, { empresaId, periodo, meses = 12, ficha = null, ahora = Date.now() } = {}) {
+  const clave = `${empresaId}|${periodo}|${meses}`
+  const enCache = cacheResumen.get(clave)
+  if (enCache && ahora - enCache.en < CACHE_RESUMEN_MS) return { ...enCache.valor, cache: true }
+
+  const inf = construirInforme(db, { empresaId, periodo, meses, ficha })
+  const op = inf.opinion
+  const valor = {
+    empresa_id: empresaId,
+    periodo: inf.periodo,
+    nivel: op.nivel,
+    titulo: op.titulo,
+    score: op.score,
+    hallazgos: (op.hallazgos || []).length,
+    hallazgos_altos: (op.hallazgos || []).filter((h) => h.severidad === 'alta').length,
+    cobertura: {
+      con_datos: inf.cobertura.con_datos,
+      sin_datos: inf.cobertura.sin_datos,
+      completa: inf.cobertura.completa,
+    },
+    // Qué se consultó de verdad: la UI no puede sugerir «al día» si el F29
+    // oficial nunca se leyó.
+    f29_oficial: inf.declaraciones.f29.estado !== 'no_consultado',
+    boletas: inf.declaraciones.boletas_honorarios.estado !== 'no_consultado',
+    ficha: !!ficha,
+    generado_en: inf.generado_en,
+  }
+  cacheResumen.set(clave, { en: ahora, valor })
+  return { ...valor, cache: false }
+}
+
+/** Invalida el resumen cacheado de una empresa (o todos si se omite). */
+function olvidarResumen(empresaId = null) {
+  if (empresaId == null) { cacheResumen.clear(); return }
+  for (const k of [...cacheResumen.keys()]) {
+    if (k.startsWith(`${empresaId}|`)) cacheResumen.delete(k)
+  }
+}
+
 /** Guarda el informe como evidencia inmutable (el JSON completo). */
 function guardarSnapshot(db, { empresaId, periodo, usuarioId = null, informe }) {
   const info = db.prepare(`
@@ -661,6 +711,8 @@ function ultimoSnapshot(db, empresaId, periodo = null) {
 module.exports = {
   CAPACIDADES_SII,
   construirInforme,
+  resumenInforme,
+  olvidarResumen,
   guardarSnapshot,
   ultimoSnapshot,
   periodoValido,
