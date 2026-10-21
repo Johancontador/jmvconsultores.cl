@@ -52,6 +52,7 @@ rol — ver el catálogo completo en `backend/core/permisos.js`. Resumen operati
 | Reportes y cierre de período | sí | ver | ver | ver | sí |
 | Suscripción y pagos | ver | **pagar** | ver | ver | sí |
 | Factura electrónica (DTE) | emitir | — | — | — | sí |
+| Salud Tributaria (ficha, F29, boletas) | ver + sincronizar | ver + sincronizar | solo ver | — | sí |
 | Onboarding | ejecutar | ejecutar | — | — | sí |
 
 **El gate de licencia** bloquea ESCRITURAS (HTTP 402) de empresas sin licencia
@@ -443,6 +444,78 @@ señales salen del mismo datos que la contabilidad (documentos, sincronización,
 períodos); su trabajo es la rutina semanal: mirar el panel de retención,
 generar los mensajes del lote que corresponda y despacharlos a mano.
 
+### 4.16 Consulta Salud Tributaria (Inicio → Consulta Salud Tributaria)
+
+> Vista `#salud`, por empresa y período. `salud:ver` = leer el informe
+> (contador, dueño, auditor y super_admin); `salud:sincronizar` = consultar el
+> SII y generar el informe (contador, dueño, super_admin — el auditor solo
+> lee). La lectura NUNCA se bloquea por licencia; sincronizar sí exige licencia
+> operativa porque escribe la ficha y el snapshot.
+
+**Qué es.** Un informe por empresa y período que reúne la ficha oficial del
+SII, el RCV ya ingerido y las declaraciones leídas del portal, y emite una
+**opinión automatizada con score 0–100**: `AL_DIA`, `CON_OBSERVACIONES`,
+`REQUIERE_REVISION` o `SIN_INFORMACION`. No es certificación tributaria ni
+asesoría legal: el encabezado y las limitaciones lo dicen, y cada fundamento
+cita su base normativa.
+
+**Los cuatro botones de la barra superior:**
+
+| Botón | Qué hace | Qué escribe |
+|---|---|---|
+| **Imprimir / PDF** | Imprime la vista tal como está | nada |
+| **Sincronizar ficha SII** | Relee la ficha oficial (identificación, régimen, atributos, alertas del SII) | ficha en `data/sii-fichas/` + snapshot + auditoría |
+| **Ficha + RCV del período** | Lo anterior + lanza en segundo plano la ingesta del RCV del período activo (job con su id) | ídem + documentos en la bandeja |
+| **Consultar declaraciones SII (5 años)** | Abre UNA sesión autenticada, lee el **F29** de la Consulta Integral y las **boletas de honorarios**, y cierra sesión al terminar | `declaraciones_sii` (UPSERT idempotente) + auditoría |
+
+Si el SII falla al leer la ficha, **lo guardado no se borra**: el informe se
+arma con la ficha cacheada y el aviso dice qué falló.
+
+**Qué se lee del SII y qué no** (la tabla «Capacidades reales de la conexión
+SII», al pie de la vista, repite esto con fuente y evidencia):
+
+| Fuente | Estado |
+|---|---|
+| **F29 mensual** | **Disponible** — estado (Vigente/Rectificada), folio, fecha de presentación y monto |
+| **Boletas de honorarios** | **Disponible** — emitidas y recibidas por año, con retención |
+| Renta F22 | **No integrado** — se muestra «no consultado» |
+| Declaraciones juradas | **No integrado** — se muestra «no consultado» |
+
+«No consultado» nunca significa «al día» ni se pinta como $0: es ausencia de
+información y la vista lo declara así.
+
+**Cómo leer los números (la parte que se malinterpreta):**
+
+- **«F29 est.»** es una ESTIMACIÓN propia desde el RCV (IVA + PPM). No es lo
+  que se declaró.
+- **«F29 declarado»** es el monto que informa el SII para ese período.
+- **«Dif.»** = estimado − declarado, y **solo aparece cuando el mes tiene RCV
+  ingerido Y el SII entregó el monto**. Sin RCV la diferencia sería un
+  espejismo (el estimado vale $0), así que se deja vacía.
+- **Cobertura:** «Con RCV», «Sin movimiento» (el SII se consultó y devolvió cero
+  documentos) y «Sin sincronizar» son tres estados distintos; solo el último se
+  cuenta como hueco de datos.
+
+**Hallazgos.** Cada uno trae severidad, detalle y fuente (`F29_DIFERENCIA`,
+`F29_ESTIMADO`, `COBERTURA_RCV_PARCIAL`, ficha incompleta, sync atrasada…).
+Un hallazgo es una **señal para revisar**, no un ajuste: el sistema no modifica
+asientos ni declaraciones por su cuenta.
+
+**Procedimiento recomendado (mensual):**
+1. Elegir empresa y período en el header.
+2. Si es la primera vez del año (o cambió el ejercicio): **Consultar
+   declaraciones SII (5 años)** — tarda minutos, es idempotente.
+3. Revisar las diferencias de los meses **con RCV**; si un mes aparece «Sin
+   sincronizar», usar **Ficha + RCV del período**.
+4. Enviar al cliente el informe impreso si lo pide, con la advertencia de que la
+   opinión es automatizada.
+
+**Equivalente por línea de comandos** (para el despacho, sin abrir el
+navegador): `node scripts/sincronizar-declaraciones.js --empresa=<id>
+--anios=5` y `node scripts/informe-salud.js --empresa=<id> --meses=60
+--out=<ruta>.md`. Detalle técnico en
+[docs/AUDITORIA-PERFIL-Y-SALUD-TRIBUTARIA.md](AUDITORIA-PERFIL-Y-SALUD-TRIBUTARIA.md).
+
 ---
 
 ## 5. Administración del sistema (JMV)
@@ -460,6 +533,7 @@ Ver `.env.example` comentado — tabla resumen de las críticas:
 | `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` | Checkout y webhook MercadoPago |
 | `PAGOS_NOTIFICATION_URL` / `PAGOS_URL_RETORNO` | Webhook y retorno del pago |
 | `DTE_CERT_PFX` … `DTE_AMBIENTE` | Emisor de factura electrónica (firma, CAF, resolución) |
+| `CHROME_PATH` | Binario de Chrome/Chromium que lee el portal del SII al consultar declaraciones (en la imagen Docker: `/usr/bin/chromium`) |
 
 ### 5.2 Despliegue y operación
 
@@ -473,6 +547,11 @@ Ver `.env.example` comentado — tabla resumen de las críticas:
   `scripts/` (cifra de nuevo con la clave nueva).
 - **Verificación post-deploy:** health + `node --test` en local antes de pushear
   (la suite SIEMPRE va verde antes de desplegar).
+- **Navegador headless:** la consulta de declaraciones SII necesita Chrome/
+  Chromium dentro del contenedor (el `Dockerfile` lo instala y fija
+  `CHROME_PATH=/usr/bin/chromium`; `puppeteer-core` va en `dependencies`, no en
+  dev). Comprobar tras un deploy con
+  `docker exec iva-mensual /usr/bin/chromium --version`.
 
 ### 5.3 Habilitar pagos y facturación (credenciales del dueño)
 
@@ -543,6 +622,10 @@ Ver `.env.example` comentado — tabla resumen de las críticas:
 | `EMISOR DTE no configurado` | Faltan variables `DTE_*` | El error lista exactamente cuáles faltan; ver §5.3 |
 | Empresa suspendida no escribe | Licencia SUSPENDIDA | Lectura sigue disponible; pagar reactiva |
 | Folio fuera del CAF | Secuencia local superó los folios autorizados | Descargar un CAF nuevo en el SII y actualizar `DTE_CAF_XML` |
+| `SII_TOPE_SESIONES` (HTTP 409) al consultar declaraciones | El RUT tiene sesiones abiertas en el SII (tope de sesiones simultáneas). NO es clave incorrecta | Cerrar sesión en el sitio del SII (o esperar su expiración) y reintentar. Cada corrida cierra su sesión al terminar, así que el tope no debería reaparecer con uso normal |
+| `SII_SIN_NAVEGADOR` (HTTP 424) al consultar declaraciones | Al servidor le falta Chrome/Chromium: la consulta se rechaza ANTES de autenticar (no deja sesiones abiertas) | Definir `CHROME_PATH` al binario real; en la imagen Docker ya viene instalado |
+| `SII_SESION_INVALIDA` al consultar declaraciones | El portal del SII cambió su HTML o la sesión cayó a mitad de la lectura | Reintentar; si persiste, revisar `core/declaraciones-sii.js` contra el portal y los logs. El sistema falla en voz alta, nunca con datos inventados |
+| F29 y boletas en «No consultado» | Nunca se corrió la consulta de declaraciones de esa empresa | Botón **Consultar declaraciones SII (5 años)** en `#salud` o `node scripts/sincronizar-declaraciones.js --empresa=<id> --anios=5` |
 
 ---
 
