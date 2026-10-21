@@ -501,6 +501,21 @@ información y la vista lo declara así.
 Un hallazgo es una **señal para revisar**, no un ajuste: el sistema no modifica
 asientos ni declaraciones por su cuenta.
 
+**Dónde se ve sin abrir nada.** El **Panel del período** (Inicio) muestra una
+tarjeta destacada con nivel, score, hallazgos, cobertura y si el F29 oficial ya
+se consultó, con el botón «Ver informe de salud». El ítem del menú lleva un
+**pill** con el score y cambia a «!» en rojo cuando la empresa requiere revisión
+o no hay información suficiente. Ambos leen el mismo informe (resumen cacheado
+60 s, se invalida al sincronizar): no hay una segunda opinión.
+
+**Ficha automática.** Toda conexión con el SII deja la ficha del contribuyente:
+la sincronización diaria (07:30) la descarga si no existe o tiene más de 7 días,
+y solo si el RCV de esa empresa terminó bien. Si el SII falla, el resumen de la
+corrida lo anota (`SII_TOPE_SESIONES`, `SII_SIN_NAVEGADOR`, clave rechazada…) y
+la sincronización sigue. Para forzarla —empresas que nunca sincronizan o carga
+inicial— está `node scripts/sincronizar-fichas.js [--dias=0] [--empresa=1,5]`
+(sale con código 1 si alguna empresa falló).
+
 **Procedimiento recomendado (mensual):**
 1. Elegir empresa y período en el header.
 2. Si es la primera vez del año (o cambió el ejercicio): **Consultar
