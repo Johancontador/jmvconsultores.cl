@@ -56,6 +56,8 @@ VIEWS['centro'] = {
     // Home estilo iOS: cada módulo es un ícono GRANDE con su nombre debajo.
     // La descripción y las subsecciones no se pierden: van en el title del
     // ícono y en el menú (dock → Menú), para que la pantalla quede limpia.
+    // La entrada escalonada la pone el CSS (`:nth-child`), no un estilo inline:
+    // el marcado queda limpio y el retardo se puede apagar de un solo lugar.
     const appTile = (app) => {
       const ruta = app.secciones[0] ? app.secciones[0].ruta : 'inicio'
       // Lo restringido se marca con un «!» visible; nunca se oculta en silencio.
@@ -71,6 +73,7 @@ VIEWS['centro'] = {
     cont.innerHTML = `
       <h1 style="display:none"></h1>
       <div class="centro-hola">
+        <img class="centro-robot" src="/assets/robot-jmv.svg" alt="" width="88" height="88" aria-hidden="true">
         <div>
           <h2>Hola, ${esc(S.user.username)}</h2>
           <p class="muted">

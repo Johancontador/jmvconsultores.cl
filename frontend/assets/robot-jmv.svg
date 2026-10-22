@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Robot de bienvenida de JMV Consultores">
+  <!-- Robot de bienvenida — identidad JMV: marfil, grafito y bronce.
+       Se usa en el encabezado del Centro de Aplicaciones. Sin texto (la
+       tipografía la pone el HTML), para que escale limpio en cualquier
+       tamaño y se lea sobre el tema claro y el oscuro. -->
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDFAF4"/>
+      <stop offset="1" stop-color="#F1E8D8"/>
+    </linearGradient>
+    <linearGradient id="cuerpo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3A3A40"/>
+      <stop offset="1" stop-color="#232327"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo marfil con borde bronce -->
+  <rect x="6" y="6" width="228" height="228" rx="52" fill="url(#fondo)" stroke="#D8BF99" stroke-width="3"/>
+
+  <!-- Antena -->
+  <path d="M120 62V44" stroke="#232327" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="120" cy="36" r="10" fill="#A87C3E"/>
+  <circle cx="117" cy="33" r="3" fill="#E6CFA6"/>
+
+  <!-- Cabeza -->
+  <rect x="58" y="60" width="124" height="104" rx="34" fill="#FFFFFF" stroke="#232327" stroke-width="6"/>
+  <!-- Visor (grafito) con los ojos en bronce -->
+  <rect x="78" y="84" width="84" height="44" rx="22" fill="url(#cuerpo)"/>
+  <circle cx="104" cy="106" r="9" fill="#A87C3E"/>
+  <circle cx="136" cy="106" r="9" fill="#A87C3E"/>
+  <circle cx="101" cy="102" r="3" fill="#F1E8D8"/>
+  <circle cx="133" cy="102" r="3" fill="#F1E8D8"/>
+  <!-- Boca: sonrisa de dos trazos -->
+  <path d="M104 143c4 5 8 7 16 7s12-2 16-7" fill="none" stroke="#A87C3E" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Brazos -->
+  <rect x="34" y="112" width="20" height="52" rx="10" fill="#232327"/>
+  <rect x="186" y="112" width="20" height="52" rx="10" fill="#232327"/>
+  <!-- Mano saludando (la derecha, levantada) -->
+  <circle cx="196" cy="106" r="13" fill="#A87C3E"/>
+
+  <!-- Cuerpo -->
+  <rect x="74" y="168" width="92" height="44" rx="18" fill="url(#cuerpo)"/>
+  <!-- Three dots: the brand's spiral motif, simplified -->
+  <circle cx="104" cy="190" r="6" fill="#A87C3E"/>
+  <circle cx="120" cy="190" r="6" fill="#C2A077"/>
+  <circle cx="136" cy="190" r="6" fill="#A87C3E"/>
+</svg>

@@ -375,6 +375,8 @@ require('./core/migraciones').migracionesDte2(db)
 require('./core/migraciones').migracionesUsuarioTemporal(db)
 require('./core/migraciones').migracionesPerfilYSalud(db)
 require('./core/migraciones').migracionesDeclaracionesSii(db)
+// Formulario Compacto del F29: casillas declaradas (la verdad del F29).
+require('./core/migraciones').migracionesF29Formularios(db)
 // CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
 require('./core/migraciones').migracionesCrm(db)
 // CRM comercial (rediseño 2026-10-15): fichas, contactos, prospectos,

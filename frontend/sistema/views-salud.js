@@ -1,266 +1,721 @@
 /**
- * VISTA SALUD TRIBUTARIA — «Consulta Salud Tributaria».
+ * VISTA SALUD TRIBUTARIA v2 — «JMV Tax Health Intelligence».
  *
- * Consume GET /api/contable/empresas/:id/salud-tributaria. Todo lo que se
- * muestra viene del backend con su fuente declarada; lo NO integrado (F29
- * oficial, F22, juradas, boletas de honorarios) se pinta como tal y nunca
- * como un cero. La opinión es automatizada y el propio informe lo advierte.
+ * Misma promesa que antes (nada se inventa: lo no verificado aparece como
+ * «no evaluable», nunca como un cero ni como un verde) pero con la lectura
+ * de un informe ejecutivo:
+ *
+ *   1. Portada con índice, cobertura, confianza, exposición y acciones.
+ *   2. KPI de portada (los 8 del informe) con su fórmula a la vista.
+ *   3. Gráficos (los MISMOS SVG que el PDF: una sola fuente de verdad).
+ *   4. Comparación con el informe anterior («qué cambió»).
+ *   5. Plan de acción con responsable, plazo y evidencia de cierre.
+ *   6. Emisión del informe imprimible (HTML → PDF desde el navegador).
+ *
+ * Un solo botón «Reunir antecedentes» ejecuta la sincronización completa
+ * (ficha + RCV + declaraciones + Formulario Compacto + renta) y va mostrando
+ * el avance paso a paso.
  */
 
 VIEWS.salud = {
-  titulo: 'Consulta Salud Tributaria',
+  titulo: 'Salud Tributaria',
   async render(cont) {
     const eid = S.empresa.id
     const periodo = periodoGlobal()
-    let inf
+    let inf = null
+    let graficos = null
+    // La ventana de análisis NO se fija acá: se usa la del backend (12 meses),
+    // la misma que leen el resumen del menú y el informe imprimible. Antes
+    // esta vista pedía 60 meses y el menú 12: el mismo índice se veía como
+    // 95 en el menú y 75 en la vista, porque la cobertura de RCV se diluía
+    // contra meses que el sistema nunca ingiere.
     try {
-      const r = await apiGet(`/api/contable/empresas/${eid}/salud-tributaria?periodo=${periodo}&meses=60`)
+      const [r, g] = await Promise.all([
+        apiGet(`/api/contable/empresas/${eid}/salud-tributaria?periodo=${periodo}`),
+        apiGet(`/api/contable/empresas/${eid}/salud-tributaria/graficos?periodo=${periodo}`),
+      ])
       inf = r.informe
+      graficos = g.graficos || {}
     } catch (err) {
-      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
+      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">No se pudo cargar el diagnóstico</b><p class="muted">${esc(err.message)}</p></div>`
       return
     }
 
     const op = inf.opinion
-    const chipOp = {
-      AL_DIA: 'contabilizado', CON_OBSERVACIONES: 'propuesto',
-      REQUIERE_REVISION: 'error', SIN_INFORMACION: 'neutral',
-    }[op.nivel] || 'neutral'
-    const fmtM = (v) => fmt(v || 0)
-    const sinDato = '<span class="sub">sin dato</span>'
-    const id = inf.identidad
+    const kpis = inf.kpis || {}
     const puede = tiene('salud:sincronizar')
 
-    const sevChip = (s) => ({ alta: 'error', media: 'propuesto', baja: 'pendiente', info: 'neutral' }[s] || 'neutral')
-    const estadoDecl = (d) => d.estado === 'disponible'
-      ? `<span class="chip contabilizado" title="${esc(d.detalle)}">Consultado</span>`
-      : `<span class="chip neutral" title="${esc(d.detalle)}">No consultado</span>`
-    const f29Chip = (m) => {
-      if (m.f29_estado === 'declarada') return '<span class="chip contabilizado">Declarada</span>'
-      if (m.f29_estado === 'rectificada') return '<span class="chip contabilizado">Rectificada</span>'
-      if (m.f29_estado === 'pendiente' || m.f29_estado === 'no_presentada') return '<span class="chip error">Pendiente</span>'
-      if (m.f29_estado === 'sin_informacion') return '<span class="chip neutral">S/I</span>'
-      return '<span class="sub">—</span>'
-    }
-    const estadoMes = (m) => {
-      if (m.estado === 'con_datos') return '<span class="chip contabilizado">Con RCV</span>'
-      if (m.estado === 'sin_movimiento') return '<span class="chip neutral">Sin movimiento</span>'
-      return '<span class="chip pendiente">Sin sincronizar</span>'
-    }
+    // ---------------------------------------------------------
+    // KPI de portada. Si no hay antecedentes, NO se inventa un 0:
+    // se declara «no evaluable con los antecedentes disponibles».
+    // ---------------------------------------------------------
+    const calendario = op.calendario || []
+    const revisados = calendario.filter((c) => c.revisada).length
+    const cumplidos = calendario.filter((c) => c.cumplida).length
+    const conFormulario = (inf.mensuales || []).filter((m) => m.f29_formulario)
+    const observados = conFormulario.filter((m) => (m.f29_formulario.monto_observado || 0) > 0
+      || /observ/i.test(m.f29_formulario.situacion || '')).length
+    const comparables = (inf.mensuales || []).filter((m) => m.comparacion && m.comparacion.comparable)
+    const conciliables = comparables.filter((m) => Math.abs(m.comparacion.diferencia_ventas || 0) < 1000).length
+    const remanenteRenta = (inf.renta?.anios || []).reduce((s, r) => s + (r.remanente_devuelto || 0), 0)
+    const altas = (op.hallazgos || []).filter((h) => h.severidad === 'alta').length
+    const noEval = 'No evaluable con los antecedentes disponibles'
 
-    const capChip = (e) => ({
-      disponible: '<span class="chip contabilizado">Disponible</span>',
-      parcial: '<span class="chip propuesto">Parcial</span>',
-      no_integrado: '<span class="chip error">No integrado</span>',
-    }[e] || '<span class="chip neutral">—</span>')
+    const pct = (n, d) => (d ? `${Math.round((n / d) * 1000) / 10}%` : noEval)
+    const tarjetas = [
+      {
+        k: 'Índice de Salud Tributaria',
+        v: op.indice_evaluable === false ? noEval : `${op.score}/100`,
+        s: op.clasificacion?.titulo || op.titulo || '—',
+        t: 'Promedio ponderado de cinco dimensiones evaluables (cumplimiento 25%, consistencia 25%, riesgos 20%, calidad de datos 15%, controles 15%).',
+      },
+      {
+        k: 'Cumplimiento oportuno',
+        v: pct(cumplidos, revisados),
+        s: `${cumplidos} de ${revisados} período(s) con declaración vigente`,
+        t: 'Obligaciones presentadas dentro de plazo ÷ obligaciones exigibles. Sin consulta oficial no se afirma cumplimiento.',
+      },
+      {
+        k: 'Tasa de declaraciones observadas',
+        v: pct(observados, conFormulario.length),
+        s: `${observados} de ${conFormulario.length} F29 con casillas leídas`,
+        t: 'Declaraciones con observaciones ÷ declaraciones revisadas × 100.',
+      },
+      {
+        k: 'Tasa de conciliación',
+        v: pct(conciliables, comparables.length),
+        s: `${conciliables} de ${comparables.length} período(s) conciliados`,
+        t: 'Períodos sin diferencias inexplicables ÷ períodos comparables × 100.',
+      },
+      {
+        k: 'Exposición tributaria',
+        v: (op.exposicion?.total || 0) > 0 ? fmtCorto(op.exposicion.total) : noEval,
+        s: 'Suma sin duplicidad de conceptos',
+        t: 'Contingencias estimadas y diferencias por investigar, sin sumar multas ni créditos que no son pérdida real.',
+      },
+      {
+        k: 'Créditos y remanentes',
+        v: remanenteRenta > 0 ? fmtCorto(remanenteRenta) : noEval,
+        s: 'Remanente devuelto en renta (F22)',
+        t: 'Créditos y remanentes respaldados y vigentes que requieren seguimiento.',
+      },
+      {
+        k: 'Riesgos críticos abiertos',
+        v: String(altas),
+        s: altas ? 'Requieren actuación inmediata' : 'Ninguno en severidad alta',
+        t: 'Riesgos de severidad alta que impiden una lectura de conformidad plena.',
+      },
+      {
+        k: 'Resolución de alertas',
+        v: noEval,
+        s: 'El seguimiento de cierre aún no está disponible',
+        t: 'Alertas cerradas con evidencia ÷ alertas que correspondía resolver × 100.',
+      },
+    ]
+    // KPIs mejorados con contexto SII y comparaciones
+    const kpiContextoSII = (tipo, label, valor, subtipo) => {
+      const ctx = { ventas: 'Ventas declaradas en F29 vs. estimadas RCV', iva: 'IVA determinado vs. estimado', ppm: 'PPM declarado vs. estimado' }[tipo]
+      return `${ctx || ''} ${label}: ${valor}`.trim()
+    }
+    const kpiComparacionF29 = (m) => {
+      if (!m.comparacion) return ''
+      const { diferencia_ventas, diferencia_iva, diferencia_ppm, diferencia_total } = m.comparacion
+      const partes = []
+      if (diferencia_ventas != null) partes.push(`Ventas: ${fmtM(diferencia_ventas)}`)
+      if (diferencia_iva != null) partes.push(`IVA: ${fmtM(diferencia_iva)}`)
+      if (diferencia_ppm != null) partes.push(`PPM: ${fmtM(diferencia_ppm)}`)
+      if (diferencia_total != null) partes.push(`Total: ${fmtM(diferencia_total)}`)
+      return partes.length ? `<div class="kpi-comparison">• ${partes.join(' · ')}</div>` : ''
+    }
+    const kpiF29Declarado = (m) => {
+      if (!m.f29_formulario) return ''
+      const { indicadores } = m.f29_formulario
+      if (!indicadores) return ''
+      const totalPagar = indicadores.total_a_pagar ?? null
+      return totalPagar != null ? `<div class="kpi-f29-declared">Total F29 declarado: ${fmtCorto(totalPagar)}</div>` : ''
+    }
+    const kpiUltimaActualizacion = () => `
+      <div class="kpi-ultima-actualizacion">
+        <small>Última actualización SII:</small> ${new Date().toLocaleDateString('es-CL')}
+      </div>
+    `
+    const kpiModuloSeleccion = (indice) => `
+      <style>
+        .sl-kpi-selection-anim { animation: kpiPulse 2s ease-in-out infinite; }
+        @keyframes kpiPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+      </style>
+      <span class="sl-kpi-selection-badge" title="Módulo ${indice}">${indice}</span>
+    `
 
-    const capital = id.capital
-      ? `$${Number(id.capital.enterado_miles_clp || 0).toLocaleString('es-CL')} miles enterados · $${Number(id.capital.por_enterar_miles_clp || 0).toLocaleString('es-CL')} miles por enterar`
-      : sinDato
+
+    const chipSev = (s) => ({ alta: 'error', media: 'propuesto', baja: 'pendiente' }[s] || 'neutral')
+    const chipEstado = (e) => ({
+      declarada: 'contabilizado', rectificada: 'contabilizado', vigente: 'contabilizado',
+      pendiente: 'error', no_presentada: 'error', observada: 'error',
+    }[e] || 'neutral')
+    const fmtM = (v) => (v == null ? '—' : fmt(v))
+    const sub = '<span class="sub">—</span>'
+
+    // ---------------------------------------------------------
+    // Bloques
+    // ---------------------------------------------------------
+    const opinionProf = op.opinion_profesional || {}
+    const queCambio = op.que_cambio
+
+    const panelResumen = `
+      <div class="sl-opinion">
+        <p class="sl-opinion-lead">${esc(opinionProf.conclusion || op.resumen || '')}</p>
+        <div class="sl-opinion-grid">
+          <div><h4>Hechos comprobados</h4>${listaHtml(opinionProf.hechos, 'Sin hechos comprobables con los antecedentes disponibles.')}</div>
+          <div><h4>Diferencias detectadas</h4>${listaHtml(opinionProf.diferencias, 'Sin diferencias detectadas.')}</div>
+          <div><h4>Riesgos potenciales</h4>${listaHtml(opinionProf.riesgos, 'Sin riesgos potenciales identificados.')}</div>
+          <div><h4>Recomendación</h4><p class="muted">${esc(opinionProf.recomendacion || '')}</p></div>
+        </div>
+        ${(opinionProf.advertencias || []).length ? `<div class="sl-adv"><h4>Advertencias</h4>${listaHtml(opinionProf.advertencias, '')}</div>` : ''}
+      </div>
+      <div class="grid-2 mt">
+        <div class="card">
+          <h3>Fortalezas verificadas</h3>
+          ${listaHtml(op.fortalezas, 'Sin fortalezas verificables con los antecedentes disponibles.')}
+        </div>
+        <div class="card">
+          <h3>Qué cambió</h3>
+          ${queCambio ? `
+            <p class="muted">${esc(queCambio.lectura || '')}</p>
+            <div class="kpi-grid">
+              <div class="kpi"><small>Informe anterior</small><strong>${queCambio.indice_anterior != null ? `${queCambio.indice_anterior}/100` : '—'}</strong></div>
+              <div class="kpi ${(queCambio.variacion_indice || 0) > 0 ? 'up' : (queCambio.variacion_indice || 0) < 0 ? 'bad' : ''}">
+                <small>Variación</small><strong>${queCambio.variacion_indice != null ? `${queCambio.variacion_indice > 0 ? '+' : ''}${queCambio.variacion_indice}` : '—'}</strong>
+              </div>
+              <div class="kpi"><small>Alertas nuevas</small><strong>${(queCambio.alertas_nuevas || []).length}</strong></div>
+            </div>
+            ${(queCambio.alertas_nuevas || []).length ? `<h4 class="mt">Nuevas</h4>${listaHtml(queCambio.alertas_nuevas.map((a) => `${a.titulo} (${a.severidad})`), '')}` : ''}
+            ${(queCambio.alertas_resueltas || []).length ? `<h4 class="mt">Resueltas</h4>${listaHtml(queCambio.alertas_resueltas.map((a) => a.titulo), '')}` : ''}
+          ` : '<p class="hint">Primer informe de la serie: todavía no hay un informe anterior con el cual comparar.</p>'}
+        </div>
+      </div>
+      <!-- Expert tax opinion badge -->
+      <div class="sl-opinion-expert" style="margin: var(--space-3) 0; padding: var(--space-3); background: var(--bg-elevated); border-radius: var(--radius-lg); border-left: 4px solid var(--accent);">
+        <h4 style="margin: 0 0 var(--space-2); display: flex; align-items: center; gap: var(--space-2);"><span class="chip contabilizado" style="font-size: var(--fs-xs)">📋</span> Opinión Tributaria Profesional</h4>
+        <p class="muted" style="font-size: var(--fs-sm); line-height: 1.5; margin: 0">${esc(opinionProf.conclusion || 'Opinión tributaria en proceso de generación')}</p>
+        ${opinionProf.recomendacion ? `<p class="muted" style="font-size: var(--fs-xs); margin: var(--space-1) 0 0">Recomendación: ${esc(opinionProf.recomendacion)}</p>` : ''}
+        ${opinionProf.hechos && opinionProf.hechos.length > 0 ? `<p class="muted" style="font-size: var(--fs-xs); margin: var(--space-1) 0 0">Hechos clave: ${listaHtml(opinionProf.hechos.slice(0, 3), '')}</p>` : ''}
+      </div>`
+
+    const panelCumplimiento = `
+      <div class="card">
+        <h3>Calendario de cumplimiento</h3>
+        <div class="sl-chart">${graficos.calendario || ''}</div>
+        <p class="hint">Los meses no consultados no se cuentan como incumplimientos; los meses futuros no se evalúan.</p>
+      </div>
+      <div class="card mt">
+        <h3>Estado de las declaraciones</h3>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Declaración</th><th>Consulta</th><th>Resultado</th><th>Última consulta</th></tr></thead>
+          <tbody>
+            ${['f29', 'renta_f22', 'juradas', 'boletas_honorarios'].map((k) => {
+      const d = inf.declaraciones[k] || {}
+      const nombre = { f29: 'Mensual F29', renta_f22: 'Renta F22', juradas: 'Declaraciones juradas', boletas_honorarios: 'Boletas de honorarios' }[k]
+      return `<tr><td>${nombre}</td>
+                <td><span class="chip ${d.estado === 'disponible' ? 'contabilizado' : 'neutral'}">${d.estado === 'disponible' ? 'Consultado' : 'No consultado'}</span></td>
+                <td class="sub">${esc(d.detalle || '')}</td>
+                <td class="sub">${esc(d.ultima_consulta || '—')}</td></tr>`
+    }).join('')}
+          </tbody>
+        </table></div>
+        <p class="hint">«Consultado» significa que el dato se leyó del portal autenticado del SII. «No consultado» no es «al día»: es ausencia de información.</p>
+      </div>
+      <div class="card mt">
+        <h3>Detalle por período · declarado (SII) vs. estimado (RCV)</h3>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Período</th><th>F29 SII</th><th class="num">Ventas netas</th><th class="num">IVA est.</th>
+            <th class="num">PPM est.</th><th class="num">F29 declarado</th><th class="num">Dif. total</th><th class="num">Dif. ventas</th></tr></thead>
+          <tbody>${(inf.mensuales || []).map((m) => `<tr>
+            <td>${esc(m.nombre)}</td>
+            <td><span class="chip ${chipEstado(m.f29_estado)}">${esc(m.f29_oficial?.etiqueta || 'No consultado')}</span></td>
+            <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.ventas_neto)}</td>
+            <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.iva_estimado)}</td>
+            <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.ppm_estimado)}</td>
+            <td class="num mono">${m.f29_oficial?.monto_total != null ? fmtM(m.f29_oficial.monto_total) : sub}</td>
+            <td class="num mono">${m.f29_diferencia != null ? fmtM(m.f29_diferencia) : sub}</td>
+            <td class="num mono">${m.comparacion?.diferencia_ventas != null ? fmtM(m.comparacion.diferencia_ventas) : sub}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <p class="hint">«IVA est.» es una estimación propia desde el RCV; «F29 declarado» es lo que informa el SII. «Dif. total» = estimado − declarado y solo aparece cuando el mes tiene RCV ingerido y el SII entregó el monto; «Dif. ventas» = ventas declaradas − ventas del RCV (solo con Formulario Compacto del F29). Un «—» en las columnas estimadas significa que no hay RCV ingerido para ese mes: no se estima nada, no se afirma que no hubo movimiento.</p>
+      </div>
+      <!-- Nueva sección: Comparativa F29 vs RCV -->
+      <div class="card mt">
+        <h3>Comparativa F29 (SII) vs. RCV (Sistema)</h3>
+        ${(inf.mensuales || []).length > 0 ? `
+          <div class="kpi-grid kpi-grid-comparison">
+            <div class="kpi kpi-comparative"><small>Período</small><strong>Actual</strong></div>
+            <div class="kpi kpi-comparative"><small>F29 declarado</small><strong>${inf.f29_declarado?.estado === 'disponible' ? 'Disponible' : 'No consultado'}</strong></div>
+            <div class="kpi kpi-comparative"><small>Estimado RCV</small><strong>${fmtCorto(kpis.declarado?.ventas || 0)}</strong></div>
+            <div class="kpi kpi-comparative"><small>Diferencia</small><strong>${fmtCorto(kpis.declarado?.total_a_pagar || 0)}</strong></div>
+          </div>
+          <div class="tbl-wrap mt"><table class="tbl">
+            <thead><tr><th>Período</th><th class="num">Ventas F29</th><th class="num">Ventas RCV</th><th class="num">Dif. Ventas</th><th class="num">Dif. %</th></tr></thead>
+            <tbody>${(inf.mensuales || []).slice(0, 6).map((m) => `<tr>
+              <td>${esc(m.nombre)}</td>
+              <td class="num mono">${m.f29_formulario && m.f29_formulario.indicadores ? fmtM(m.f29_formulario.indicadores.total_debitos || 0) : sub}</td>
+              <td class="num mono">${fmtM(m.ventas_neto)}</td>
+              <td class="num mono">${m.comparacion?.diferencia_ventas != null ? fmtM(m.comparacion.diferencia_ventas) : '—'}</td>
+              <td class="num mono">${m.comparacion?.diferencia_ventas != null ? `${Math.round((m.comparacion.diferencia_ventas / Math.max(1, m.ventas_neto)) * 1000) / 10}%` : '—'}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+        ` : ''}
+      </div>`
+
+    const panelIva = `
+      <div class="card">
+        <h3>Evolución mensual del IVA</h3>
+        <div class="sl-chart">${graficos.iva || ''}</div>
+        <p class="hint">Débito y crédito fiscal desde el RCV ingerido. El IVA determinado es una estimación propia y no sustituye la determinación del F29.</p>
+      </div>
+      <div class="card mt">
+        <h3>Puente de conciliación</h3>
+        <div class="sl-chart">${graficos.puente || ''}</div>
+        <p class="hint">${(kpis.declarado?.periodos || 0) > 0
+        ? 'Construido con las casillas del Formulario Compacto del F29 leídas del SII.'
+        : 'Construido con estimaciones del RCV: no hay Formulario Compacto del F29 disponible.'}</p>
+      </div>
+      <div class="card mt">
+        <h3>Formulario Compacto del F29 (datos declarados)</h3>
+        ${inf.f29_declarado?.estado === 'disponible' ? `
+          <div class="kpi-grid">
+            <div class="kpi"><small>Períodos leídos</small><strong>${inf.f29_declarado.periodos.length}</strong></div>
+            <div class="kpi ${inf.f29_declarado.verificaciones_ok === inf.f29_declarado.verificaciones_total ? 'up' : 'bad'}">
+              <small>Verificaciones internas</small><strong>${inf.f29_declarado.verificaciones_ok}/${inf.f29_declarado.verificaciones_total}</strong></div>
+            <div class="kpi"><small>Ventas declaradas</small><strong>${fmtCorto(kpis.declarado?.ventas || 0)}</strong></div>
+            <div class="kpi"><small>Total a pagar declarado</small><strong>${fmtCorto(kpis.declarado?.total_a_pagar || 0)}</strong></div>
+          </div>
+          <div class="tbl-wrap mt"><table class="tbl">
+            <thead><tr><th>Período</th><th>Folio</th><th>Situación</th><th class="num">IVA determinado</th><th class="num">PPM neto</th><th class="num">Total a pagar</th><th class="num">Observado</th></tr></thead>
+            <tbody>${(inf.f29_declarado.periodos || []).map((p) => `<tr>
+              <td>${esc(p.periodo)}</td><td class="mono">${esc(p.folio || '—')}</td>
+              <td class="sub">${esc(p.situacion || '—')}</td>
+              <td class="num mono">${p.indicadores?.iva_determinado != null ? fmt(p.indicadores.iva_determinado) : sub}</td>
+              <td class="num mono">${p.indicadores?.ppm_neto != null ? fmt(p.indicadores.ppm_neto) : sub}</td>
+              <td class="num mono">${p.indicadores?.total_a_pagar != null ? fmt(p.indicadores.total_a_pagar) : sub}</td>
+              <td class="num mono">${p.monto_observado ? fmt(p.monto_observado) : sub}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+        ` : '<div class="empty">Formulario Compacto no consultado. Ejecuta «Reunir antecedentes» para leer las casillas declaradas del F29.</div>'}
+      </div>`
+
+    const panelRiesgos = `
+      <div class="grid-2">
+        <div class="card"><h3>Distribución por severidad</h3><div class="sl-chart">${graficos.riesgos || ''}</div></div>
+        <div class="card"><h3>Exposición por materia</h3><div class="sl-chart">${graficos.exposicion || ''}</div></div>
+      </div>
+      <div class="card mt">
+        <h3>Matriz de riesgos</h3>
+        ${(op.matriz_riesgos || []).length ? `<div class="tbl-wrap"><table class="tbl sl-tbl-riesgos">
+          <thead><tr><th>Severidad</th><th>Materia</th><th>Riesgo</th><th>Período</th><th class="num">Exposición</th>
+            <th>Triage</th><th>Evidencia</th></tr></thead>
+          <tbody>${op.matriz_riesgos.map((r) => `<tr>
+            <td><span class="chip ${chipSev(r.severidad)}">${esc(String(r.severidad).toUpperCase())}</span></td>
+            <td>${esc(r.materia || '—')}</td><td>${esc(r.titulo || '—')}</td><td>${esc(r.periodo || '—')}</td>
+            <td class="num mono">${r.importe ? fmt(r.importe) : sub}${r.cuenta_exposicion === false && r.importe ? '<span class="sub">no suma al total</span>' : ''}</td>
+            <td class="sub"><span>${esc(r.naturaleza || '—')}</span><span>${esc(r.responsable || '—')} · ${esc(r.plazo || '—')}</span></td>
+            <td class="sub">${esc(r.evidencia || '—')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<div class="empty">Sin riesgos cuantificados en la ventana analizada.</div>'}
+        <p class="hint">${esc(op.exposicion?.nota || '')}</p>
+      </div>`
+
+    const panelTendencias = `
+      <div class="card">
+        <h3>Tendencia mensual</h3>
+        <div class="sl-chart">${graficos.tendencia || ''}</div>
+        <p class="hint">Ventas netas e IVA determinado por período, desde el RCV ingerido.</p>
+      </div>
+      <div class="card mt">
+        <h3>Ingresos por año (RCV)</h3>
+        <p class="hint" style="margin-top:0">${esc(inf.ingresos_historicos?.nota || '')}</p>
+        ${(inf.ingresos_historicos?.anios || []).length ? `<div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Año</th><th class="num">Ventas neto</th><th class="num">IVA ventas</th><th class="num">Compras neto</th><th class="num">IVA compras</th><th class="num">Meses</th></tr></thead>
+          <tbody>${inf.ingresos_historicos.anios.map((a) => `<tr>
+            <td><b>${esc(a.anio)}</b></td><td class="num mono">${fmtM(a.ventas_neto)}</td><td class="num mono">${fmtM(a.ventas_iva)}</td>
+            <td class="num mono">${fmtM(a.compras_neto)}</td><td class="num mono">${fmtM(a.compras_iva)}</td><td class="num">${a.meses_con_datos}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<div class="empty">Sin años con RCV ingerido.</div>'}
+      </div>`
+
+    const teso = inf.tesoreria || {}
+    const panelImpacto = `
+      <div class="card">
+        <h3>Impacto financiero del período</h3>
+        <div class="kpi-grid">
+          <div class="kpi"><small>Ventas netas</small><strong>${fmtCorto(kpis.ventas_periodo || 0)}</strong></div>
+          <div class="kpi"><small>IVA estimado</small><strong>${fmtCorto(kpis.iva_periodo || 0)}</strong></div>
+          <div class="kpi"><small>PPM estimado</small><strong>${fmtCorto(kpis.ppm_periodo || 0)}</strong></div>
+          <div class="kpi"><small>Margen bruto</small><strong>${kpis.margen_bruto_pct != null ? `${kpis.margen_bruto_pct}%` : '—'}</strong></div>
+          <div class="kpi"><small>Fondos disponibles</small><strong>${teso.total_bancos != null ? fmtCorto(teso.total_bancos) : '—'}</strong></div>
+          <div class="kpi ${(teso.cobranza?.vencido_30_dias || 0) > 0 ? 'bad' : ''}"><small>Cartera vencida &gt;30 días</small><strong>${teso.cobranza?.vencido_30_dias != null ? fmtCorto(teso.cobranza.vencido_30_dias) : '—'}</strong></div>
+        </div>
+      </div>
+      <div class="grid-2 mt">
+        <div class="card">
+          <h3>Escenarios de caja</h3>
+          <div class="tbl-wrap"><table class="tbl"><tbody>
+            <tr><th>Cobertura de obligaciones del período</th><td class="num">${(teso.total_bancos != null && (kpis.iva_periodo || 0) + (kpis.ppm_periodo || 0) > 0)
+        ? `${Math.round((teso.total_bancos / ((kpis.iva_periodo || 0) + (kpis.ppm_periodo || 0))) * 1000) / 10}%` : '—'}</td></tr>
+            <tr><th>DSO estimado (cobranza)</th><td class="num">${kpis.tesoreria?.dso_estimado != null ? `${kpis.tesoreria.dso_estimado} días` : '—'}</td></tr>
+            <tr><th>Conciliación bancaria</th><td class="num">${teso.conciliacion?.ratio != null ? `${teso.conciliacion.ratio}%` : '—'}</td></tr>
+            <tr><th>Cuentas por pagar</th><td class="num">${teso.proveedores?.total != null ? fmtCorto(teso.proveedores.total) : '—'}</td></tr>
+            <tr><th>Exposición tributaria identificada</th><td class="num">${(op.exposicion?.total || 0) > 0 ? fmtCorto(op.exposicion.total) : '—'}</td></tr>
+          </tbody></table></div>
+          <p class="hint">Escenarios derivados de la caja registrada. Requieren validación del contador.</p>
+        </div>
+        <div class="card">
+          <h3>Renta (F22)</h3>
+          ${(inf.renta?.anios || []).length ? `<div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Año</th><th>Estado</th><th class="num">Monto declarado</th><th class="num">Remanente devuelto</th></tr></thead>
+            <tbody>${inf.renta.anios.map((r) => `<tr>
+              <td>${esc(r.anio)}</td>
+              <td><span class="chip ${chipEstado(r.estado)}">${esc(r.estado || '—')}</span></td>
+              <td class="num mono">${r.monto_total != null ? fmt(r.monto_total) : sub}</td>
+              <td class="num mono">${r.remanente_devuelto ? fmt(r.remanente_devuelto) : sub}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>` : '<div class="empty">Renta no consultada: la existencia de la declaración anual no está verificada.</div>'}
+        </div>
+      </div>`
+
+    const panelPlan = `
+      <div class="card">
+        <h3>Plan de acción (${(op.plan_accion || []).length})</h3>
+        ${(op.plan_accion || []).length ? `<div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>#</th><th>Acción</th><th>Motivo</th><th>Evidencia de cierre</th><th>Responsable</th><th>Plazo</th><th class="num">Impacto estimado</th></tr></thead>
+          <tbody>${op.plan_accion.map((a, i) => `<tr>
+            <td>${a.prioridad ?? i + 1}</td>
+            <td>${esc(a.accion || '—')}</td>
+            <td class="sub">${esc(a.motivo || '—')}</td>
+            <td class="sub">${esc(a.evidencia || '—')}</td>
+            <td>${esc(a.responsable || '—')}</td>
+            <td>${esc(a.plazo || '—')}</td>
+            <td class="num mono">${a.impacto_estimado ? fmt(a.impacto_estimado) : sub}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<div class="empty">Sin acciones pendientes: mantener el control mensual.</div>'}
+        <p class="hint">Cada acción se cierra con la evidencia señalada; el siguiente informe verifica el resultado.</p>
+      </div>
+      <!-- Plan de acción con opinión experta tributaria -->
+      <div class="card mt">
+        <h3>Plan de acción tributario</h3>
+        <p class="muted" style="font-size: var(--fs-sm); margin: var(--space-2) 0 0">Basado en la opinión tributaria profesional y los hallazgos del informe, se recomienda:</p>
+        ${(op.plan_accion || []).length ? `
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>#</th><th>Acción</th><th>Razón tributaria</th><th>Evidencia</th><th>Responsable</th><th>Plazo</th><th class="num">Impacto estimado</th></tr></thead>
+            <tbody>${op.plan_accion.map((a, i) => `<tr>
+              <td>${a.prioridad ?? i + 1}</td>
+              <td>${esc(a.accion || '—')}</td>
+              <td class="sub">${esc(a.motivo || '—')}</td>
+              <td class="sub">${esc(a.evidencia || '—')}</td>
+              <td>${esc(a.responsable || '—')}</td>
+              <td>${esc(a.plazo || '—')}</td>
+              <td class="num mono">${a.impacto_estimado ? fmt(a.impacto_estimado) : sub}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>` : '<div class="empty">No hay acciones pendientes: el informe actual está al día.</div>'}
+        <p class="muted" style="font-size: var(--fs-xs); margin: var(--space-3) 0 0">«Mantener el control mensual de declaraciones y conciliación para evitar sanciones del SII.»</p>
+        <p class="muted" style="font-size: var(--fs-xs); margin: var(--space-2) 0 0; color: var(--fg-muted)">— Opinión tributaria profesional generada automáticamente a partir de los antecedentes SII reunidos.</p>
+      </div>`
+
+    const met = inf.metodologia || {}
+    const panelMetodologia = `
+      <div class="grid-2">
+        <div class="card">
+          <h3>Índice por dimensiones</h3>
+          <div class="sl-chart">${graficos.indice || ''}</div>
+          <p class="hint">${esc(met.regla_no_evaluable || '')}</p>
+          <p class="hint">${esc(met.regla_alerta_critica || '')}</p>
+          <p class="hint">Escala: ${esc(met.clasificacion || '')}</p>
+        </div>
+        <div class="card">
+          <h3>Identificación del contribuyente</h3>
+          <div class="tbl-wrap"><table class="tbl"><tbody>
+            <tr><th>RUT</th><td class="mono">${esc(formatRut(inf.identidad?.rut || ''))}</td></tr>
+            <tr><th>Razón social</th><td>${esc(inf.identidad?.razon_social || '')}</td></tr>
+            <tr><th>Régimen</th><td>${esc(inf.identidad?.regimen || '—')}</td></tr>
+            <tr><th>Inicio de actividades</th><td>${esc(inf.identidad?.inicio_actividades || '—')}</td></tr>
+            <tr><th>Fuente de la ficha</th><td class="sub">${esc(inf.identidad?.fuente || '—')}</td></tr>
+            <tr><th>Período evaluado</th><td>${esc(inf.cobertura?.desde || '—')} → ${esc(inf.cobertura?.hasta || '—')}</td></tr>
+            <tr><th>Cobertura del diagnóstico</th><td>${op.cobertura_diagnostico}% · confianza ${esc(op.nivel_confianza || '—')}</td></tr>
+          </tbody></table></div>
+        </div>
+      </div>
+      <div class="card mt">
+        <h3>Origen de los datos</h3>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Categoría</th><th>Qué significa</th></tr></thead>
+          <tbody>${(met.origen_datos || []).map((o) => `<tr><td><b>${esc(o.nombre)}</b></td><td class="sub">${esc(o.detalle)}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+      <div class="grid-2 mt">
+        <div class="card">
+          <h3>Limitaciones</h3>
+          ${listaHtml([...(met.limitaciones_generales || []), ...(op.limitaciones || [])], '')}
+        </div>
+        <div class="card">
+          <h3>Base normativa de referencia</h3>
+          ${listaHtml(op.base_normativa, '')}
+          <h3 class="mt">Capacidades reales de la conexión SII</h3>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Consulta</th><th>Estado</th><th>Detalle</th></tr></thead>
+            <tbody>${(inf.capacidades_sii || []).map((c) => `<tr>
+              <td><b>${esc(c.nombre)}</b></td>
+              <td><span class="chip ${c.estado === 'disponible' ? 'contabilizado' : c.estado === 'parcial' ? 'propuesto' : 'error'}">${esc(c.estado)}</span></td>
+              <td class="sub">${esc(c.detalle || '')}</td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+      </div>`
+
+    const panelIdentidad = `
+      <div class="grid-2">
+        <div class="card">
+          <h3>Identificación y actividad</h3>
+          <div class="tbl-wrap"><table class="tbl"><tbody>
+            <tr><th>RUT</th><td class="mono">${esc(formatRut(inf.identidad?.rut || ''))}</td></tr>
+            <tr><th>Razón social</th><td>${esc(inf.identidad?.razon_social || '')}</td></tr>
+            <tr><th>Tipo</th><td>${esc(inf.identidad?.tipo_contribuyente || '—')}</td></tr>
+            <tr><th>Inicio de actividades</th><td>${esc(inf.identidad?.inicio_actividades || '—')}</td></tr>
+            <tr><th>Actividad económica</th><td>${esc((inf.identidad?.actividades || []).join(' · ') || '—')}</td></tr>
+            <tr><th>Dirección</th><td>${esc(inf.identidad?.direccion || '—')}</td></tr>
+          </tbody></table></div>
+        </div>
+        <div class="card">
+          <h3>Régimen y atributos del SII</h3>
+          ${inf.identidad?.regimen
+        ? `<div class="checkline ok">Régimen vigente: <b>${esc(inf.identidad.regimen)}</b></div>`
+        : '<div class="checkline warn">Régimen no determinado en la ficha.</div>'}
+          ${(inf.identidad?.atributos || []).length ? `<div class="tbl-wrap mt"><table class="tbl">
+            <thead><tr><th>Código</th><th>Atributo</th><th>Vigencia</th></tr></thead>
+            <tbody>${inf.identidad.atributos.map((a) => `<tr><td class="mono">${esc(a.codigo)}</td><td>${esc(a.descripcion || '')}</td>
+              <td class="sub">${esc(a.fechaInicio || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Sin atributos en la ficha guardada.</p>'}
+          ${(inf.identidad?.alertas_sii || []).length ? `<h4 class="mt">Alertas del SII (verbatim)</h4>
+            ${inf.identidad.alertas_sii.map((a) => `<div class="checkline warn">${esc(a.descripcion || a.descripcionAlerta || 'Alerta sin descripción')}</div>`).join('')}` : ''}
+        </div>
+      </div>`
+
+    const tabs = [
+      { id: 'resumen', label: 'Resumen', html: panelResumen },
+      { id: 'cumplimiento', label: 'Cumplimiento', html: panelCumplimiento },
+      { id: 'iva', label: 'IVA y conciliación', html: panelIva },
+      { id: 'riesgos', label: 'Riesgos', html: panelRiesgos },
+      { id: 'tendencias', label: 'Tendencias', html: panelTendencias },
+      { id: 'impacto', label: 'Impacto financiero', html: panelImpacto },
+      { id: 'plan', label: 'Plan de acción', html: panelPlan },
+      { id: 'metodologia', label: 'Metodología', html: panelMetodologia },
+      { id: 'identidad', label: 'Identificación', html: panelIdentidad },
+    ]
+
+    const color = op.nivel === 'AL_DIA' ? 'var(--success)' : op.nivel === 'CON_OBSERVACIONES' ? 'var(--warning)' : op.nivel === 'REQUIERE_REVISION' ? 'var(--danger)' : 'var(--fg-muted)'
+
+    // ---------------------------------------------------------
+    // Portada profesional con imagen de bienvenida y índice
+    // ---------------------------------------------------------
+    const bienvenida = `
+      <div class="sl-portada-bienvenida">
+        <img class="sl-portada-robot" src="/assets/robot-jmv.svg" alt="Robot de bienvenida JMV" width="64" height="64" aria-hidden="true">
+        <h1 class="sl-portada-titulo">Salud Tributaria</h1>
+        <p class="sl-portada-subtitulo">Diagnóstico inteligente de cumplimiento tributario</p>
+      </div>`
+    
+    const perDisplay = inf.periodo ? `${inf.periodo.slice(4, 6)}/${inf.periodo.slice(0, 4)}` : '—/—'
 
     cont.innerHTML = `
-     <div class="card" id="sl-top">
-       <div class="flex" style="justify-content:space-between;align-items:flex-start;gap:var(--space-3);flex-wrap:wrap">
-         <div>
-           <span class="sys-kicker">Opinión automatizada · ${esc(perDisplay(inf.periodo))}</span>
-           <h2 style="margin:var(--space-1) 0">${esc(op.titulo)} <span class="chip ${chipOp}">${esc(op.nivel.replaceAll('_', ' '))}</span></h2>
-           <p class="muted" style="max-width:70ch;margin:0">${esc(op.resumen)}</p>
-         </div>
-         <div style="text-align:right">
-           <div class="kpi ${op.score >= 80 ? 'up' : op.score >= 50 ? '' : 'bad'}" style="min-width:130px">
-             <small>Score de salud</small><strong>${op.score}/100</strong>
-           </div>
-           <div class="flex mt" style="gap:var(--space-2);justify-content:flex-end;flex-wrap:wrap">
-             <button class="btn btn-secondary" id="sl-print">Imprimir / PDF</button>
-             ${puede ? '<button class="btn btn-primary" id="sl-sync">Sincronizar ficha SII</button>' : ''}
-             ${puede ? '<button class="btn btn-secondary" id="sl-sync-rcv">Ficha + RCV del período</button>' : ''}
-             ${puede ? '<button class="btn btn-secondary" id="sl-sync-decl">Consultar declaraciones SII (5 años)</button>' : ''}
-           </div>
-         </div>
-       </div>
-       <div class="mt" id="sl-aviso"></div>
-       <p class="hint mt">Opinión sobre datos verificables. No es certificación tributaria ni asesoría legal personalizada.
-         El F29 y las boletas de honorarios se leen del SII al consultar declaraciones; el F22 y las juradas todavía <b>no están conectados</b>
-         y se muestran como «no consultado». Abajo se declara qué fuente respalda cada dato.</p>
-     </div>
+      <div class="card sl-portada">
+        <div class="sl-portada-grid">
+          <div>
+            <span class="sys-kicker">JMV Tax Health Intelligence · ${esc(perDisplay)}</span>
+            <h2 class="sl-titulo">Diagnóstico de Salud Tributaria</h2>
+            <p class="muted" style="max-width:64ch;margin:6px 0 12px">${esc(op.clasificacion?.titulo || op.titulo || '')} — ${esc(op.resumen || '')}</p>
+            ${op.clasificacion?.nota ? `<p class="hint" style="max-width:64ch;margin:-6px 0 12px;color:var(--danger)">${esc(op.clasificacion.nota)}</p>` : ''}
+            <div class="sl-indice">
+              <div class="sl-indice-num" style="color:${color}">${op.indice_evaluable === false ? '—' : esc(op.score)}<small>/100</small></div>
+              <div class="sl-indice-meta">
+                <div><b>Cobertura</b> ${op.cobertura_diagnostico}%</div>
+                <div><b>Confianza</b> ${esc(op.nivel_confianza || '—')}</div>
+                <div><b>Alertas altas</b> ${altas}</div>
+                <div><b>Acciones</b> ${(op.plan_accion || []).length}</div>
+              </div>
+            </div>
+          </div>
+          ${bienvenida}
+          <div class="sl-indice">
+            <div class="sl-indice-num" style="color:${color}">${op.indice_evaluable === false ? '—' : esc(op.score)}<small>/100</small></div>
+            <div class="sl-indice-meta">
+              <div><b>Cobertura</b> ${op.cobertura_diagnostico}%</div>
+              <div><b>Confianza</b> ${esc(op.nivel_confianza || '—')}</div>
+              <div><b>Alertas altas</b> ${altas}</div>
+              <div><b>Acciones</b> ${(op.plan_accion || []).length}</div>
+            </div>
+          </div>
+        </div>
+        <div class="sl-acciones">
+            ${puede ? '<button class="btn btn-primary" id="sl-reunion">Reunir antecedentes</button>' : ''}
+            <button class="btn btn-secondary" id="sl-emitir">Emitir informe (PDF)</button>
+            <p class="hint" style="text-align:right;margin:6px 0 0">«Reunir antecedentes» consulta el SII (ficha, compras y ventas, declaraciones, F29 compacto y renta) y rehace el informe. Puede tardar varios minutos.</p>
+          </div>
+        </div>
+        <div id="sl-progreso" class="sl-progreso"></div>
+      </div>
 
-     <div class="grid-2 mt">
-       <div class="card">
-         <h3>Identificación y actividad</h3>
-         <div class="tbl-wrap"><table class="tbl">
-           <tbody>
-             <tr><th>RUT</th><td class="mono">${esc(formatRut(id.rut))}</td></tr>
-             <tr><th>Razón social</th><td>${esc(id.razon_social || '')}</td></tr>
-             <tr><th>Tipo</th><td>${esc(id.tipo_contribuyente || '—')}${id.subtipo_contribuyente ? ` · ${esc(id.subtipo_contribuyente)}` : ''}</td></tr>
-             <tr><th>Inicio de actividades</th><td>${id.inicio_actividades ? esc(id.inicio_actividades) : sinDato}</td></tr>
-             <tr><th>Término de giro</th><td>${id.termino_giro ? `<b style="color:var(--danger)">${esc(id.termino_giro)}</b>` : '<span class="sub">sin término registrado</span>'}</td></tr>
-             <tr><th>Actividad económica</th><td>${(id.actividades || []).length ? esc(id.actividades.join(' · ')) : sinDato}</td></tr>
-             <tr><th>Dirección</th><td>${id.direccion ? esc(id.direccion) : sinDato}</td></tr>
-             <tr><th>Unidad operativa</th><td>${id.unidad_operativa ? esc(`${id.unidad_operativa.descripcion || ''} (${id.unidad_operativa.codigo || 's/c'})`) : sinDato}</td></tr>
-             <tr><th>Capital</th><td>${capital}</td></tr>
-             <tr><th>Segmento</th><td>${esc(id.segmento || '—')}</td></tr>
-             <tr><th>Contacto SII</th><td>${esc(id.email || '')}${id.telefono ? ` · ${esc(id.telefono)}` : ''}${!id.email && !id.telefono ? sinDato : ''}</td></tr>
-             <tr><th>Fuente</th><td class="sub">${esc(id.fuente || '')}</td></tr>
-           </tbody>
-         </table></div>
-       </div>
+      <div class="sl-kpis">
+        ${tarjetas.map((t) => `
+          <div class="sl-kpi" title="${esc(t.t)}">
+            <div class="sl-kpi-k">${esc(t.k)}</div>
+            <div class="sl-kpi-v">${esc(t.v)}</div>
+            <div class="sl-kpi-s">${esc(t.s)}</div>
+            ${kpiContextoSII(t.k, '', t.v, t.s)}
+          </div>`).join('')}
+      </div>
 
-       <div class="card">
-         <h3>Régimen y atributos del SII</h3>
-         ${id.regimen
-           ? `<div class="checkline ok">Régimen vigente: <b>${esc(id.regimen)}</b>${id.regimen_atributo ? ` <span class="sub">(${esc(id.regimen_atributo.codigo)})</span>` : ''}</div>`
-           : '<div class="checkline warn">Régimen no determinado en la ficha. Revisa los atributos en el SII.</div>'}
-         ${(id.atributos || []).length ? `
-           <div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Código</th><th>Atributo</th><th>Vigencia</th></tr></thead>
-           <tbody>${id.atributos.map((a) => `<tr><td class="mono">${esc(a.codigo)}</td><td>${esc(a.descripcion || '')}</td>
-             <td class="sub">${esc(a.fechaInicio || '—')}${a.fechaTermino ? ` → ${esc(a.fechaTermino)}` : ''}</td></tr>`).join('')}</tbody></table></div>`
-           : '<p class="hint">Sin atributos en la ficha guardada.</p>'}
-         ${(id.alertas_sii || []).length ? `
-           <h4 class="mt">Alertas del SII (verbatim)</h4>
-           ${id.alertas_sii.map((a) => `<div class="checkline warn">${esc(a.descripcion || a.descripcionAlerta || 'Alerta sin descripción')}
-             <span class="sub">· código ${esc(a.codigo || 's/c')} · ${esc(a.fechaActiv || 's/f')}</span></div>`).join('')}` : ''}
-       </div>
-     </div>
+      <div class="sl-kpi-animaciones">
+        ${tarjetas.map((t, i) => `
+          <div class="sl-kpi-anim sl-kpi-selection-anim" data-index="${i}">${kpiModuloSeleccion(i)}</div>`).join('')}
+      </div>
 
-     <div class="card mt">
-       <h3>Declaraciones</h3>
-       <div class="tbl-wrap"><table class="tbl">
-         <thead><tr><th>Declaración</th><th>Estado de la consulta</th><th>Resultado</th><th>Última consulta</th></tr></thead>
-         <tbody>
-           <tr><td>Mensual F29</td><td>${estadoDecl(inf.declaraciones.f29)}</td><td class="sub">${esc(inf.declaraciones.f29.detalle)}</td><td class="sub">${esc(inf.declaraciones.f29.ultima_consulta || '—')}</td></tr>
-           <tr><td>Renta F22</td><td>${estadoDecl(inf.declaraciones.renta_f22)}</td><td class="sub">${esc(inf.declaraciones.renta_f22.detalle)}</td><td class="sub">${esc(inf.declaraciones.renta_f22.ultima_consulta || '—')}</td></tr>
-           <tr><td>Declaraciones juradas</td><td>${estadoDecl(inf.declaraciones.juradas)}</td><td class="sub">${esc(inf.declaraciones.juradas.detalle)}</td><td class="sub">${esc(inf.declaraciones.juradas.ultima_consulta || '—')}</td></tr>
-           <tr><td>Boletas de honorarios</td><td>${estadoDecl(inf.declaraciones.boletas_honorarios)}</td><td class="sub">${esc(inf.declaraciones.boletas_honorarios.detalle)}</td><td class="sub">${esc(inf.declaraciones.boletas_honorarios.ultima_consulta || '—')}</td></tr>
-         </tbody>
-       </table></div>
-       <p class="hint mt">«Consultado» significa que el dato se leyó del portal autenticado del SII en la fecha indicada. «No consultado» no es «al día»: es ausencia de información.</p>
-     </div>
+      <div class="sl-kpi-contexto-sii">
+        ${inf.mensuales && inf.mensuales.length > 0 ? `
+          <div class="sl-kpi-f29-comparison">
+            <small>Comparación F29 declarado vs. RCV estimado</small>
+            ${inf.mensuales.slice(0, 3).map((m) => kpiF29Declarado(m)).join('')}
+            ${inf.mensuales.slice(0, 3).map((m) => kpiComparacionF29(m)).join('')}
+          </div>` : ''}
+      </div>
 
-     <div class="grid-2 mt">
-       <div class="card">
-         <h3>Ingresos por año (RCV)</h3>
-         <p class="hint" style="margin-top:0">${esc(inf.ingresos_historicos.nota)}</p>
-         ${(inf.ingresos_historicos.anios || []).length ? `
-           <div class="tbl-wrap"><table class="tbl">
-             <thead><tr><th>Año</th><th class="num">Ventas neto</th><th class="num">IVA ventas</th><th class="num">Compras neto</th><th class="num">IVA compras</th><th class="num">Meses</th></tr></thead>
-             <tbody>${inf.ingresos_historicos.anios.map((a) => `<tr>
-               <td><b>${esc(a.anio)}</b></td><td class="num mono">${fmtM(a.ventas_neto)}</td><td class="num mono">${fmtM(a.ventas_iva)}</td>
-               <td class="num mono">${fmtM(a.compras_neto)}</td><td class="num mono">${fmtM(a.compras_iva)}</td><td class="num">${a.meses_con_datos}</td></tr>`).join('')}</tbody>
-           </table></div>` : '<div class="empty">Sin años con RCV ingerido.</div>'}
-       </div>
+      <div class="sl-tabs" role="tablist">
+        ${tabs.map((t, i) => `<button class="sl-tab ${i === 0 ? 'active' : ''}" data-tab="${t.id}" role="tab">${esc(t.label)}</button>`).join('')}
+      </div>
+      ${tabs.map((t, i) => `<div class="sl-panel ${i === 0 ? '' : 'hidden'}" data-panel="${t.id}">${t.html}</div>`).join('')}
+    `
 
-       <div class="card">
-         <h3>Cobertura del período</h3>
-         <div class="kpi-grid">
-           <div class="kpi up"><small>Meses con RCV</small><strong>${inf.cobertura.con_datos}</strong></div>
-           <div class="kpi"><small>Sin movimiento confirmado</small><strong>${inf.cobertura.sin_movimiento}</strong></div>
-           <div class="kpi ${inf.cobertura.sin_datos ? 'bad' : 'up'}"><small>Sin sincronizar</small><strong>${inf.cobertura.sin_datos}</strong></div>
-         </div>
-         <p class="hint mt">Ventana ${esc(inf.cobertura.desde)} → ${esc(inf.cobertura.hasta)}. «Sin movimiento» solo se marca cuando el SII ya fue consultado y devolvió cero documentos; si no, es «sin sincronizar».</p>
-       </div>
-     </div>
+    // ---------------------------------------------------------
+    // Tabs
+    // ---------------------------------------------------------
+    const botones = cont.querySelectorAll('.sl-tab')
+    const paneles = cont.querySelectorAll('.sl-panel')
+    botones.forEach((b) => b.addEventListener('click', () => {
+      botones.forEach((x) => x.classList.toggle('active', x === b))
+      paneles.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }))
 
-     <div class="card mt">
-       <h3>Declaraciones anuales (${esc(inf.declaraciones_anuales.desde)}–${esc(inf.declaraciones_anuales.hasta)})</h3>
-       <p class="hint" style="margin-top:0">F22 y boletas de honorarios leídos del SII. «—» significa que ese año no se consultó, no que no exista declaración.</p>
-       <div class="tbl-wrap"><table class="tbl">
-         <thead><tr><th>Año</th><th class="num">Ventas RCV (neto)</th><th>F22</th><th class="num">F22 monto</th><th class="num">BHE emitidas</th><th class="num">BHE recibidas</th></tr></thead>
-         <tbody>${(inf.declaraciones_anuales.anios || []).map((a) => `<tr>
-           <td><b>${esc(a.anio)}</b></td>
-           <td class="num mono">${a.rcv ? fmtM(a.rcv.ventas_neto) : '<span class="sub">—</span>'}</td>
-           <td>${a.f22 ? `<span class="chip ${a.f22.estado === 'declarada' || a.f22.estado === 'rectificada' ? 'contabilizado' : a.f22.estado === 'pendiente' || a.f22.estado === 'no_presentada' ? 'error' : 'neutral'}">${esc(a.f22.etiqueta)}</span>` : '<span class="sub">no consultado</span>'}</td>
-           <td class="num mono">${a.f22 && a.f22.monto_total != null ? fmtM(a.f22.monto_total) : '<span class="sub">—</span>'}</td>
-           <td class="num mono">${a.boletas_honorarios?.emitidas?.totales ? fmtM(a.boletas_honorarios.emitidas.totales.honorario_bruto) : '<span class="sub">—</span>'}</td>
-           <td class="num mono">${a.boletas_honorarios?.recibidas?.totales ? fmtM(a.boletas_honorarios.recibidas.totales.honorario_bruto) : '<span class="sub">—</span>'}</td></tr>`).join('')}</tbody>
-       </table></div>
-     </div>
+    // ---------------------------------------------------------
+    // Emitir informe imprimible (HTML → PDF del navegador)
+    // ---------------------------------------------------------
+    document.getElementById('sl-emitir')?.addEventListener('click', () => {
+      const url = `/api/contable/empresas/${eid}/salud-tributaria/informe?periodo=${periodo}`
+      const w = window.open(url, '_blank')
+      if (!w) showToast('El navegador bloqueó la ventana emergente: abre el informe desde el enlace.', 'error')
+    })
 
-     <div class="card mt">
-       <h3>Mensuales — RCV y estimación F29</h3>
-       <div class="tbl-wrap"><table class="tbl">
-         <thead><tr><th>Período</th><th>RCV</th><th>F29 SII</th><th class="num">Ventas neto</th><th class="num">IVA ventas</th><th class="num">Compras neto</th><th class="num">IVA compras</th><th class="num">IVA estimado</th><th class="num">PPM est.</th><th class="num">F29 est.</th><th class="num">F29 declarado</th><th class="num">Dif.</th></tr></thead>
-         <tbody>${inf.mensuales.map((m) => `<tr>
-           <td>${esc(m.nombre)}</td><td>${estadoMes(m)}</td><td>${f29Chip(m)}</td>
-           <td class="num mono">${fmtM(m.ventas_neto)}</td><td class="num mono">${fmtM(m.ventas_iva)}</td>
-           <td class="num mono">${fmtM(m.compras_neto)}</td><td class="num mono">${fmtM(m.compras_iva)}</td>
-           <td class="num mono"><b>${fmtM(m.iva_estimado)}</b></td><td class="num mono">${fmtM(m.ppm_estimado)}</td>
-           <td class="num mono">${fmtM(m.f29_estimado)}</td>
-           <td class="num mono">${m.f29_oficial && m.f29_oficial.monto_total != null ? fmtM(m.f29_oficial.monto_total) : '<span class="sub">—</span>'}</td>
-           <td class="num mono">${m.f29_diferencia == null ? '<span class="sub">—</span>' : `<span class="${Math.abs(m.f29_diferencia) >= 1000 ? '' : 'sub'}">${fmtM(m.f29_diferencia)}</span>`}</td></tr>`).join('')}</tbody>
-       </table></div>
-       <p class="hint mt">«F29 est.» es una estimación propia desde el RCV; «F29 declarado» es lo que informa el SII. La diferencia solo aparece cuando el SII entrega el monto de la declaración.</p>
-     </div>
+    // Agregar estilo para la portada y animaciones
+    const estilo = `
+      <style>
+        .sl-portada { position: relative; }
+        .sl-portada-bienvenida { text-align: center; padding: var(--space-4) var(--space-3); margin-bottom: var(--space-4); }
+        .sl-portada-robot { width: 64px; height: 64px; margin: 0 auto var(--space-2); }
+        .sl-portada-titulo { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.01em; margin: 0; color: var(--fg-primary); }
+        .sl-portada-subtitulo { color: var(--fg-muted); font-size: var(--fs-sm); margin: 4px 0 0; }
+        .sl-kpi-animaciones { position: absolute; top: var(--space-2); right: var(--space-2); display: flex; gap: var(--space-2); }
+        .sl-kpi-selection-badge {
+          background: var(--accent-soft); color: var(--accent);
+          padding: 2px 8px; border-radius: var(--radius-full);
+          font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+        }
+        .sl-kpi-f29-comparison {
+          background: var(--bg-surface);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: var(--space-3) var(--space-4);
+          margin-top: var(--space-3);
+        }
+        .sl-kpi-f29-declared {
+          background: var(--accent-soft);
+          color: var(--accent);
+          padding: var(--space-1) var(--space-2);
+          border-radius: var(--radius-md);
+          font-size: var(--fs-xs);
+          margin: var(--space-1) 0;
+        }
+        .sl-kpi-contexto-sii {
+          background: var(--bg-surface);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          padding: var(--space-3) var(--space-4);
+          margin: var(--space-3) 0;
+        }
+        .sl-kpi-contexto-sii small {
+          color: var(--fg-muted);
+          display: block;
+          margin-bottom: var(--space-1);
+        }
+        @keyframes kpiPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+      </style>`
+    cont.insertAdjacentHTML('afterbegin', estilo)
 
-     <div class="grid-2 mt">
-       <div class="card">
-         <h3>Hallazgos (${(op.hallazgos || []).length})</h3>
-         ${(op.hallazgos || []).length ? op.hallazgos.map((h) => `
-           <div class="checkline ${h.severidad === 'alta' ? 'warn' : ''}">
-             <span class="chip ${sevChip(h.severidad)}">${esc(h.severidad)}</span>
-             <b>${esc(h.titulo)}</b> — ${esc(h.detalle)}
-             <div class="sub">Fuente: ${esc(h.fuente || '—')}</div>
-           </div>`).join('') : '<div class="empty">Sin hallazgos.</div>'}
-       </div>
-
-       <div class="card">
-         <h3>Fundamentos y limitaciones</h3>
-         <h4>Fundamentos</h4>
-         <ul>${(op.fundamentos || []).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-         <h4 class="mt">Recomendaciones</h4>
-         ${(op.recomendaciones || []).length ? `<ul>${op.recomendaciones.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="hint">Sin recomendaciones pendientes.</p>'}
-         <h4 class="mt">Limitaciones</h4>
-         <ul>${(op.limitaciones || []).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-         <h4 class="mt">Base normativa citada</h4>
-         <ul class="sub">${(op.base_normativa || []).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-       </div>
-     </div>
-
-     <div class="card mt">
-       <h3>Capacidades reales de la conexión SII</h3>
-       <div class="tbl-wrap"><table class="tbl">
-         <thead><tr><th>Consulta</th><th>Estado</th><th>Fuente</th><th>Detalle</th></tr></thead>
-         <tbody>${(inf.capacidades_sii || []).map((c) => `<tr>
-           <td><b>${esc(c.nombre)}</b></td><td>${capChip(c.estado)}</td>
-           <td class="sub">${esc(c.fuente || '—')}${c.evidencia ? `<br><span class="mono" style="font-size:var(--fs-xs)">${esc(c.evidencia)}</span>` : ''}</td>
-           <td class="sub">${esc(c.detalle || '')}</td></tr>`).join('')}</tbody>
-       </table></div>
-     </div>`
-
-    document.getElementById('sl-print').addEventListener('click', () => window.print())
-
-    const sincronizar = async (incluirRcv) => {
-      const aviso = document.getElementById('sl-aviso')
-      aviso.innerHTML = '<div class="banner-lic">Consultando el SII… puede tardar unos segundos.</div>'
+    // ---------------------------------------------------------
+    // Botón único: reunión de antecedentes
+    // ---------------------------------------------------------
+    const cajaProgreso = document.getElementById('sl-progreso')
+    document.getElementById('sl-reunion')?.addEventListener('click', async () => {
+      const boton = document.getElementById('sl-reunion')
+      boton.disabled = true
+      boton.textContent = 'Reuniendo…'
+      cajaProgreso.innerHTML = '<div class="sl-prog"><b>Iniciando la consulta al SII…</b></div>'
       try {
-        const r = await apiPost(`/api/contable/empresas/${eid}/salud-tributaria/sincronizar`, {
-          periodo, meses: 12, incluir_rcv: incluirRcv,
+        const r = await apiPost(`/api/contable/empresas/${eid}/salud-tributaria/reunion`, { periodo })
+        const jobId = r.jobId
+        const pintar = (est) => {
+          const pasos = est.pasos || []
+          cajaProgreso.innerHTML = `
+            <div class="sl-prog">
+              <div class="sl-prog-estado">${est.estado === 'en_curso' ? 'Consultando el SII…' : est.estado === 'completado' ? 'Antecedentes reunidos' : est.estado === 'completado_con_errores' ? 'Reunido con errores parciales' : 'Error'}</div>
+              <ul class="sl-prog-pasos">${pasos.map((p) => `<li class="sl-prog-paso is-${p.estado}">
+                <span class="sl-prog-dot"></span>
+                <span class="sl-prog-nombre">${esc(p.nombre)}</span>
+                <span class="sl-prog-detalle">${esc(p.detalle || p.error || '')}</span>
+              </li>`).join('')}</ul>
+            </div>`
+        }
+        await new Promise((resolve) => {
+          const stop = iniciarPolling(
+            () => apiGet(`/api/contable/empresas/${eid}/salud-tributaria/reunion/${jobId}`).then((x) => x.estado),
+            {
+              onUpdate: pintar,
+              esTerminal: (est) => est.estado !== 'en_curso',
+              intervalo: 3000,
+            },
+          )
+          setTimeout(() => { stop(); resolve() }, 30 * 60 * 1000)
         })
-        const partes = ['Informe generado']
-        if (r.ficha && !r.ficha.sincronizada) partes.push(`ficha SII no actualizada: ${r.ficha.advertencia}`)
-        if (r.rcv && r.rcv.job_id) partes.push('ingesta RCV iniciada en segundo plano')
-        if (r.rcv && r.rcv.advertencia) partes.push(`RCV no iniciado: ${r.rcv.advertencia}`)
-        showToast(partes.join(' · '), r.ficha && r.ficha.sincronizada ? 'success' : 'error')
+        const final = await apiGet(`/api/contable/empresas/${eid}/salud-tributaria/reunion/${jobId}`)
+        const fallidos = (final.estado.pasos || []).filter((p) => p.estado === 'error')
+        showToast(
+          fallidos.length
+            ? `Antecedentes reunidos con ${fallidos.length} paso(s) con error: ${fallidos.map((p) => p.nombre).join(', ')}`
+            : 'Antecedentes reunidos. El informe fue actualizado.',
+          fallidos.length ? 'error' : 'success',
+        )
         renderRoute()
       } catch (err) {
-        aviso.innerHTML = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">${esc(err.message)}</div>`
-      }
-    }
-    document.getElementById('sl-sync')?.addEventListener('click', () => sincronizar(false))
-    document.getElementById('sl-sync-rcv')?.addEventListener('click', () => sincronizar(true))
-    document.getElementById('sl-sync-decl')?.addEventListener('click', async () => {
-      const aviso = document.getElementById('sl-aviso')
-      aviso.innerHTML = '<div class="banner-lic">Leyendo las declaraciones del SII (5 años)… puede tardar varios minutos.</div>'
-      try {
-        const r = await apiPost(`/api/contable/empresas/${eid}/salud-tributaria/declaraciones`, { periodo, anios: 5 })
-        const partes = [`Declaraciones consultadas: F29 ${r.resultado.f29?.periodos ?? 0} período(s)`]
-        if (r.resultado.f22) partes.push(`F22 ${r.resultado.f22.anios} año(s)`)
-        if (r.resultado.boletas) partes.push(`BHE ${r.resultado.boletas.anios} año(s)`)
-        if (r.aviso) partes.push(r.aviso)
-        showToast(partes.join(' · '), r.aviso ? 'error' : 'success')
-        renderRoute()
-      } catch (err) {
-        aviso.innerHTML = `<div class="banner-lic" style="background:var(--danger-soft);color:var(--danger)">${esc(err.message)}</div>`
+        cajaProgreso.innerHTML = `<div class="sl-prog"><b style="color:var(--danger)">${esc(err.message)}</b></div>`
+        boton.disabled = false
+        boton.textContent = 'Reunir antecedentes'
       }
     })
   },
+}
+
+/** Lista HTML tolerante: sin datos NO inventa contenido. */
+function listaHtml(items, vacio = '') {
+  if (!items || !items.length) return vacio ? `<p class="hint">${esc(vacio)}</p>` : ''
+  return `<ul class="sl-lista">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`
 }

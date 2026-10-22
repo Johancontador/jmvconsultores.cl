@@ -68,12 +68,20 @@ const CAPACIDADES_SII = [
     detalle: 'Fuente: SII. Por período: declarada/pendiente, folio, fecha de presentación y monto declarado (búsqueda anual, 6 años disponibles).',
   },
   {
+    id: 'f29_formulario_compacto',
+    nombre: 'Formulario Compacto del F29 (casillas declaradas)',
+    estado: 'disponible',
+    fuente: 'www4.sii.cl/rfiInternet/formCompacto (Consulta Integral F29 → Formulario Compacto)',
+    evidencia: 'backend/core/declaraciones-sii.js + backend/core/f29-formulario.js',
+    detalle: 'Descarga el PDF del F29 tal como se presentó y extrae sus casillas (ventas, compras, IVA, PPM, total a pagar). Es la verdad declarada: permite contrastar el RCV del sistema contra lo declarado.',
+  },
+  {
     id: 'renta_f22',
     nombre: 'Estado de declaraciones de renta (F22)',
-    estado: 'no_integrado',
-    fuente: 'SII Renta',
-    evidencia: null,
-    detalle: 'No se encontró una consulta de estado F22 por RUT en los portales accesibles con el login simple; el flujo de Renta exige la operación renta. Queda «no consultado».',
+    estado: 'disponible',
+    fuente: 'www4.sii.cl/consultaestadof22ui — Consulta de Estado de Renta',
+    evidencia: 'backend/core/renta-sii.js',
+    detalle: 'Por año: folio, código de concordancia, situación vigente/no vigente, fecha de tramitación, remanente solicitado/devuelto, glosa textual del SII e historial de eventos.',
   },
   {
     id: 'declaraciones_juradas',
@@ -285,6 +293,328 @@ function hallazgo(codigo, severidad, titulo, detalle, fuente) {
   return { codigo, severidad, titulo, detalle, fuente }
 }
 
+// ---------------------------------------------------------------------------
+// LECTURAS NUEVAS (v2 del informe)
+// ---------------------------------------------------------------------------
+
+/**
+ * Formularios Compactos leídos del SII: una fila por período con las CASILLAS
+ * declaradas. Es la contraparte oficial del F29 estimado desde el RCV.
+ */
+function leerFormulariosF29(db, empresaId, desde, hasta) {
+  const filas = db.prepare(`
+    SELECT periodo, folio, estado, situacion, monto_observado, declaraciones_vigentes,
+           intentos, indicadores_json, casillas_json, verificaciones_json, eventos_json,
+           url, consultado_en
+    FROM f29_formularios
+    WHERE empresa_id = ? AND periodo BETWEEN ? AND ?
+    ORDER BY periodo
+  `).all(empresaId, String(desde), String(hasta))
+  const mapa = new Map()
+  for (const f of filas) {
+    const parse = (v, def) => { try { return JSON.parse(v) } catch { return def } }
+    mapa.set(String(f.periodo), {
+      periodo: String(f.periodo),
+      folio: f.folio || null,
+      estado: f.estado || null,
+      situacion: f.situacion || null,
+      monto_observado: f.monto_observado == null ? null : Number(f.monto_observado),
+      declaraciones_vigentes: f.declaraciones_vigentes == null ? null : Number(f.declaraciones_vigentes),
+      intentos: f.intentos == null ? null : Number(f.intentos),
+      indicadores: parse(f.indicadores_json, {}),
+      casillas: parse(f.casillas_json, []),
+      verificaciones: parse(f.verificaciones_json, []),
+      eventos: parse(f.eventos_json, []),
+      url: f.url || null,
+      consultado_en: f.consultado_en || null,
+    })
+  }
+  return mapa
+}
+
+/** Declaraciones de renta (F22) por año, con su glosa e historial de eventos. */
+function leerRenta(db, empresaId, desde, hasta) {
+  const filas = db.prepare(`
+    SELECT periodo, estado, folio, fecha_presentacion, monto_total, datos_json, consultado_en
+    FROM declaraciones_sii
+    WHERE empresa_id = ? AND tipo = 'F22' AND periodo BETWEEN ? AND ?
+    ORDER BY periodo
+  `).all(empresaId, String(desde), String(hasta))
+  const mapa = new Map()
+  for (const f of filas) {
+    let datos = null
+    try { datos = JSON.parse(f.datos_json) } catch { datos = null }
+    mapa.set(String(f.periodo), {
+      anio: String(f.periodo),
+      estado: f.estado || 'sin_informacion',
+      folio: f.folio || null,
+      fecha_presentacion: f.fecha_presentacion || null,
+      monto_total: f.monto_total == null ? null : Number(f.monto_total),
+      glosa: datos?.glosa || null,
+      concordancia: datos?.concordancia || null,
+      cod_concordancia: datos?.cod_concordancia || null,
+      situacion: datos?.situacion || null,
+      situacion_etiqueta: datos?.situacion_etiqueta || null,
+      fecha_vencimiento: datos?.fecha_vencimiento || null,
+      remanente_solicitado: datos?.remanente_solicitado ?? null,
+      remanente_devuelto: datos?.remanente_devuelto ?? null,
+      monto_giro: datos?.monto_giro ?? null,
+      eventos: Array.isArray(datos?.eventos) ? datos.eventos : [],
+      observaciones: Array.isArray(datos?.observaciones) ? datos.observaciones : [],
+      consultado_en: f.consultado_en || null,
+    })
+  }
+  return mapa
+}
+
+/**
+ * Estado de TESORERÍA para el informe: saldos bancarios, caja, movimientos del
+ * mes, cobranza (con mora) y cuentas por pagar. Todo sale de las tablas del
+ * sistema; si la empresa no usa tesorería, se declara 'sin_datos'.
+ */
+function resumenTesoreria(db, empresaId, { desde, hasta } = {}) {
+  const salida = {
+    estado: 'sin_datos',
+    bancos: [],
+    total_bancos: null,
+    caja: null,
+    mes_actual: null,
+    cobranza: null,
+    proveedores: null,
+    conciliacion: null,
+    nota: 'Sin movimientos de tesorería registrados para esta empresa.',
+  }
+  try {
+    const bancos = db.prepare(`
+      SELECT b.id, b.banco, b.numero, b.moneda, b.saldo, b.activo
+      FROM bancos_cuentas b
+      WHERE b.empresa_id = ? AND b.activo = 1
+      ORDER BY b.saldo DESC
+    `).all(empresaId)
+    const total = bancos.reduce((s, b) => s + (Number(b.saldo) || 0), 0)
+    salida.bancos = bancos.map((b) => ({ ...b, saldo: Number(b.saldo) || 0 }))
+    salida.total_bancos = total
+    if (bancos.length) salida.estado = 'disponible'
+
+    // Caja (cuenta alias CAJA), si existe.
+    const cta = db.prepare(`SELECT id FROM cuentas WHERE empresa_id = ? AND alias = 'CAJA' AND activa = 1`).get(empresaId)
+    if (cta) {
+      const s = db.prepare(`
+        SELECT COALESCE(SUM(debe),0) AS debe, COALESCE(SUM(haber),0) AS haber
+        FROM asiento_lineas WHERE empresa_id = ? AND cuenta_id = ?
+      `).get(empresaId, cta.id)
+      salida.caja = (s.debe || 0) - (s.haber || 0)
+    }
+
+    // Flujos del mes en curso.
+    const mes = new Date().toISOString().slice(0, 7)
+    const flujos = db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN monto > 0 THEN monto ELSE 0 END), 0) AS ingresos,
+        COALESCE(SUM(CASE WHEN monto < 0 THEN -monto ELSE 0 END), 0) AS egresos,
+        COUNT(*) AS n
+      FROM teso_movimientos WHERE empresa_id = ? AND substr(fecha,1,7) = ?
+    `).get(empresaId, mes)
+    salida.mes_actual = { mes, ingresos: flujos.ingresos, egresos: flujos.egresos, movimientos: flujos.n }
+
+    // Cobranza (cuentas por cobrar) con nivel de mora.
+    const cc = db.prepare(`
+      SELECT d.rut_contraparte AS rut, d.razon_social, SUM(d.monto_total) AS saldo
+      FROM documentos d
+      WHERE d.empresa_id = ? AND d.tipo_flujo = 'venta' AND d.estado = 'CONTABILIZADO'
+        AND d.asiento_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM teso_movimientos m
+          WHERE m.documento_id = d.id AND ABS(m.monto) >= ABS(d.monto_total) - 1
+        )
+      GROUP BY d.rut_contraparte, d.razon_social
+      HAVING saldo > 0
+      ORDER BY saldo DESC
+    `).all(empresaId)
+    if (cc.length) {
+      const hoy = new Date().toISOString().slice(0, 10)
+      const vencidos = db.prepare(`
+        SELECT d.rut_contraparte AS rut, d.fecha_docto, d.monto_total
+        FROM documentos d
+        WHERE d.empresa_id = ? AND d.tipo_flujo = 'venta' AND d.estado = 'CONTABILIZADO'
+          AND d.asiento_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM teso_movimientos m
+            WHERE m.documento_id = d.id AND ABS(m.monto) >= ABS(d.monto_total) - 1
+          )
+      `).all(empresaId)
+      let dias = 0
+      let vencidoPesos = 0
+      let vencidos30 = 0
+      for (const v of vencidos) {
+        const d = Math.max(0, Math.floor((new Date(hoy) - new Date(v.fecha_docto || hoy)) / 86400e3))
+        dias += d
+        if (d > 30) { vencidoPesos += Number(v.monto_total) || 0; vencidos30++ }
+      }
+      const total = cc.reduce((s, c) => s + (Number(c.saldo) || 0), 0)
+      salida.cobranza = {
+        total,
+        clientes: cc.length,
+        dias_promedio: vencidos.length ? Math.round(dias / vencidos.length) : null,
+        vencido_30_dias: vencidoPesos,
+        documentos_vencidos_30: vencidos30,
+        top: cc.slice(0, 5).map((c) => ({ rut: c.rut, razon_social: c.razon_social, saldo: Number(c.saldo) || 0 })),
+      }
+    }
+
+    // Cuentas por pagar (compras contabilizadas sin pago).
+    const cp = db.prepare(`
+      SELECT d.rut_contraparte AS rut, d.razon_social, SUM(d.monto_total) AS saldo
+      FROM documentos d
+      WHERE d.empresa_id = ? AND d.tipo_flujo = 'compra' AND d.estado = 'CONTABILIZADO'
+        AND d.asiento_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM teso_movimientos m
+          WHERE m.documento_id = d.id AND ABS(m.monto) >= ABS(d.monto_total) - 1
+        )
+      GROUP BY d.rut_contraparte, d.razon_social
+      HAVING saldo > 0
+      ORDER BY saldo DESC
+    `).all(empresaId)
+    if (cp.length) {
+      salida.proveedores = {
+        total: cp.reduce((s, c) => s + (Number(c.saldo) || 0), 0),
+        proveedores: cp.length,
+        top: cp.slice(0, 5).map((c) => ({ rut: c.rut, razon_social: c.razon_social, saldo: Number(c.saldo) || 0 })),
+      }
+    }
+
+    // Conciliación: movimientos de cartola pendientes vs. aplicados.
+    const cartola = db.prepare(`
+      SELECT COUNT(*) AS n, SUM(CASE WHEN aplicado = 1 THEN 1 ELSE 0 END) AS ok
+      FROM teso_cartola WHERE empresa_id = ?
+    `).get(empresaId)
+    if (cartola && cartola.n) {
+      salida.conciliacion = {
+        total: cartola.n,
+        conciliados: cartola.ok || 0,
+        pendientes: cartola.n - (cartola.ok || 0),
+        ratio: cartola.n ? Math.round(((cartola.ok || 0) / cartola.n) * 100) : 0,
+      }
+    }
+  } catch (err) {
+    salida.estado = 'sin_datos'
+    salida.nota = `No se pudo leer la tesorería: ${err.message}`
+  }
+  return salida
+}
+
+/**
+ * KPIs y comparaciones del período: magnitudes con contexto (contra el
+ * promedio de 12 meses y contra el mismo mes del año anterior), no números
+ * sueltos. Todo se deriva de los datos ya leídos; nada se estima.
+ */
+function calcularKpis(mensuales, { f29Formularios, tesoreria, tasa }) {
+  const conDatos = mensuales.filter((m) => m.estado === 'con_datos')
+  const ultimo = conDatos.length ? conDatos[conDatos.length - 1] : null
+  const anterior = conDatos.length > 1 ? conDatos[conDatos.length - 2] : null
+  const promedioVentas = conDatos.length
+    ? Math.round(conDatos.reduce((s, m) => s + m.ventas_neto, 0) / conDatos.length)
+    : null
+  const promedioIva = conDatos.length
+    ? Math.round(conDatos.reduce((s, m) => s + m.iva_estimado, 0) / conDatos.length)
+    : null
+  const promedioPpm = conDatos.length
+    ? Math.round(conDatos.reduce((s, m) => s + m.ppm_estimado, 0) / conDatos.length)
+    : null
+
+  const ventasTotal = conDatos.reduce((s, m) => s + m.ventas_neto, 0)
+  const comprasTotal = conDatos.reduce((s, m) => s + m.compras_neto, 0)
+  const ivaTotal = conDatos.reduce((s, m) => s + m.iva_estimado, 0)
+  const ppmTotal = conDatos.reduce((s, m) => s + m.ppm_estimado, 0)
+
+  // Mismo mes del año anterior (para la comparación interanual).
+  const mismoMes = (p) => {
+    if (!p) return null
+    const anio = Number(p.slice(0, 4)) - 1
+    return conDatos.find((m) => m.periodo === `${anio}${p.slice(4)}`) || null
+  }
+  const previo = ultimo ? mismoMes(ultimo.periodo) : null
+
+  // Lo DECLARADO en el F29 (Formulario Compacto): la verdad del SII.
+  const declarados = [...f29Formularios.values()].filter((f) => f.indicadores && Object.keys(f.indicadores).length)
+  const sumaDeclarado = (clave) => declarados.reduce((s, f) => s + (Number(f.indicadores?.[clave]) || 0), 0)
+
+  const variacion = (actual, base) => {
+    if (actual == null || base == null || !base) return null
+    return Math.round(((actual - base) / Math.abs(base)) * 1000) / 10
+  }
+
+  const cob = tesoreria?.cobranza || null
+  const dso = cob && cob.total && ventasTotal
+    ? Math.round((cob.total / (ventasTotal / Math.max(1, conDatos.length))) * 30)
+    : null
+
+  return {
+    ventas_periodo: ventasTotal,
+    compras_periodo: comprasTotal,
+    iva_periodo: ivaTotal,
+    ppm_periodo: ppmTotal,
+    resultado_operativo: ventasTotal - comprasTotal - ivaTotal - ppmTotal,
+    margen_bruto_pct: ventasTotal ? Math.round(((ventasTotal - comprasTotal) / ventasTotal) * 1000) / 10 : null,
+    promedio_mensual_ventas: promedioVentas,
+    promedio_mensual_iva: promedioIva,
+    promedio_mensual_ppm: promedioPpm,
+    ultimo_mes: ultimo ? {
+      periodo: ultimo.periodo,
+      ventas: ultimo.ventas_neto,
+      iva: ultimo.iva_estimado,
+      ppm: ultimo.ppm_estimado,
+      variacion_vs_promedio: variacion(ultimo.ventas_neto, promedioVentas),
+      variacion_vs_mes_anterior: variacion(ultimo.ventas_neto, previo ? previo.ventas_neto : null),
+      variacion_iva_vs_mes_anterior: variacion(ultimo.iva_estimado, previo ? previo.iva_estimado : null),
+    } : null,
+    mismo_mes_anterior: previo ? { periodo: previo.periodo, ventas: previo.ventas_neto, iva: previo.iva_estimado } : null,
+    // Lo declarado en el F29 (SII) vs. lo estimado desde el RCV.
+    declarado: {
+      periodos: declarados.length,
+      ventas: sumaDeclarado('total_debitos'),
+      compras: sumaDeclarado('total_creditos'),
+      iva_determinado: sumaDeclarado('iva_determinado'),
+      ppm_neto: sumaDeclarado('ppm_neto'),
+      total_a_pagar: sumaDeclarado('total_a_pagar'),
+      verificaciones_ok: declarados.reduce((s, f) => s + (f.verificaciones || []).filter((v) => v.ok).length, 0),
+      verificaciones_total: declarados.reduce((s, f) => s + (f.verificaciones || []).length, 0),
+    },
+    tesoreria: {
+      saldos_bancarios: tesoreria?.total_bancos ?? null,
+      caja: tesoreria?.caja ?? null,
+      cobranza_total: cob ? cob.total : null,
+      cobranza_dias: cob ? cob.dias_promedio : null,
+      cobranza_vencida_30: cob ? cob.vencido_30_dias : null,
+      dso_estimado: dso,
+      cuentas_por_pagar: tesoreria?.proveedores?.total ?? null,
+      conciliacion_pct: tesoreria?.conciliacion?.ratio ?? null,
+    },
+    tasa_ppm: tasa,
+  }
+}
+
+/** Serie mensual para los gráficos (SVG en el front) con su declarado. */
+function serieMensual(mensuales, f29Formularios) {
+  return mensuales.map((m) => {
+    const f = f29Formularios.get(m.periodo)
+    const ind = f?.indicadores || {}
+    return {
+      periodo: m.periodo,
+      nombre: m.nombre,
+      ventas: m.ventas_neto,
+      compras: m.compras_neto,
+      iva: m.iva_estimado,
+      ppm: m.ppm_estimado,
+      f29_estimado: m.f29_estimado,
+      f29_declarado: ind.total_a_pagar ?? null,
+      ventas_declaradas: ind.total_debitos ?? null,
+      estado: m.estado,
+    }
+  })
+}
+
 /**
  * Construye el informe. `ficha` es opcional: si no se pasa, usa la guardada
  * en empresas (y lo declara). No hace red.
@@ -304,9 +634,19 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
   // Declaraciones OFICIALES ya consultadas al SII (si las hay).
   const anioHasta = Number(periodoFinal.slice(0, 4))
   const anioDesde = anioHasta - 5
-  const f29Oficial = leerDeclaraciones(db, empresaId, 'F29', desde, periodoFinal)
+  // Las declaraciones se leen en TODO el rango que entrega el SII (5 años),
+  // no solo en la ventana del RCV: un F29 no presentado de hace tres años es
+  // un riesgo real y no puede desaparecer porque el período analizado sea
+  // corto. La ventana del RCV sigue mandando en montos, calendario y
+  // gráficos; aquí manda el historial de cumplimiento.
+  const f29Oficial = leerDeclaraciones(db, empresaId, 'F29', `${anioDesde}01`, periodoFinal)
   const f22Oficial = leerDeclaraciones(db, empresaId, 'F22', anioDesde, anioHasta)
   const bheOficial = leerDeclaraciones(db, empresaId, 'BHE', anioDesde, anioHasta)
+
+  // NUEVO v2: Formulario Compacto del F29 (casillas DECLARADAS) y tesorería.
+  const f29Formularios = leerFormulariosF29(db, empresaId, desde, periodoFinal)
+  const rentaAnual = leerRenta(db, empresaId, anioDesde, anioHasta)
+  const tesoreria = resumenTesoreria(db, empresaId, { desde, hasta: periodoFinal })
 
   const mensuales = periodoLista.map((p) => {
     const reg = porPeriodo.get(p) || {}
@@ -328,6 +668,13 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
     }
 
     const of = f29Oficial.get(p) || null
+    const ff = f29Formularios.get(p) || null
+    const ind = ff?.indicadores || {}
+    // Lo declarado en el F29 (SII) frente a lo estimado desde el RCV.
+    const declaradoVentas = ind.total_debitos ?? null
+    const declaradoIva = ind.iva_determinado ?? null
+    const declaradoPpm = ind.ppm_neto ?? null
+    const declaradoTotal = ind.total_a_pagar ?? null
     return {
       periodo: p,
       nombre: nombrePeriodo(p),
@@ -360,6 +707,38 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
       f29_diferencia: of && of.monto_total != null && estado === 'con_datos'
         ? Math.round(totalF29) - Number(of.monto_total)
         : null,
+      // Formulario Compacto: las casillas del F29 tal como se presentó.
+      f29_formulario: ff ? {
+        folio: ff.folio,
+        estado: ff.estado,
+        situacion: ff.situacion,
+        monto_observado: ff.monto_observado,
+        declaraciones_vigentes: ff.declaraciones_vigentes,
+        intentos: ff.intentos,
+        indicadores: ff.indicadores,
+        verificaciones: ff.verificaciones,
+        eventos: ff.eventos,
+        url: ff.url,
+        consultado_en: ff.consultado_en,
+      } : null,
+      // Comparación DECLARADO (SII) vs. ESTIMADO (RCV del sistema).
+      comparacion: ff ? {
+        ventas_declaradas: declaradoVentas,
+        ventas_estimadas: Math.round(ventasNeto),
+        diferencia_ventas: declaradoVentas != null ? declaradoVentas - Math.round(ventasNeto) : null,
+        iva_declarado: declaradoIva,
+        iva_estimado: Math.round(iva),
+        diferencia_iva: declaradoIva != null ? declaradoIva - Math.round(iva) : null,
+        ppm_declarado: declaradoPpm,
+        ppm_estimado: Math.round(ppm),
+        diferencia_ppm: declaradoPpm != null ? declaradoPpm - Math.round(ppm) : null,
+        total_declarado: declaradoTotal,
+        total_estimado: Math.round(totalF29),
+        diferencia_total: declaradoTotal != null ? declaradoTotal - Math.round(totalF29) : null,
+        verificaciones: ff.verificaciones || [],
+        // Solo hay comparación cuando el RCV del período está ingerido.
+        comparable: estado === 'con_datos',
+      } : null,
     }
   })
 
@@ -370,26 +749,36 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
 
   const hallazgos = []
 
-  // ---- Declaraciones oficiales F29 ----
-  const f29Declaradas = mensuales.filter((m) => m.f29_estado === 'declarada' || m.f29_estado === 'rectificada')
-  const f29Pendientes = mensuales.filter((m) => m.f29_estado === 'pendiente' || m.f29_estado === 'no_presentada')
-  const f29Consultados = mensuales.filter((m) => m.f29_estado !== 'no_consultado')
+  // ---- Declaraciones oficiales F29 (historial completo del SII) ----
+  // El HISTORIAL alimenta el cumplimiento y los hallazgos (un F29 pendiente
+  // de 2024 sigue siendo un F29 pendiente). La VENTANA sigue alimentando los
+  // montos y la exposición: solo se puede cuantificar lo que tiene RCV.
+  const f29Historial = [...f29Oficial.values()]
+  const f29Declaradas = f29Historial.filter((d) => d.estado === 'declarada' || d.estado === 'rectificada')
+  const f29Pendientes = f29Historial.filter((d) => d.estado === 'pendiente' || d.estado === 'no_presentada')
+  const f29Consultados = f29Historial.length
+  const f29EnVentana = mensuales.filter((m) => m.f29_estado !== 'no_consultado').length
+  const f29PendientesVentana = mensuales.filter((m) => m.f29_estado === 'pendiente' || m.f29_estado === 'no_presentada')
+  const rangoF29 = f29Historial.length
+    ? `${[...f29Historial].map((d) => d.periodo).sort()[0]}–${[...f29Historial].map((d) => d.periodo).sort()[f29Historial.length - 1]}`
+    : null
 
   // No consultar NO es un hallazgo: es una limitación de cobertura (va en
   // `limitaciones`). Marcarlo como observación haría que todo informe sin
   // sincronización con el SII pareciera un problema del contribuyente.
   if (f29Pendientes.length) {
-    const lista = f29Pendientes.slice(0, 6).map((m) => m.nombre).join(', ')
+    const lista = f29Pendientes.slice(0, 6).map((d) => nombrePeriodo(d.periodo)).join(', ')
     hallazgos.push(hallazgo('F29_PENDIENTE', 'alta', 'F29 pendiente de presentación',
-      `El SII registra ${f29Pendientes.length} período(s) sin declaración vigente: ${lista}${f29Pendientes.length > 6 ? '…' : ''}. Regulariza antes de que el SII aplique sanciones o intereses.`,
+      `El SII registra ${f29Pendientes.length} período(s) sin declaración vigente${rangoF29 ? ` (${rangoF29})` : ''}: ${lista}${f29Pendientes.length > 6 ? '…' : ''}. Regulariza antes de que el SII aplique sanciones o intereses.`,
       'Consulta Integral F29 (SII)'))
   }
 
   const diferencias = mensuales.filter((m) => m.estado === 'con_datos' && m.f29_diferencia != null && Math.abs(m.f29_diferencia) >= 1000)
   if (diferencias.length) {
     const total = diferencias.reduce((s, m) => s + m.f29_diferencia, 0)
+    const bruto = diferencias.reduce((s, m) => s + Math.abs(m.f29_diferencia), 0)
     hallazgos.push(hallazgo('F29_DIFERENCIA', 'media', 'Diferencia entre F29 declarado y estimación del RCV',
-      `${diferencias.length} período(s) con diferencia de al menos $1.000 (suma ${Math.round(total).toLocaleString('es-CL')} CLP). La estimación sale del RCV: si la diferencia se repite, revisa documentos faltantes o declaraciones rectificatorias.`,
+      `${diferencias.length} período(s) con diferencia de al menos $1.000 (magnitud bruta ${Math.round(bruto).toLocaleString('es-CL')} CLP; diferencia neta ${Math.round(total).toLocaleString('es-CL')} CLP, cuyo signo indica si se declaró de más o de menos). La estimación sale del RCV: si la diferencia se repite, revisa documentos faltantes o declaraciones rectificatorias.`,
       'Declaraciones F29 del SII vs RCV'))
   }
 
@@ -478,36 +867,336 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
   const ivaPorPagar = mensuales.filter((m) => m.estado === 'con_datos' && m.iva_estimado > 0)
   if (ivaPorPagar.length) {
     hallazgos.push(hallazgo('F29_ESTIMADO', 'info',
-      f29Consultados.length ? 'F29 estimado y F29 declarado disponibles' : 'F29 estimado disponible, estado oficial no consultado',
-      f29Consultados.length
+      f29Consultados ? 'F29 estimado y F29 declarado disponibles' : 'F29 estimado disponible, estado oficial no consultado',
+      f29Consultados
         ? `${ivaPorPagar.length} período(s) con IVA estimado a pagar desde el RCV. El monto declarado se lee del SII y se compara en el detalle mensual; la estimación sigue siendo propia.`
         : `${ivaPorPagar.length} período(s) con IVA estimado a pagar. No se consultó la declaración F29 del SII para este rango: el monto mostrado es una estimación desde el RCV.`,
-      'services/calculos + RCV' + (f29Consultados.length ? ' + Consulta Integral F29' : '')))
+      'backend/services/calculos.js + RCV ingerido' + (f29Consultados ? ' + Consulta Integral F29' : '')))
   }
 
-  // ---- Opinión ----
+  // ---- F29 DECLARADO (SII) vs RCV (sistema): la comparación de verdad ----
+  const comparables = mensuales.filter((m) => m.comparacion && m.comparacion.comparable)
+  const difVentas = comparables.filter((m) => m.comparacion.diferencia_ventas != null && Math.abs(m.comparacion.diferencia_ventas) >= 1000)
+  if (difVentas.length) {
+    const suma = difVentas.reduce((s, m) => s + m.comparacion.diferencia_ventas, 0)
+    const bruto = difVentas.reduce((s, m) => s + Math.abs(m.comparacion.diferencia_ventas || 0), 0)
+    const detalle = difVentas.slice(0, 6).map((m) => `${m.nombre}: declarado ${Math.round(m.comparacion.ventas_declaradas).toLocaleString('es-CL')} vs RCV ${Math.round(m.comparacion.ventas_estimadas).toLocaleString('es-CL')}`).join('; ')
+    hallazgos.push(hallazgo('F29_VS_RCV', 'alta', 'Ventas del F29 declarado no coinciden con el RCV del sistema',
+      `${difVentas.length} período(s) con diferencia de ventas de al menos $1.000 (magnitud bruta ${Math.round(bruto).toLocaleString('es-CL')} CLP; diferencia neta ${Math.round(suma).toLocaleString('es-CL')} CLP). ${detalle}${difVentas.length > 6 ? '…' : ''}. El F29 declarado es la verdad: la diferencia apunta a documentos faltantes en el RCV, notas de crédito no leídas o a una rectificación pendiente de regularizar.`,
+      'Formulario Compacto del F29 (SII) vs RCV ingerido'))
+  }
+  const verifFallidas = mensuales.flatMap((m) => (m.comparacion?.verificaciones || []).filter((v) => !v.ok).map((v) => ({ periodo: m.nombre, ...v })))
+  if (verifFallidas.length) {
+    hallazgos.push(hallazgo('F29_INCONSISTENTE', 'media', 'Casillas del F29 declarado que no cuadran entre sí',
+      `${verifFallidas.length} verificación(es) internas del Formulario Compacto no cuadran (por ejemplo, débitos menos notas de crédito distinto del total, o IVA determinado que no coincide con la diferencia de débitos y créditos). Detalle: ${verifFallidas.slice(0, 3).map((v) => `${v.periodo}: ${v.detalle}`).join(' · ')}.`,
+      'Formulario Compacto del F29 (SII) — verificaciones internas'))
+  }
+
+  // Verificaciones internas del Formulario Compacto (cuadran las casillas).
+  const verifTotal = [...f29Formularios.values()].reduce((s, f) => s + (f.verificaciones || []).length, 0)
+  const verifOk = [...f29Formularios.values()].reduce((s, f) => s + (f.verificaciones || []).filter((v) => v.ok).length, 0)
+  const verificacionRatio = verifTotal ? (verifOk / verifTotal) * 100 : 0
+
+  // ============================================================
+  // ÍNDICE DE SALUD TRIBUTARIA — metodología por DIMENSIONES
+  // ============================================================
+  // Cinco dimensiones con pesos fijos. Una dimensión sin antecedentes NO se
+  // puntúa con cero: se declara «no evaluable» y su peso se redistribuye.
+  // El puntaje nunca oculta una contingencia crítica: el informe muestra el
+  // índice global Y las alertas que obligan a actuar, y la cobertura del
+  // diagnóstico viaja junto al número.
+  const PESOS = { cumplimiento: 0.25, consistencia: 0.25, riesgos: 0.20, calidad: 0.15, controles: 0.15 }
+  // Nivel de cada dimensión, con la misma escala del índice global: el gráfico
+  // del índice colorea la barra con el color que SIGNIFICA algo (verde =
+  // favorable, ámbar = requiere atención, rojo = riesgo). Sin este campo la
+  // barra salía siempre gris, porque el color era decorativo.
+  const nivelDimension = (puntaje) => {
+    if (puntaje == null) return 'NO_EVALUABLE'
+    if (puntaje >= 75) return 'AL_DIA'
+    if (puntaje >= 60) return 'CON_OBSERVACIONES'
+    return 'REQUIERE_REVISION'
+  }
+  const dimensiones = []
+  const addDimension = (clave, nombre, puntaje, detalle, evidencia) => {
+    const acotado = puntaje == null ? null : Math.max(0, Math.min(100, Math.round(puntaje)))
+    dimensiones.push({
+      clave,
+      nombre,
+      peso: PESOS[clave],
+      puntaje: acotado,
+      nivel: nivelDimension(acotado),
+      estado: acotado == null ? 'no_evaluable' : 'evaluable',
+      detalle,
+      evidencia: evidencia || null,
+    })
+  }
+
+  // --- 1) Cumplimiento de obligaciones (25%) ---
+  let cumplPuntaje = null
+  let cumplDetalle = 'Sin consulta oficial de declaraciones: no evaluable con los antecedentes disponibles.'
+  if (f29Consultados) {
+    cumplPuntaje = (f29Declaradas.length / f29Consultados) * 100
+    cumplDetalle = `${f29Declaradas.length} de ${f29Consultados} períodos consultados en el SII (${rangoF29 || 'rango no informado'}) tienen F29 declarado vigente.`
+  }
+  addDimension('cumplimiento', 'Cumplimiento de obligaciones', cumplPuntaje, cumplDetalle, 'Consulta Integral F29 (SII)')
+
+  // --- 2) Consistencia y conciliación (25%) ---
+  let consPuntaje = null
+  let consDetalle = 'Sin Formulario Compacto del F29 para conciliar: no evaluable con los antecedentes disponibles.'
+  if (comparables.length) {
+    const dif = comparables.filter((m) => Math.abs(m.comparacion.diferencia_ventas || 0) >= 1000).length
+    const verifOkC = comparables.reduce((s, m) => s + (m.comparacion.verificaciones || []).filter((v) => v.ok).length, 0)
+    const verifTotC = comparables.reduce((s, m) => s + (m.comparacion.verificaciones || []).length, 0)
+    const puntos = 100 - Math.min(70, dif * 12) - Math.min(30, verifFallidas.length * 10)
+    consPuntaje = puntos
+    consDetalle = `${comparables.length} período(s) conciliados contra el F29 declarado: ${dif} con diferencia de ventas y ${verifFallidas.length} verificación(es) interna(s) fallida(s) (${verifOkC}/${verifTotC} verificaciones correctas).`
+  }
+  addDimension('consistencia', 'Consistencia y conciliación', consPuntaje, consDetalle, 'Formulario Compacto del F29 (SII) vs RCV ingerido')
+
+  // --- 3) Riesgos y contingencias (20%) ---
   const altas = hallazgos.filter((h) => h.severidad === 'alta').length
   const medias = hallazgos.filter((h) => h.severidad === 'media').length
   const bajas = hallazgos.filter((h) => h.severidad === 'baja').length
-  const score = Math.max(0, Math.min(100, 100 - altas * 25 - medias * 10 - bajas * 3))
+  const riesgosPuntaje = Math.max(0, 100 - altas * 18 - medias * 6 - bajas * 2)
+  addDimension('riesgos', 'Riesgos y contingencias', riesgosPuntaje,
+    `${altas} riesgo(s) alto(s), ${medias} medio(s) y ${bajas} bajo(s) identificados en el período.`,
+    'Hallazgos del informe')
+
+  // --- 4) Calidad y cobertura de datos (15%) ---
+  const coberturaRcv = meses ? Math.round((conDatos / meses) * 100) : 0
+  // La cobertura de declaraciones se mide sobre la VENTANA analizada (los
+  // meses del período): el historial de 5 años no puede dividirse por la
+  // ventana o el indicador se iría de 100 %.
+  const consultasPct = meses ? Math.min(100, Math.round((f29EnVentana / meses) * 100)) : 0
+  const fichaPct = (f.inicioActividades ? 40 : 0) + (f.regimen ? 30 : 0) + (f.actividades && f.actividades.length ? 30 : 0)
+  const calidadPuntaje = conDatos > 0 ? Math.round(coberturaRcv * 0.6 + consultasPct * 0.2 + fichaPct * 0.2) : null
+  addDimension('calidad', 'Calidad y cobertura de datos', calidadPuntaje,
+    `Cobertura RCV ${coberturaRcv}%, declaraciones oficiales consultadas ${consultasPct}% de los períodos, ficha del SII completa en ${fichaPct}%.`,
+    'Documentos ingeridos + ficha del SII')
+
+  // --- 5) Controles y regularización (15%) ---
+  let controlesPuntaje = null
+  let controlesDetalle = 'Sin evidencia de conciliación interna (Formulario Compacto ni conciliación bancaria): no evaluable con los antecedentes disponibles.'
+  const controlesBase = []
+  if (f29Formularios.size) controlesBase.push({ peso: 0.6, valor: verificacionRatio })
+  if (tesoreria.conciliacion) controlesBase.push({ peso: 0.4, valor: (tesoreria.conciliacion.ratio / 100) * 100 })
+  if (controlesBase.length) {
+    const suma = controlesBase.reduce((s, c) => s + c.valor * c.peso, 0)
+    const pesoTotal = controlesBase.reduce((s, c) => s + c.peso, 0)
+    controlesPuntaje = suma / pesoTotal
+    controlesDetalle = controlesBase.map((c) => c.peso === 0.6
+      ? `verificaciones internas del F29 declarado: ${Math.round(c.valor)}% correctas`
+      : `conciliación bancaria: ${Math.round(c.valor)}% de la cartola aplicada`).join(' · ')
+  }
+  addDimension('controles', 'Controles y regularización', controlesPuntaje, controlesDetalle, 'Verificaciones del F29 declarado + conciliación bancaria')
+
+  // Índice global: promedio ponderado de las dimensiones EVALUABLES.
+  const evaluables = dimensiones.filter((d) => d.estado === 'evaluable')
+  const pesoEvaluable = evaluables.reduce((s, d) => s + d.peso, 0)
+  const score = evaluables.length
+    ? Math.round(evaluables.reduce((s, d) => s + d.puntaje * d.peso, 0) / pesoEvaluable)
+    : 0
+  // Regla de producto: sin antecedentes verificados NO hay índice. La
+  // dimensión «riesgos» siempre es evaluable (los hallazgos existen), pero sin
+  // ficha ni RCV ese puntaje mide la falta de datos, no la salud de la
+  // empresa: mostrarlo como 54/100 sería inventar una lectura.
+  const sinEvidencia = conDatos === 0 && !f.inicioActividades
+  const indiceEvaluable = evaluables.length > 0 && !sinEvidencia
+
+  const CLASIFICACIONES = [
+    { min: 90, clave: 'SOLIDA', titulo: 'Sólida', interpretacion: 'Controles y cumplimiento favorables dentro del alcance revisado.' },
+    { min: 75, clave: 'FAVORABLE', titulo: 'Favorable con observaciones', interpretacion: 'Existen brechas que deben gestionarse.' },
+    { min: 60, clave: 'ATENCION', titulo: 'Requiere atención', interpretacion: 'Deben corregirse debilidades relevantes.' },
+    { min: 40, clave: 'RIESGO', titulo: 'Riesgo elevado', interpretacion: 'Se requiere un plan de regularización prioritario.' },
+    { min: 0, clave: 'CRITICA', titulo: 'Crítica', interpretacion: 'Existen deficiencias importantes que requieren intervención.' },
+  ]
+  const SIN_EVALUABLE = {
+    min: 0, clave: 'NO_EVALUABLE',
+    titulo: 'No evaluable con los antecedentes disponibles',
+    interpretacion: 'No hay antecedentes verificados suficientes para emitir un índice: una materia sin datos no se puntúa.',
+  }
+  const clasificacion = CLASIFICACIONES.find((c) => score >= c.min)
+  // Regla de producto: el índice nunca oculta una contingencia crítica.
+  // La nota se adjunta SIEMPRE que haya alerta alta (no solo en «Sólida»):
+  // sin ella, la portada mostraba un «84» en rojo etiquetado «Favorable con
+  // observaciones» sin explicar por qué, y la nota se calculaba pero nunca
+  // se mostraba en ningún capítulo.
+  const alertaCritica = altas > 0
+  const notaAlertaCritica = 'El índice es favorable, pero existen alertas de severidad alta que impiden una lectura de conformidad plena.'
+  const clasificacionEfectiva = !indiceEvaluable
+    ? SIN_EVALUABLE
+    : alertaCritica && clasificacion.clave === 'SOLIDA'
+      ? { ...CLASIFICACIONES[1], nota: notaAlertaCritica }
+      : alertaCritica
+        ? { ...clasificacion, nota: notaAlertaCritica }
+        : clasificacion
 
   let nivel = 'AL_DIA'
-  if (conDatos === 0 && !f.inicioActividades) nivel = 'SIN_INFORMACION'
+  if (sinEvidencia) nivel = 'SIN_INFORMACION'
   else if (altas > 0) nivel = 'REQUIERE_REVISION'
   else if (medias > 0 || bajas > 0) nivel = 'CON_OBSERVACIONES'
+
+  // Cobertura del diagnóstico y nivel de confianza (independientes del índice).
+  const coberturaDiagnostico = indiceEvaluable ? Math.round((evaluables.reduce((s, d) => s + d.peso, 0) / 1) * 100) : 0
+  const nivelConfianza = coberturaDiagnostico >= 80 ? 'ALTA' : coberturaDiagnostico >= 50 ? 'MEDIA' : 'BAJA'
 
   const resumen = (() => {
     if (nivel === 'SIN_INFORMACION') {
       return 'No hay información suficiente para emitir una opinión: falta la ficha del SII y no hay RCV ingerido. Sincroniza la ficha y los libros antes de usar este informe.'
     }
     if (nivel === 'REQUIERE_REVISION') {
-      return `La empresa presenta ${altas} hallazgo(s) de atención alta. Antes de declarar o emitir documentos, revisa los puntos marcados en rojo.`
+      return `La empresa presenta ${altas} hallazgo(s) de atención alta. El índice global (${score}/100, ${clasificacionEfectiva.titulo}) no sustituye esa lectura: antes de declarar o emitir documentos, revisa los puntos marcados en rojo.`
     }
     if (nivel === 'CON_OBSERVACIONES') {
-      return `Sin hallazgos críticos, pero hay ${medias + bajas} observación(es) que conviene corregir para dejar la situación tributaria documentada.`
+      return `Sin hallazgos críticos, pero hay ${medias + bajas} observación(es) que conviene corregir para dejar la situación tributaria documentada. Índice ${score}/100 (${clasificacionEfectiva.titulo}) con cobertura del diagnóstico ${coberturaDiagnostico}%.`
     }
-    return 'Los antecedentes disponibles se ven consistentes: ficha SII completa y RCV con cobertura en el período analizado. Esto no reemplaza la revisión de las declaraciones oficiales.'
+    return `Los antecedentes disponibles se ven consistentes: ficha SII completa y RCV con cobertura en el período analizado. Índice ${score}/100 (${clasificacionEfectiva.titulo}), cobertura del diagnóstico ${coberturaDiagnostico}% (${nivelConfianza.toLowerCase()}). Esto no reemplaza la revisión de las declaraciones oficiales.`
   })()
+
+  // ============================================================
+  // MATRIZ DE RIESGOS con exposición cuantificada
+  // ============================================================
+  // La exposición NO suma magnitudes que puedan solaparse: se separa en
+  // «deuda efectiva», «diferencia por investigar» y «contingencia estimada».
+  // Exposición cuantificada. Hay DOS magnitudes distintas y no se suman:
+  //   · la diferencia F29 declarado − estimación del RCV, en PESOS DE
+  //     IMPUESTO (IVA + PPM): es el dinero en disputa. Antes solo se medía con
+  //     el Formulario Compacto (casi nunca hay), y la portada decía «$0 MM»
+  //     mientras el capítulo 1 reportaba 11 períodos con diferencia.
+  //   · la diferencia de VENTAS declaradas vs. RCV, en pesos brutos: es el
+  //     diagnóstico de la causa (documentos faltantes), no exposición
+  //     tributaria. Se muestra en la matriz pero NO suma al total.
+  const exposicionDiferencias = diferencias.reduce((s, m) => s + Math.abs(m.f29_diferencia || 0), 0)
+  const exposicionVentas = difVentas.reduce((s, m) => s + Math.abs(m.comparacion.diferencia_ventas || 0), 0)
+  const exposicionPendientes = f29PendientesVentana
+    .filter((m) => m.estado === 'con_datos')
+    .reduce((s, m) => s + Math.abs(m.iva_estimado + m.ppm_estimado), 0)
+  const matrizRiesgos = hallazgos.map((h) => {
+    let importe = null
+    let naturaleza = 'sin cuantificar'
+    let cuentaExposicion = false
+    if (h.codigo === 'F29_VS_RCV') { importe = exposicionVentas; naturaleza = 'diferencia de ventas por conciliar'; cuentaExposicion = false }
+    else if (h.codigo === 'F29_DIFERENCIA') { importe = exposicionDiferencias; naturaleza = 'diferencia por investigar'; cuentaExposicion = true }
+    else if (h.codigo === 'F29_PENDIENTE') { importe = exposicionPendientes; naturaleza = 'contingencia estimada'; cuentaExposicion = true }
+    return {
+      codigo: h.codigo,
+      titulo: h.titulo,
+      severidad: h.severidad,
+      materia: h.codigo.startsWith('F29') ? 'IVA' : h.codigo.startsWith('F22') ? 'Renta' : h.codigo.startsWith('TES') ? 'Tesorería' : 'Cumplimiento',
+      impacto: h.severidad === 'alta' ? 'alto' : h.severidad === 'media' ? 'medio' : 'bajo',
+      probabilidad: h.severidad === 'alta' ? 'alta' : h.severidad === 'media' ? 'media' : 'baja',
+      importe: importe ? Math.round(importe) : null,
+      // Si el importe NO suma al total (la diferencia de ventas es un
+      // diagnóstico en pesos brutos), el informe lo declara para que nadie
+      // sume la fila y lo lea como exposición tributaria.
+      cuenta_exposicion: cuentaExposicion,
+      naturaleza,
+      responsable: h.severidad === 'alta' ? 'Contador responsable' : 'Contador',
+      plazo: h.severidad === 'alta' ? '5 días hábiles' : h.severidad === 'media' ? '15 días hábiles' : '30 días',
+      evidencia: h.fuente,
+    }
+  })
+  const exposicionTotal = matrizRiesgos.reduce((s, r) => s + (r.cuenta_exposicion ? (r.importe || 0) : 0), 0)
+
+  // ============================================================
+  // CALENDARIO DE CUMPLIMIENTO
+  // ============================================================
+  const calendario = mensuales.map((m) => ({
+    periodo: m.periodo,
+    nombre: m.nombre,
+    revisada: m.f29_estado !== 'no_consultado',
+    cumplida: m.f29_estado === 'declarada' || m.f29_estado === 'rectificada',
+    estado: m.f29_estado,
+    monto_declarado: m.f29_oficial?.monto_total ?? null,
+  }))
+
+  // ============================================================
+  // QUÉ CAMBIÓ (respecto del informe anterior)
+  // ============================================================
+  const anterior = (() => {
+    const fila = db.prepare(`
+      SELECT id, periodo, generado_en, opinion_nivel, score, datos_json
+      FROM salud_tributaria_snapshots WHERE empresa_id = ? ORDER BY id DESC LIMIT 1
+    `).get(empresaId)
+    if (!fila) return null
+    let datos = null
+    try { datos = JSON.parse(fila.datos_json) } catch { datos = null }
+    const prev = Array.isArray(datos?.opinion?.hallazgos) ? datos.opinion.hallazgos : []
+    const prevCodigos = new Set(prev.map((x) => x.codigo))
+    const prevScore = Number.isFinite(Number(fila.score)) ? Number(fila.score) : null
+    const nuevos = hallazgos.filter((h) => !prevCodigos.has(h.codigo)).map((h) => ({ codigo: h.codigo, titulo: h.titulo, severidad: h.severidad }))
+    const resueltos = prev.filter((h) => !hallazgos.some((x) => x.codigo === h.codigo)).map((h) => ({ codigo: h.codigo, titulo: h.titulo, severidad: h.severidad }))
+    return {
+      snapshot_id: fila.id,
+      periodo: fila.periodo,
+      generado_en: fila.generado_en,
+      indice_anterior: prevScore,
+      variacion_indice: prevScore == null ? null : score - prevScore,
+      alertas_nuevas: nuevos,
+      alertas_resueltas: resueltos,
+      lectura: prevScore == null
+        ? 'Primer informe de la serie: no hay antecedente con el cual comparar.'
+        : score === prevScore
+          ? 'El índice se mantiene respecto del informe anterior.'
+          : score > prevScore
+            ? `El índice subió ${score - prevScore} puntos respecto del informe anterior. Verifica que el improvement provenga de una regularización real y no solo de mayor cobertura de información.`
+            : `El índice bajó ${prevScore - score} puntos respecto del informe anterior. Revisa las alertas nuevas antes de cerrar el período.`,
+    }
+  })()
+
+  // ============================================================
+  // PLAN DE ACCIÓN
+  // ============================================================
+  const planAccion = matrizRiesgos
+    .filter((r) => r.severidad === 'alta' || r.severidad === 'media')
+    .map((r, i) => ({
+      prioridad: i + 1,
+      accion: r.codigo === 'F29_VS_RCV'
+        ? 'Conciliar el RCV del período con las casillas del F29 declarado y regularizar los documentos que falten.'
+        : r.codigo === 'F29_PENDIENTE'
+          ? 'Presentar el F29 del período pendiente o Regularizar el Formulario Compacto en el portal del SII.'
+          : r.codigo === 'F29_DIFERENCIA'
+            ? 'Revisar la diferencia entre el F29 declarado y la estimación del sistema, documento a documento.'
+            : r.codigo === 'COBERTURA_RCV_PARCIAL'
+              ? 'Sincronizar el RCV de los meses sin datos antes de emitir el informe definitivo.'
+              : r.codigo === 'SIN_RCV' || r.codigo === 'SIN_RCV_RECIENTE'
+                ? 'Ejecutar la ingesta de compras y ventas desde el SII para completar el diagnóstico.'
+                : `Resolver: ${r.titulo}.`,
+      motivo: r.titulo,
+      responsable: r.responsable,
+      plazo: r.plazo,
+      impacto_estimado: r.importe,
+      evidencia: r.evidencia,
+      estado: 'pendiente',
+    }))
+
+  // Fortalezas: lo que el diagnóstico confirma que está bien.
+  const fortalezas = []
+  if (f29Declaradas.length && !f29Pendientes.length) {
+    fortalezas.push(`Cumplimiento sin brechas visibles: ${f29Declaradas.length} período(s) con F29 declarado vigente y sin pendientes registrados en el SII${rangoF29 ? ` (${rangoF29})` : ''}.`)
+  }
+  if (comparables.length && !comparables.some((m) => Math.abs(m.comparacion.diferencia_ventas || 0) >= 1000)) {
+    fortalezas.push('Las ventas declaradas en el F29 coinciden con el RCV del sistema en los períodos conciliados.')
+  }
+  if (verifFallidas.length === 0 && f29Formularios.size) {
+    fortalezas.push('Las casillas del Formulario Compacto son internamente consistentes (débito, crédito, IVA y PPM cuadran entre sí).')
+  }
+  if (coberturaRcv >= 90) {
+    fortalezas.push(`Cobertura de libros casi completa: ${coberturaRcv}% de los períodos analizados con RCV ingerido.`)
+  }
+  if (fichaPct >= 70) {
+    fortalezas.push('Ficha del contribuyente vigente en el SII: régimen, inicio de actividades y actividad económica acreditados.')
+  }
+  if (tesoreria.conciliacion && tesoreria.conciliacion.ratio >= 80) {
+    fortalezas.push(`Conciliación bancaria al día: ${tesoreria.conciliacion.ratio}% de la cartola aplicada.`)
+  }
+  if (rentaAnual.size) {
+    const devol = [...rentaAnual.values()].filter((r) => (r.remanente_devuelto || 0) > 0)
+    if (devol.length) {
+      const total = devol.reduce((s, r) => s + (r.remanente_devuelto || 0), 0)
+      fortalezas.push(`Renta con devolución autorizada por el SII en ${devol.length} período(s), por ${total.toLocaleString('es-CL')} CLP: crédito fiscal disponible para seguimiento.`)
+    }
+  }
 
   const opinion = {
     nivel,
@@ -522,8 +1211,8 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
       `Ficha SII: ${f.origen || 'ficha guardada'}; inicio de actividades ${f.inicioActividades || 'no informado'}; régimen ${f.regimen || 'no determinado'}.`,
       `Cobertura RCV: ${conDatos} mes(es) con datos, ${sinMovimiento} sin movimiento confirmado y ${sinDatos} sin sincronizar en los últimos ${meses} meses.`,
       `Ingresos por ventas en el período: ${mensuales.reduce((s, m) => s + m.ventas_neto, 0).toLocaleString('es-CL')} CLP (neto, RCV).`,
-      f29Consultados.length
-        ? `F29 oficial: ${f29Declaradas.length} período(s) declarado(s) y ${f29Pendientes.length} pendiente(s) según el SII (${f29Consultados.length} período(s) consultados).`
+      f29Consultados
+        ? `F29 oficial: ${f29Declaradas.length} período(s) declarado(s) y ${f29Pendientes.length} pendiente(s) según el SII (${f29Consultados} período(s) consultados${rangoF29 ? `, ${rangoF29}` : ''}).`
         : 'F29 oficial: sin consultar; los montos mensuales son estimaciones desde el RCV.',
       f22Consultado
         ? `Renta: ${f22Anios.filter((d) => d.estado === 'declarada' || d.estado === 'rectificada').length} año(s) con F22 declarado de ${f22Anios.length} consultados.`
@@ -534,7 +1223,7 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
       .map((h) => h.titulo),
     limitaciones: [
       'Opinión automatizada sobre datos verificables. No es una certificación tributaria ni reemplaza la revisión de un asesor.',
-      ...(f29Consultados.length
+      ...(f29Consultados
         ? ['El estado del F29 se lee de la Consulta Integral del SII; los montos de IVA y PPM siguen siendo estimaciones propias desde el RCV.']
         : ['No se consultó el estado oficial del F29: los montos mensuales son estimaciones desde el RCV.']),
       ...(f22Consultado ? [] : ['No se consultó el F22 (renta): la existencia de la declaración anual no está verificada.']),
@@ -551,6 +1240,56 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
     ],
     score,
     hallazgos,
+    // ---- v2: índice por dimensiones, exposición, plan y opinión profesional ----
+    indice_evaluable: indiceEvaluable,
+    dimensiones,
+    clasificacion: clasificacionEfectiva,
+    clasificacion_escala: CLASIFICACIONES,
+    cobertura_diagnostico: coberturaDiagnostico,
+    nivel_confianza: nivelConfianza,
+    alerta_critica: alertaCritica,
+    exposicion: {
+      total: Math.round(exposicionTotal),
+      por_naturaleza: {
+        // El dinero en disputa: diferencia entre el F29 declarado y la
+        // estimación del RCV, en pesos de impuesto (IVA + PPM).
+        diferencia_por_investigar: Math.round(exposicionDiferencias),
+        contingencia_estimada: Math.round(exposicionPendientes),
+        // Diagnóstico de la causa, en pesos brutos de ventas: NO suma al
+        // total (contarían las mismas diferencias dos veces).
+        diferencia_ventas_por_conciliar: Math.round(exposicionVentas),
+      },
+      nota: 'Suma sin duplicidad: el total suma la diferencia entre el F29 declarado y la estimación del RCV (pesos de impuesto) y la contingencia de declaraciones pendientes. La diferencia de ventas se muestra aparte porque mide la causa en pesos brutos, no exposición tributaria.',
+    },
+    matriz_riesgos: matrizRiesgos,
+    calendario,
+    plan_accion: planAccion,
+    fortalezas,
+    que_cambio: anterior,
+    opinion_profesional: {
+      hechos: [
+        ...(f29Declaradas.length ? [`El SII registra ${f29Declaradas.length} período(s) con F29 declarado vigente${rangoF29 ? ` (${rangoF29})` : ''}.`] : []),
+        ...(comparables.length ? [`${comparables.length} período(s) tienen casillas del Formulario Compacto leídas directamente del SII, con ${verifOk}/${verifTotal} verificaciones internas correctas.`] : []),
+        ...(rentaAnual.size ? [`El SII registra ${rentaAnual.size} año(s) con declaración de renta consultada en su consulta de estado.`] : []),
+      ],
+      diferencias: [
+        ...(difVentas.length ? [`${difVentas.length} período(s) presentan diferencias entre las ventas declaradas en el F29 y el RCV del sistema, por un total de ${Math.round(exposicionVentas).toLocaleString('es-CL')} CLP en ventas.`] : []),
+        ...(diferencias.length ? [`${diferencias.length} período(s) presentan diferencias entre el F29 declarado y la estimación del RCV, por un total de ${Math.round(exposicionDiferencias).toLocaleString('es-CL')} CLP de impuesto declarado.`] : []),
+        ...(f29Pendientes.length ? [`${f29Pendientes.length} período(s) sin declaración vigente en el SII${rangoF29 ? ` (${rangoF29})` : ''}, con un impuesto estimado no presentado de ${Math.round(exposicionPendientes).toLocaleString('es-CL')} CLP en los períodos con RCV del período analizado.`] : []),
+      ],
+      riesgos: [
+        ...(altas ? [`${altas} hallazgo(s) de severidad alta requieren actuación: ${hallazgos.filter((h) => h.severidad === 'alta').map((h) => h.titulo).join('; ')}.`] : []),
+        ...(tesoreria.cobranza && tesoreria.cobranza.vencido_30_dias ? [`Cartera vencida sobre 30 días por ${tesoreria.cobranza.vencido_30_dias.toLocaleString('es-CL')} CLP, que puede comprometer el IVA del período siguiente.`] : []),
+      ],
+      conclusion: `Con base en los antecedentes examinados para el período comprendido entre ${nombrePeriodo(desde)} y ${nombrePeriodo(periodoFinal)}, la entidad presenta un índice de salud tributaria de ${indiceEvaluable ? `${score}/100 (${clasificacionEfectiva.titulo})` : 'no evaluable con los antecedentes disponibles'}, con una cobertura del diagnóstico de ${coberturaDiagnostico}% y nivel de confianza ${nivelConfianza.toLowerCase()}. ${alertaCritica ? 'Existen alertas de severidad alta que impiden una lectura de conformidad plena, con independencia del índice.' : 'No se identificaron contingencias críticas dentro del alcance revisado.'}`,
+      recomendacion: planAccion.length
+        ? `Prioridad recomendada: ${planAccion[0].accion} (${planAccion[0].plazo}, ${planAccion[0].responsable}).${planAccion.length > 1 ? ` Le siguen ${planAccion.length - 1} acción(es) priorizadas en el plan de acción.` : ''}`
+        : 'Mantener el control mensual: sincronizar los libros y las declaraciones en cada cierre de período.',
+      advertencias: [
+        'Los montos del RCV son los que el sistema tiene ingeridos; los del F29 son los declarados. La diferencia entre ambos es materia de investigación, no una conclusión de incumplimiento.',
+        'Este documento es una opinión técnica automatizada sobre antecedentes verificables. No es una certificación tributaria, no constituye asesoría legal personalizada y no reemplaza la revisión profesional de un contador.',
+      ],
+    },
   }
 
   return {
@@ -580,7 +1319,7 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
       fuente: f.origen || 'ficha guardada',
     },
     declaraciones: {
-      f29: resumenTipoDeclaraciones(f29Oficial, { desde, hasta: periodoFinal, etiquetaBase: 'Consulta Integral F29' }),
+      f29: resumenTipoDeclaraciones(f29Oficial, { desde: `${anioDesde}01`, hasta: periodoFinal, etiquetaBase: 'Consulta Integral F29' }),
       renta_f22: resumenTipoDeclaraciones(f22Oficial, { desde: anioDesde, hasta: anioHasta, etiquetaBase: 'Renta (F22)' }),
       juradas: resumenTipoDeclaraciones(leerDeclaraciones(db, empresaId, 'DJ', anioDesde, anioHasta), {
         desde: anioDesde, hasta: anioHasta, etiquetaBase: 'Declaraciones juradas',
@@ -631,6 +1370,39 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
     },
     capacidades_sii: CAPACIDADES_SII,
     opinion,
+    // ---- v2: inteligencia financiera, tesorería y declared vs RCV ----
+    kpis: calcularKpis(mensuales, { f29Formularios, tesoreria, tasa }),
+    serie: serieMensual(mensuales, f29Formularios),
+    tesoreria,
+    renta: {
+      estado: rentaAnual.size ? 'disponible' : 'no_consultado',
+      anios: [...rentaAnual.values()].sort((a, b) => b.anio.localeCompare(a.anio)),
+    },
+    f29_declarado: {
+      estado: f29Formularios.size ? 'disponible' : 'no_consultado',
+      fuente: 'Formulario Compacto del F29 (SII)',
+      periodos: [...f29Formularios.values()].sort((a, b) => a.periodo.localeCompare(b.periodo)),
+      verificaciones_ok: verifOk,
+      verificaciones_total: verifTotal,
+    },
+    metodologia: {
+      indice: 'JMV Tax Health — promedio ponderado de cinco dimensiones evaluables (cumplimiento 25%, consistencia y conciliación 25%, riesgos y contingencias 20%, calidad y cobertura de datos 15%, controles y regularización 15%).',
+      regla_no_evaluable: 'Una dimensión sin antecedentes no se puntúa con cero: se declara «no evaluable» y su peso se redistribuye entre las demás.',
+      regla_alerta_critica: 'El índice nunca oculta una contingencia crítica: las alertas de severidad alta se muestran siempre, con independencia del puntaje.',
+      clasificacion: '90–100 Sólida · 75–89 Favorable con observaciones · 60–74 Requiere atención · 40–59 Riesgo elevado · 0–39 Crítica.',
+      origen_datos: [
+        { clave: 'obtenidos', nombre: 'Datos obtenidos directamente', detalle: 'Ficha del contribuyente, RCV, estados y casillas de declaraciones: consultados desde el SII con la sesión del contribuyente.' },
+        { clave: 'importados', nombre: 'Datos importados', detalle: 'Documentos y movimientos cargados por el cliente o su contador (bandeja, tesorería y contabilidad).' },
+        { clave: 'calculados', nombre: 'Datos calculados', detalle: 'Indicadores derivados con fórmulas documentadas (IVA, PPM, ratios, aging de cobranza, índice de salud).' },
+        { clave: 'estimados', nombre: 'Datos estimados', detalle: 'Proyecciones y escenarios que requieren validación del contador.' },
+        { clave: 'no_disponibles', nombre: 'Datos no disponibles', detalle: 'Materias que no se pueden evaluar todavía (remuneraciones, retenciones,Declaraciones juradas).' },
+      ],
+      limitaciones_generales: [
+        'El informe no constituye una auditoría de estados financieros ni una certificación tributaria.',
+        'Las diferencias detectadas son materia de investigación: no prueban por sí mismas un incumplimiento.',
+        'Los plazos legales y la prescripción deben evaluarse caso a caso.',
+      ],
+    },
   }
 }
 
@@ -658,6 +1430,7 @@ function resumenInforme(db, { empresaId, periodo, meses = 12, ficha = null, ahor
     nivel: op.nivel,
     titulo: op.titulo,
     score: op.score,
+    indice_evaluable: op.indice_evaluable,
     hallazgos: (op.hallazgos || []).length,
     hallazgos_altos: (op.hallazgos || []).filter((h) => h.severidad === 'alta').length,
     cobertura: {

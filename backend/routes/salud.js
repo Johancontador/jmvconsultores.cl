@@ -13,6 +13,8 @@ const db = require('../db')
 const { requirePermiso } = require('../middleware/requirePermiso')
 const { registrarAccion } = require('../core/auditoria')
 const salud = require('../core/salud-tributaria')
+const saludSync = require('../core/salud-sincronizacion')
+const informeHtml = require('../core/informe-salud-html')
 const { leerFichaGuardada, consultarFichaSii } = require('../core/empresas-sii')
 
 const router = express.Router()
@@ -194,6 +196,87 @@ router.post('/empresas/:empresaId/salud-tributaria/declaraciones', requirePermis
       : err.codigo === 'SII_SIN_NAVEGADOR' ? 424
         : 502
     res.status(code).json({ ok: false, codigo: err.codigo || null, error: err.message })
+  }
+})
+
+// ============================================================
+// REUNIÓN DE ANTECEDENTES (botón único de sincronización)
+// ============================================================
+// Un solo botón deja el diagnóstico completo: ficha, RCV, declaraciones
+// (matriz F29/boletas/juradas), Formulario Compacto del F29, renta (F22) y
+// el informe con su evidencia. Es una acción larga (abre sesión en el portal
+// del SII), así que corre en segundo plano y el cliente hace polling.
+router.post('/empresas/:empresaId/salud-tributaria/reunion', requirePermiso('salud:sincronizar'), (req, res) => {
+  try {
+    const empresaId = req.empresaId
+    const periodo = String(req.body.periodo || PERIODO_ACTUAL())
+    if (!salud.periodoValido(periodo)) {
+      return res.status(400).json({ ok: false, error: 'Período inválido (YYYYMM)' })
+    }
+    const r = saludSync.iniciar(db, {
+      empresaId,
+      usuarioId: req.user.id,
+      periodo,
+      meses: leerMeses(req.body.meses, 12),
+      anios: Math.min(Math.max(Number(req.body.anios) || 5, 1), 6),
+      ip: req.ip || null,
+    })
+    res.json({ ok: true, ...r })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// Estado del job de reunión (el front lo consulta cada 3 s hasta terminar).
+router.get('/empresas/:empresaId/salud-tributaria/reunion/:jobId', requirePermiso('salud:ver'), (req, res) => {
+  const estado = saludSync.obtenerEstado(req.params.jobId, req.user.id)
+  if (!estado) return res.status(404).json({ ok: false, error: 'Job no encontrado o ya expirado' })
+  res.json({ ok: true, estado })
+})
+
+// ============================================================
+// INFORME EJECUTIVO IMPRIMIBLE (HTML → PDF desde el navegador)
+// ============================================================
+// El PDF lo genera el navegador (Imprimir → Guardar como PDF) sobre este
+// mismo HTML: el informe impreso y el panel nunca se contradicen. Se sirve
+// como text/html con el mismo control de acceso que el resto de la vista.
+router.get('/empresas/:empresaId/salud-tributaria/informe', requirePermiso('salud:ver'), (req, res) => {
+  try {
+    const empresaId = req.empresaId
+    const periodo = String(req.query.periodo || PERIODO_ACTUAL())
+    if (!salud.periodoValido(periodo)) {
+      return res.status(400).send('Período inválido (YYYYMM)')
+    }
+    const meses = leerMeses(req.query.meses, 12)
+    const emp = db.prepare(`SELECT rut FROM empresas WHERE id = ?`).get(empresaId)
+    if (!emp) return res.status(404).send('Empresa no encontrada')
+    const ficha = leerFichaGuardada(emp.rut)
+    const informe = salud.construirInforme(db, { empresaId, periodo, meses, ficha })
+    const html = informeHtml.renderInformeHtml(informe)
+    res.set('Content-Type', 'text/html; charset=utf-8')
+    res.send(html)
+  } catch (err) {
+    res.status(500).send(`Error generando el informe: ${err.message}`)
+  }
+})
+
+// Gráficos SVG del informe (los mismos del PDF) para pintarlos en el panel.
+router.get('/empresas/:empresaId/salud-tributaria/graficos', requirePermiso('salud:ver'), (req, res) => {
+  try {
+    const empresaId = req.empresaId
+    const periodo = String(req.query.periodo || PERIODO_ACTUAL())
+    if (!salud.periodoValido(periodo)) {
+      return res.status(400).json({ ok: false, error: 'Período inválido (YYYYMM)' })
+    }
+    const meses = leerMeses(req.query.meses, 12)
+    const emp = db.prepare(`SELECT rut FROM empresas WHERE id = ?`).get(empresaId)
+    if (!emp) return res.status(404).json({ ok: false, error: 'Empresa no encontrada' })
+    const informe = salud.construirInforme(db, {
+      empresaId, periodo, meses, ficha: leerFichaGuardada(emp.rut),
+    })
+    res.json({ ok: true, graficos: informeHtml.graficosSvg(informe) })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
   }
 })
 

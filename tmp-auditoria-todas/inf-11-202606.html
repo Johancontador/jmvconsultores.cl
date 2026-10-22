@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe Ejecutivo de Salud Tributaria — COMERCIALIZADOR DE ALIMENTOS IVANA RATTALINO E.I.R.L.</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Sora", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #232327;
+    background: #F7F2E9;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hoja { max-width: 900px; margin: 0 auto; background: #FFFDF9; padding: 0 0 40px; }
+  .gfx { width: 100%; height: auto; display: block; margin: 10px 0 4px; }
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; }
+  .portada { padding: 34px 40px 30px; border-bottom: 3px solid #A87C3E; }
+  .marca-fila { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .marca { display: flex; align-items: center; gap: 10px; }
+  .marca-simbolo { width: 54px; height: 34px; }
+  .marca-txt { font-size: 10pt; letter-spacing: 0.18em; color: #5C5C63; }
+  .marca-txt b { color: #232327; font-size: 13pt; letter-spacing: 0.04em; }
+  .marca-fila .kicker { font-size: 8.5pt; letter-spacing: 0.22em; text-transform: uppercase; color: #5C5C63; }
+  .titulo-informe { font-size: 26pt; line-height: 1.15; margin: 26px 0 6px; }
+  .subtitulo-informe { font-size: 11pt; color: #5C5C63; margin: 0 0 22px; }
+  .datos-empresa { display: flex; flex-wrap: wrap; gap: 8px 26px; font-size: 9.5pt; color: #5C5C63; border-top: 1px solid #E3DACA; padding-top: 14px; }
+  .datos-empresa b { color: #232327; font-weight: 600; }
+  .semilla { margin-top: 18px; padding: 12px 14px; background: #F1ECE2; border-left: 3px solid #A87C3E; font-size: 9pt; color: #5C5C63; }
+  .diagnostico { display: flex; gap: 22px; align-items: center; margin: 18px 0 6px; }
+  .diagnostico .puntaje { font-size: 40pt; font-weight: 700; line-height: 1; }
+  .diagnostico .estado { font-size: 13pt; font-weight: 600; }
+  .diagnostico .meta { font-size: 9pt; color: #5C5C63; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0 10px; }
+  .kpi-card { border: 1px solid #E3DACA; border-radius: 10px; padding: 12px 14px; background: #fff; min-width: 0; }
+  .kpi-k { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: #5C5C63; }
+  .kpi-v { font-size: 19pt; font-weight: 700; margin: 4px 0 2px; }
+  .kpi-s { font-size: 8.5pt; color: #5C5C63; }
+  .hallazgo-prioritario { border: 1px solid #E3DACA; border-left: 4px solid #B3372B; border-radius: 10px; padding: 14px 16px; margin: 16px 0 6px; background: #fff; }
+  .hallazgo-prioritario h4 { margin: 0 0 6px; font-size: 10.5pt; }
+  .hallazgo-prioritario p { margin: 0; font-size: 9.5pt; color: #5C5C63; }
+  .cap { padding: 26px 40px 6px; border-top: 1px solid #E3DACA; margin-top: 22px; page-break-inside: auto; }
+  .cap:first-of-type { border-top: none; }
+  .cap h2 { font-size: 15pt; margin: 0 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  .cap-n { font-size: 9pt; color: #A87C3E; letter-spacing: 0.1em; }
+  .cap h3 { font-size: 11pt; margin: 18px 0 6px; }
+  .nota { font-size: 9pt; color: #5C5C63; margin: 6px 0 10px; }
+  .tabla { width: 100%; border-collapse: collapse; font-size: 8.8pt; margin: 6px 0 12px; }
+  .tabla th { text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.05em; color: #5C5C63; border-bottom: 1px solid #5C5C63; padding: 6px 6px; }
+  .tabla td { padding: 6px 6px; border-bottom: 1px solid #E3DACA; vertical-align: top; }
+  .tabla .der { text-align: right; font-variant-numeric: tabular-nums; }
+  /* Diferencia estimado − declarado: se marca en rojo cuando es MATERIAL
+     (|dif| ≥ $1.000, el mismo umbral con el que el capítulo 1 cuenta
+     períodos con diferencia). Antes se usaban clases .neg/.pos que NO
+     existían en el CSS: el color nunca se aplicaba. */
+  .tabla td.dif-alerta { color: #B3372B; font-weight: 600; }
+  .tabla td.dif-ok { color: #5C5C63; }
+  .tabla .evid { color: #5C5C63; font-size: 8pt; }
+  .tabla tr { page-break-inside: avoid; }
+  .tabla-riesgos { table-layout: fixed; }
+  /* Nueve columnas (declarado vs. estimado) en A4: ancho fijo por porcentaje
+     y montos que solo se parten tras el separador de miles. */
+  .tabla-mensual { table-layout: fixed; }
+  .tabla-mensual th { font-size: 7.2pt; padding: 6px 3px; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+  .tabla-mensual td { padding: 6px 3px; font-size: 8pt; }
+  .tabla-mensual td.der { overflow-wrap: normal; word-break: normal; }
+  .tabla-mensual td:first-child { font-size: 7.8pt; }
+  /* Tablas de 6 y 8 columnas: también ancho fijo por porcentaje. */
+  .tabla-anuales, .tabla-plan { table-layout: fixed; }
+  .tabla-anuales th, .tabla-plan th { font-size: 7.4pt; padding: 6px 4px; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+  .tabla-anuales td, .tabla-plan td { padding: 6px 4px; font-size: 8pt; overflow-wrap: anywhere; }
+  .tabla-anuales td.der, .tabla-plan td.der { overflow-wrap: normal; word-break: normal; }
+  .tabla-riesgos th { font-size: 7.4pt; padding: 6px 4px; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+  .tabla-riesgos td { padding: 6px 4px; overflow-wrap: anywhere; word-break: normal; }
+  .tabla-riesgos .triage span { display: block; }
+  .tabla-riesgos .triage span + span { color: #5C5C63; font-size: 7.8pt; }
+  /* El monto se parte solo en los cortes marcados (separadores de miles),
+     nunca a media cifra; si es muy largo baja de cuerpo. */
+  .tabla-riesgos .exposicion { font-size: 8pt; overflow-wrap: normal; word-break: normal; }
+  .tabla-riesgos .exposicion.long { font-size: 7pt; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 7.8pt; font-weight: 600; letter-spacing: 0.04em; border: 1px solid #E3DACA; color: #5C5C63; }
+  .chip-alta, .chip-pendiente, .chip-no_presentada, .chip-rechazada { color: #B3372B; border-color: #B3372B; background: #FBEDEB; }
+  .chip-media, .chip-observada, .chip-parcial { color: #B07A18; border-color: #B07A18; background: #FCF3E2; }
+  .chip-baja, .chip-declarada, .chip-aceptada, .chip-vigente { color: #2F7D5D; border-color: #2F7D5D; background: #EAF3EE; }
+  .lista { margin: 6px 0 12px; padding-left: 18px; }
+  .lista li { margin-bottom: 4px; font-size: 9.5pt; }
+  .decl-bloque { margin-bottom: 16px; }
+  /* Fichas de una declaración: etiqueta arriba, valor abajo. Fluyen con el
+     ancho de la columna (una tabla de 5 columnas desbordaba el papel). */
+  .decl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px 12px; margin: 8px 0 4px; }
+  .decl-stats > div { min-width: 0; border-top: 1px solid #E3DACA; padding-top: 4px; }
+  .decl-stats dt { font-size: 7.2pt; text-transform: uppercase; letter-spacing: 0.06em; color: #5C5C63; }
+  .decl-stats dd { margin: 2px 0 0; font-size: 9pt; font-weight: 600; overflow-wrap: anywhere; }
+  .opinion { border: 1px solid #E3DACA; border-radius: 12px; padding: 18px 20px; background: #fff; }
+  .opinion-lead { font-size: 11pt; line-height: 1.6; margin: 0 0 14px; }
+  .opinion-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 26px; }
+  .opinion-grid > div { min-width: 0; }
+  .opinion h4 { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: #A87C3E; margin: 0 0 4px; }
+  .adv { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #E3DACA; }
+  .idx { columns: 2; column-gap: 30px; font-size: 9.5pt; }
+  .idx div { break-inside: avoid; padding: 3px 0; }
+  .idx b { color: #A87C3E; }
+  .final { margin: 30px 40px 0; padding: 24px 26px; background: #F7F2E9; border: 1px solid #E3DACA; border-radius: 14px; text-align: center; }
+  .final .marca { justify-content: center; margin-bottom: 10px; }
+  .final p { font-size: 10pt; margin: 6px 0; }
+  .final .firma { margin-top: 14px; font-size: 9pt; color: #5C5C63; }
+  .pie { margin: 26px 40px 0; padding-top: 10px; border-top: 1px solid #E3DACA; font-size: 8pt; color: #5C5C63; display: flex; justify-content: space-between; gap: 12px; }
+  /* minmax(0, 1fr): sin esto el ancho mínimo del contenido (min-width:auto)
+     ensancha la columna y el bloque se sale del papel. */
+  .dos-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+  .dos-col > div { min-width: 0; }
+  @media print {
+    body { background: #fff; }
+    .hoja { max-width: none; }
+    .cap, .final, .portada { page-break-inside: avoid; }
+    .tabla thead { display: table-header-group; }
+  }</style>
+</head>
+<body>
+  <div class="hoja">
+    <header class="portada">
+      <div class="marca-fila">
+        <div class="marca"><svg class="marca-simbolo" viewBox="52 8 350 216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JMV Consultores">
+  <g fill="#8a5a2b">
+    <circle cx="392" cy="128" r="30"/><circle cx="368" cy="82" r="24"/><circle cx="330" cy="50" r="18"/>
+    <circle cx="286" cy="34" r="13"/><circle cx="244" cy="36" r="9"/><circle cx="322" cy="96" r="10"/><circle cx="298" cy="130" r="7"/>
+  </g>
+  <g fill="#c2a077">
+    <circle cx="128" cy="150" r="32"/><circle cx="172" cy="188" r="24"/><circle cx="222" cy="206" r="17"/>
+    <circle cx="268" cy="208" r="11"/><circle cx="306" cy="196" r="7"/><circle cx="168" cy="120" r="12"/><circle cx="212" cy="102" r="8"/>
+  </g>
+</svg><span class="marca-txt"><b>JMV</b> CONSULTORES</span></div>
+        <div class="kicker">Tax Health Intelligence</div>
+      </div>
+      <h1 class="titulo-informe">Informe Ejecutivo de Salud Tributaria</h1>
+      <p class="subtitulo-informe">JMV Tax Health Intelligence · diagnóstico, riesgos, exposición y plan de acción</p>
+      <div class="datos-empresa">
+        <span><b>Contribuyente:</b> COMERCIALIZADOR DE ALIMENTOS IVANA RATTALINO E.I.R.L.</span>
+        <span><b>RUT:</b> 77721016-5</span>
+        <span><b>Período evaluado:</b> 202407 a 202606</span>
+        <span><b>Emitido:</b> 22 de octubre de 2026</span>
+        <span><b>Informe:</b> JMV-TH-11-202606-20261022043810</span>
+        <span><b>Versión:</b> 2.0</span>
+      </div>
+      <div class="diagnostico">
+        <div>
+          <div class="puntaje" style="color:#B3372B">74</div>
+          <div class="meta">Índice de Salud Tributaria</div>
+        </div>
+        <div>
+          <div class="estado" style="color:#B3372B">Requiere atención</div>
+          <div class="meta">Clasificación según la escala JMV</div>
+          <div class="meta">Cobertura 20% · Confianza BAJA</div>
+        </div>
+      </div>
+      <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-k">Índice de salud tributaria</div>
+      <div class="kpi-v">74/100</div>
+      <div class="kpi-s">Requiere atención</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-k">Obligaciones revisadas</div>
+      <div class="kpi-v">0/0</div>
+      <div class="kpi-s">períodos con declaración vigente</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-k">Alertas críticas</div>
+      <div class="kpi-v">1</div>
+      <div class="kpi-s">severidad alta sin resolver</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-k">Exposición cuantificada</div>
+      <div class="kpi-v">$0 MM</div>
+      <div class="kpi-s">sin duplicidad de conceptos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-k">Acciones prioritarias</div>
+      <div class="kpi-v">2</div>
+      <div class="kpi-s">en el plan de acción</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-k">Cobertura del diagnóstico</div>
+      <div class="kpi-v">20%</div>
+      <div class="kpi-s">confianza: BAJA</div>
+    </div></div>
+      <div class="hallazgo-prioritario">
+        <h4>Hallazgo prioritario</h4>
+        <p>No hay documentos de compras ni ventas en los últimos 24 meses. Esto NO significa «sin movimiento»: el RCV no se ha sincronizado.</p>
+      </div>
+      <div class="semilla">
+        Este informe se emite sobre los antecedentes que el sistema pudo verificar. Los índices, coberturas y cantidades reflecten esa realidad:
+        una materia sin datos aparece como «no evaluable», nunca como conforme. Documento de trabajo técnico; no constituye certificación tributaria.
+      </div>
+    </header>
+
+    <section class="cap">
+      <h2><span class="cap-n">—</span> Índice</h2>
+      <div class="idx">
+        <div><b>01</b> Resumen ejecutivo</div>
+        <div><b>02</b> Cumplimiento tributario y obligaciones</div>
+        <div><b>03</b> Análisis del IVA y conciliaciones</div>
+        <div><b>04</b> Matriz de riesgos tributarios</div>
+        <div><b>05</b> Tendencias y comportamiento tributario</div>
+        <div><b>06</b> Impacto financiero y proyecciones</div>
+        <div><b>07</b> Plan de acción y regularización</div>
+        <div><b>08</b> Metodología, alcance y anexos</div>
+      </div>
+    </section>
+
+    <section class="cap">
+    <h2><span class="cap-n">01</span> Resumen ejecutivo</h2>
+    
+    
+  <div class="opinion">
+    <p class="opinion-lead">Con base en los antecedentes examinados para el período comprendido entre julio 2024 y junio 2026, la entidad presenta un índice de salud tributaria de 74/100 (Requiere atención), con una cobertura del diagnóstico de 20% y nivel de confianza baja. Existen alertas de severidad alta que impiden una lectura de conformidad plena, con independencia del índice.</p>
+    <div class="opinion-grid">
+      <div><h4>Hechos comprobados</h4><p class="nota">Sin hechos comprobables en la ventana analizada.</p></div>
+      <div><h4>Diferencias detectadas</h4><p class="nota">Sin diferencias detectadas.</p></div>
+      <div><h4>Riesgos potenciales</h4><ul class="lista"><li>1 hallazgo(s) de severidad alta requieren actuación: Sin RCV ingerido en el período analizado.</li></ul></div>
+      <div><h4>Recomendación</h4><p class="nota">Prioridad recomendada: Resolver: Régimen tributario no determinado. (15 días hábiles, Contador). Le siguen 1 acción(es) priorizadas en el plan de acción.</p></div>
+    </div>
+    <div class="adv"><h4>Advertencias</h4><ul class="lista"><li>Los montos del RCV son los que el sistema tiene ingeridos; los del F29 son los declarados. La diferencia entre ambos es materia de investigación, no una conclusión de incumplimiento.</li><li>Este documento es una opinión técnica automatizada sobre antecedentes verificables. No es una certificación tributaria, no constituye asesoría legal personalizada y no reemplaza la revisión profesional de un contador.</li></ul></div>
+  </div>
+    <h3>Hallazgos principales</h3>
+    <ol class="lista"><li><b>Régimen tributario no determinado</b> — No hay atributo de régimen vigente en la ficha (14 TT / 14 D1 / 14 A). Sin régimen no se puede validar la tributación aplicable.</li><li><b>Dirección no disponible</b> — No hay domicilio en la ficha. El SII exige domicilio actualizado para notificaciones.</li><li><b>Sin RCV ingerido en el período analizado</b> — No hay documentos de compras ni ventas en los últimos 24 meses. Esto NO significa «sin movimiento»: el RCV no se ha sincronizado.</li></ol>
+    <h3>Fortalezas verificadas</h3>
+    <ul class="lista"><li>Ficha del contribuyente vigente en el SII: régimen, inicio de actividades y actividad económica acreditados.</li></ul>
+    
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">02</span> Cumplimiento tributario y obligaciones</h2>
+    
+    <svg viewBox="0 0 720 190" role="img" aria-label="Calendario de cumplimiento" class="gfx"><g><rect x="6" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>julio 2024: pendiente</title></rect>
+      <text x="18" y="28" font-size="11" font-weight="700" fill="#232327">ENE</text>
+      <text x="102" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="18" y="50" font-size="10" fill="#5C5C63">julio 2024</text>
+    </g><g><rect x="126" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>agosto 2024: pendiente</title></rect>
+      <text x="138" y="28" font-size="11" font-weight="700" fill="#232327">FEB</text>
+      <text x="222" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="138" y="50" font-size="10" fill="#5C5C63">agosto 2024</text>
+    </g><g><rect x="246" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>septiembre 2024: pendiente</title></rect>
+      <text x="258" y="28" font-size="11" font-weight="700" fill="#232327">MAR</text>
+      <text x="342" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="258" y="50" font-size="10" fill="#5C5C63">septiembre 2024</text>
+    </g><g><rect x="366" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>octubre 2024: pendiente</title></rect>
+      <text x="378" y="28" font-size="11" font-weight="700" fill="#232327">ABR</text>
+      <text x="462" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="378" y="50" font-size="10" fill="#5C5C63">octubre 2024</text>
+    </g><g><rect x="486" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>noviembre 2024: pendiente</title></rect>
+      <text x="498" y="28" font-size="11" font-weight="700" fill="#232327">MAY</text>
+      <text x="582" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="498" y="50" font-size="10" fill="#5C5C63">noviembre 2024</text>
+    </g><g><rect x="606" y="6" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>diciembre 2024: pendiente</title></rect>
+      <text x="618" y="28" font-size="11" font-weight="700" fill="#232327">JUN</text>
+      <text x="702" y="30" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="618" y="50" font-size="10" fill="#5C5C63">diciembre 2024</text>
+    </g><g><rect x="6" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>enero 2025: pendiente</title></rect>
+      <text x="18" y="102" font-size="11" font-weight="700" fill="#232327">JUL</text>
+      <text x="102" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="18" y="124" font-size="10" fill="#5C5C63">enero 2025</text>
+    </g><g><rect x="126" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>febrero 2025: pendiente</title></rect>
+      <text x="138" y="102" font-size="11" font-weight="700" fill="#232327">AGO</text>
+      <text x="222" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="138" y="124" font-size="10" fill="#5C5C63">febrero 2025</text>
+    </g><g><rect x="246" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>marzo 2025: pendiente</title></rect>
+      <text x="258" y="102" font-size="11" font-weight="700" fill="#232327">SEP</text>
+      <text x="342" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="258" y="124" font-size="10" fill="#5C5C63">marzo 2025</text>
+    </g><g><rect x="366" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>abril 2025: pendiente</title></rect>
+      <text x="378" y="102" font-size="11" font-weight="700" fill="#232327">OCT</text>
+      <text x="462" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="378" y="124" font-size="10" fill="#5C5C63">abril 2025</text>
+    </g><g><rect x="486" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>mayo 2025: pendiente</title></rect>
+      <text x="498" y="102" font-size="11" font-weight="700" fill="#232327">NOV</text>
+      <text x="582" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="498" y="124" font-size="10" fill="#5C5C63">mayo 2025</text>
+    </g><g><rect x="606" y="80" width="108" height="62" rx="8" fill="#F1ECE2" stroke="#E3DACA" stroke-width="1.2"><title>junio 2025: pendiente</title></rect>
+      <text x="618" y="102" font-size="11" font-weight="700" fill="#232327">DIC</text>
+      <text x="702" y="104" font-size="15" font-weight="700" fill="#5C5C63" text-anchor="middle">?</text>
+      <text x="618" y="124" font-size="10" fill="#5C5C63">junio 2025</text>
+    </g></svg>
+    <p class="nota">Calendario de cumplimiento: los meses no consultados no se cuentan como incumplimientos; los meses futuros no se evalúan.</p>
+    <div class="dos-col">
+      <div>
+        <div class="decl-bloque"><h3>F29 — IVA mensual</h3>
+      <p class="nota">Períodos con RCV en el período analizado: 202407 a 202606. El estado del F29 se lee en todo el rango disponible en el SII.</p>
+      <p class="nota"><span class="chip">No consultada</span> Sin consulta registrada para este rango. Ejecuta la sincronización de declaraciones.</p></div>
+        <div class="decl-bloque"><h3>Declaraciones juradas</h3>
+      <p class="nota"></p>
+      <p class="nota"><span class="chip">No consultada</span> Sin consulta registrada para este rango. Ejecuta la sincronización de declaraciones.</p></div>
+      </div>
+      <div>
+        <div class="decl-bloque"><h3>F22 — Renta anual</h3>
+      <p class="nota"></p>
+      <p class="nota"><span class="chip">No consultada</span> Sin consulta registrada para este rango. Ejecuta la sincronización de declaraciones.</p></div>
+        <div class="decl-bloque"><h3>Boletas de honorarios</h3>
+      <p class="nota"></p>
+      <p class="nota"><span class="chip">No consultada</span> Sin consulta registrada para este rango. Ejecuta la sincronización de declaraciones.</p></div>
+      </div>
+    </div>
+    <h3>Declaraciones anuales (F22 y boletas de honorarios)</h3>
+    <p class="nota">Sin declaraciones anuales consultadas en el SII.</p>
+    <h3>Cobertura del diagnóstico</h3>
+    <p class="nota">
+      Cobertura: <b>20%</b> · Nivel de confianza: <b>BAJA</b> ·
+      Períodos con datos: 0 · sin movimiento: 0 · sin sincronizar: 24.
+    </p>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">03</span> Análisis del IVA y conciliaciones</h2>
+    
+    <svg viewBox="0 0 720 90" role="img" class="gfx"><rect x="0" y="0" width="720" height="90" rx="8" fill="#F1ECE2"/><text x="360" y="50" text-anchor="middle" font-size="12" fill="#5C5C63">Sin suficientes períodos con datos para graficar el IVA.</text></svg>
+    <p class="nota">Débito y crédito fiscal calculados desde el RCV ingerido; el IVA determinado es una estimación propia y no sustituye la determinación del F29.</p>
+    <svg viewBox="0 0 720 262" role="img" aria-label="Puente de conciliación del IVA" class="gfx"><line x1="66" y1="186.0" x2="704" y2="186.0" stroke="#E3DACA"/><text x="58" y="189.0" text-anchor="end" font-size="10" fill="#5C5C63">$0 MM</text><line x1="66" y1="105.0" x2="704" y2="105.0" stroke="#E3DACA"/><text x="58" y="108.0" text-anchor="end" font-size="10" fill="#5C5C63">$0 MM</text><line x1="66" y1="24.0" x2="704" y2="24.0" stroke="#E3DACA"/><text x="58" y="27.0" text-anchor="end" font-size="10" fill="#5C5C63">$0 MM</text><g>
+      <rect x="92.8" y="186.0" width="74.0" height="2.0" rx="3" fill="#A87C3E" opacity="0.9"><title>Débito fiscal (RCV): $0</title></rect>
+      <text x="129.8" y="180.0" text-anchor="middle" font-size="10" font-weight="700" fill="#232327">$0 MM</text>
+      <text x="129.8" y="214" text-anchor="middle" font-size="9.5" fill="#5C5C63">Débito</text>
+      <text x="129.8" y="226" text-anchor="middle" font-size="9.5" fill="#5C5C63">fiscal (RCV)</text>
+    </g><g>
+      <rect x="220.4" y="186.0" width="74.0" height="2.0" rx="3" fill="#A87C3E" opacity="0.9"><title>Menos crédito fiscal (RCV): $-0</title></rect>
+      <text x="257.4" y="180.0" text-anchor="middle" font-size="10" font-weight="700" fill="#232327">$0 MM</text>
+      <text x="257.4" y="214" text-anchor="middle" font-size="9.5" fill="#5C5C63">Menos crédito</text>
+      <text x="257.4" y="226" text-anchor="middle" font-size="9.5" fill="#5C5C63">fiscal (RCV)</text>
+    </g><g>
+      <rect x="348.0" y="186.0" width="74.0" height="2.0" rx="3" fill="#232327" opacity="0.9"><title>IVA determinado estimado: $0</title></rect>
+      <text x="385.0" y="180.0" text-anchor="middle" font-size="10" font-weight="700" fill="#232327">$0 MM</text>
+      <text x="385.0" y="214" text-anchor="middle" font-size="9.5" fill="#5C5C63">IVA determinado</text>
+      <text x="385.0" y="226" text-anchor="middle" font-size="9.5" fill="#5C5C63">estimado</text>
+    </g><g>
+      <rect x="475.6" y="186.0" width="74.0" height="2.0" rx="3" fill="#A87C3E" opacity="0.9"><title>PPM estimado: $0</title></rect>
+      <text x="512.6" y="180.0" text-anchor="middle" font-size="10" font-weight="700" fill="#232327">$0 MM</text>
+      <text x="512.6" y="214" text-anchor="middle" font-size="9.5" fill="#5C5C63">PPM</text>
+      <text x="512.6" y="226" text-anchor="middle" font-size="9.5" fill="#5C5C63">estimado</text>
+    </g><g>
+      <rect x="603.2" y="186.0" width="74.0" height="2.0" rx="3" fill="#232327" opacity="0.9"><title>Total F29 estimado: $0</title></rect>
+      <text x="640.2" y="180.0" text-anchor="middle" font-size="10" font-weight="700" fill="#232327">$0 MM</text>
+      <text x="640.2" y="214" text-anchor="middle" font-size="9.5" fill="#5C5C63">Total F29</text>
+      <text x="640.2" y="226" text-anchor="middle" font-size="9.5" fill="#5C5C63">estimado</text>
+    </g></svg>
+    <p class="nota">Puente construido con estimaciones del RCV: no hay Formulario Compacto del F29 disponible.</p>
+    <h3>Detalle por período (declarado vs. estimado)</h3>
+    <table class="tabla tabla-mensual">
+    <thead><tr>
+      <th style="width:13%">Período</th><th style="width:11%" class="der">Ventas netas</th>
+      <th style="width:11%" class="der">Débito fiscal</th><th style="width:11%" class="der">Crédito fiscal</th>
+      <th style="width:9%" class="der">IVA det.</th><th style="width:9%" class="der">PPM</th>
+      <th style="width:12%" class="der">F29 declarado</th><th style="width:11%" class="der">Dif. (est. − decl.)</th>
+      <th style="width:13%">Estado F29</th>
+    </tr></thead>
+    <tbody><tr>
+      <td>julio 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>agosto 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>septiembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>octubre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>noviembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>diciembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>enero 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>febrero 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>marzo 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>abril 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>mayo 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>junio 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>julio 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>agosto 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>septiembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>octubre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>noviembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>diciembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>enero 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>febrero 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>marzo 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>abril 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>mayo 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>junio 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr></tbody>
+  </table>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">04</span> Matriz de riesgos tributarios</h2>
+    
+    <svg viewBox="0 0 720 190" role="img" aria-label="Distribución de riesgos por severidad" class="gfx"><g>
+      <text x="74" y="39.7" text-anchor="end" font-size="12" fill="#232327">Alto</text>
+      <rect x="84" y="20.0" width="546.0" height="31.333333333333336" rx="4" fill="#B3372B" opacity="0.88"><title>1 hallazgo(s) · $0</title></rect>
+      <text x="638.0" y="39.7" font-size="11" fill="#5C5C63">1 hallazgo(s)</text>
+    </g><g>
+      <text x="74" y="85.0" text-anchor="end" font-size="12" fill="#232327">Medio</text>
+      <rect x="84" y="65.3" width="546.0" height="31.333333333333336" rx="4" fill="#B07A18" opacity="0.88"><title>1 hallazgo(s) · $0</title></rect>
+      <text x="638.0" y="85.0" font-size="11" fill="#5C5C63">1 hallazgo(s)</text>
+    </g><g>
+      <text x="74" y="130.3" text-anchor="end" font-size="12" fill="#232327">Bajo</text>
+      <rect x="84" y="110.7" width="546.0" height="31.333333333333336" rx="4" fill="#2F7D5D" opacity="0.88"><title>1 hallazgo(s) · $0</title></rect>
+      <text x="638.0" y="130.3" font-size="11" fill="#5C5C63">1 hallazgo(s)</text>
+    </g></svg>
+    <svg viewBox="0 0 720 140" role="img" aria-label="Exposición tributaria por materia" class="gfx"><g>
+      <text x="140" y="36.0" text-anchor="end" font-size="12" fill="#232327">Cumplimiento</text>
+      <rect x="150" y="16" width="0.0" height="26" rx="4" fill="#A87C3E" opacity="0.9"><title>Cumplimiento: $0</title></rect>
+      <text x="158.0" y="35.0" font-size="11" fill="#5C5C63">$0 MM</text>
+    </g></svg>
+    <p class="nota">Exposición por materia: Suma sin duplicidad: la diferencia entre el F29 declarado y el RCV y la contingencia de declaraciones pendientes son conceptos distintos.</p>
+    <table class="tabla tabla-riesgos">
+    <thead><tr>
+      <th style="width:11%">Severidad</th>
+      <th style="width:12%">Materia</th>
+      <th style="width:22%">Riesgo</th>
+      <th style="width:7%">Período</th>
+      <th style="width:12%" class="der">Exposición</th>
+      <th style="width:16%">Triage</th>
+      <th style="width:20%">Evidencia</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="chip chip-media">MEDIA</span></td>
+        <td>Cumplimiento</td>
+        <td>Régimen tributario no determinado</td>
+        <td>—</td>
+        <td class="der exposicion">—</td>
+        <td class="triage">
+          <span>sin cuantificar</span>
+          <span>Contador · 15 días hábiles</span>
+        </td>
+        <td class="evid">Ficha SII / atributos</td>
+      </tr>
+      <tr>
+        <td><span class="chip chip-baja">BAJA</span></td>
+        <td>Cumplimiento</td>
+        <td>Dirección no disponible</td>
+        <td>—</td>
+        <td class="der exposicion">—</td>
+        <td class="triage">
+          <span>sin cuantificar</span>
+          <span>Contador · 30 días</span>
+        </td>
+        <td class="evid">Ficha SII</td>
+      </tr>
+      <tr>
+        <td><span class="chip chip-alta">ALTA</span></td>
+        <td>Cumplimiento</td>
+        <td>Sin RCV ingerido en el período analizado</td>
+        <td>—</td>
+        <td class="der exposicion">—</td>
+        <td class="triage">
+          <span>sin cuantificar</span>
+          <span>Contador responsable · 5 días hábiles</span>
+        </td>
+        <td class="evid">documentos (bandeja local)</td>
+      </tr></tbody>
+  </table>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">05</span> Tendencias y comportamiento tributario</h2>
+    
+    <svg viewBox="0 0 720 90" role="img" class="gfx"><rect x="0" y="0" width="720" height="90" rx="8" fill="#F1ECE2"/><text x="360" y="50" text-anchor="middle" font-size="12" fill="#5C5C63">Sin suficientes períodos con datos para graficar la tendencia.</text></svg>
+    <p class="nota">Ventas netas e IVA determinado por período, desde el RCV ingerido.</p>
+    <table class="tabla tabla-mensual">
+    <thead><tr>
+      <th style="width:13%">Período</th><th style="width:11%" class="der">Ventas netas</th>
+      <th style="width:11%" class="der">Débito fiscal</th><th style="width:11%" class="der">Crédito fiscal</th>
+      <th style="width:9%" class="der">IVA det.</th><th style="width:9%" class="der">PPM</th>
+      <th style="width:12%" class="der">F29 declarado</th><th style="width:11%" class="der">Dif. (est. − decl.)</th>
+      <th style="width:13%">Estado F29</th>
+    </tr></thead>
+    <tbody><tr>
+      <td>julio 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>agosto 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>septiembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>octubre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>noviembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>diciembre 2024</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>enero 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>febrero 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>marzo 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>abril 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>mayo 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>junio 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>julio 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>agosto 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>septiembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>octubre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>noviembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>diciembre 2025</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>enero 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>febrero 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>marzo 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>abril 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>mayo 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr><tr>
+      <td>junio 2026</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">$0</td>
+      <td class="der">—</td>
+      <td class="der ">—</td>
+      <td>No consultado</td>
+    </tr></tbody>
+  </table>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">06</span> Impacto financiero y proyecciones</h2>
+    
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-k">Ventas del período</div><div class="kpi-v">$0 MM</div><div class="kpi-s">neto, 0 mes(es) con datos</div></div>
+      <div class="kpi-card"><div class="kpi-k">IVA del período</div><div class="kpi-v">$0 MM</div><div class="kpi-s">estimado desde RCV</div></div>
+      <div class="kpi-card"><div class="kpi-k">PPM del período</div><div class="kpi-v">$0 MM</div><div class="kpi-s">tasa 1%</div></div>
+      <div class="kpi-card"><div class="kpi-k">Margen bruto</div><div class="kpi-v">—</div><div class="kpi-s">(ventas − compras) / ventas</div></div>
+      <div class="kpi-card"><div class="kpi-k">Fondos disponibles</div><div class="kpi-v">—</div><div class="kpi-s">0 cuenta(s) bancaria(s)</div></div>
+      <div class="kpi-card"><div class="kpi-k">Cartera por cobrar</div><div class="kpi-v">—</div><div class="kpi-s">vencido &gt;30 días: —</div></div>
+    </div>
+    <h3>Escenarios de caja (indicadores)</h3>
+    <table class="tabla">
+      <thead><tr><th>Indicador</th><th>Valor</th><th>Lectura</th></tr></thead>
+      <tbody>
+        <tr><td>Cobertura de obligaciones del período</td><td class="der">—</td><td>Fondos disponibles sobre el IVA y PPM estimados del período.</td></tr>
+        <tr><td>Días promedio de cobranza (DSO estimado)</td><td class="der">—</td><td>Retraso en el ingreso del IVA pagado por los clientes.</td></tr>
+        <tr><td>Cartera vencida sobre 30 días</td><td class="der">—</td><td>Riesgo directo sobre la capacidad de pago del IVA del período siguiente.</td></tr>
+        <tr><td>Conciliación bancaria</td><td class="der">—</td><td>Cartola aplicada sobre el período revisado.</td></tr>
+        <tr><td>Exposición tributaria identificada</td><td class="der">$0 MM</td><td>Suma sin duplicidad: la diferencia entre el F29 declarado y el RCV y la contingencia de declaraciones pendientes son conceptos distintos.</td></tr>
+      </tbody>
+    </table>
+    <h3>Renta (F22) y devoluciones</h3>
+    <p class="nota">Renta no consultada: la existencia de la declaración anual no está verificada.</p>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">07</span> Plan de acción y regularización</h2>
+    
+    <table class="tabla tabla-plan">
+    <thead><tr>
+      <th style="width:4%">#</th><th style="width:20%">Acción</th><th style="width:16%">Motivo</th>
+      <th style="width:16%">Evidencia de cierre</th><th style="width:11%">Responsable</th>
+      <th style="width:8%">Plazo</th><th style="width:13%" class="der">Impacto estimado</th>
+      <th style="width:12%">Estado</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Resolver: Régimen tributario no determinado.</td>
+        <td>Régimen tributario no determinado</td>
+        <td>Ficha SII / atributos</td>
+        <td>Contador</td>
+        <td>15 días hábiles</td>
+        <td class="der">—</td>
+        <td><span class="chip chip-media">pendiente</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Ejecutar la ingesta de compras y ventas desde el SII para completar el diagnóstico.</td>
+        <td>Sin RCV ingerido en el período analizado</td>
+        <td>documentos (bandeja local)</td>
+        <td>Contador responsable</td>
+        <td>5 días hábiles</td>
+        <td class="der">—</td>
+        <td><span class="chip chip-media">pendiente</span></td>
+      </tr></tbody>
+  </table>
+    <p class="nota">Cada acción se cierra con la evidencia señalada; el siguiente informe verifica el resultado.</p>
+  
+  </section><section class="cap">
+    <h2><span class="cap-n">08</span> Metodología, alcance y anexos</h2>
+    
+    <h3>Índice de Salud Tributaria JMV</h3>
+    <p class="nota">JMV Tax Health — promedio ponderado de cinco dimensiones evaluables (cumplimiento 25%, consistencia y conciliación 25%, riesgos y contingencias 20%, calidad y cobertura de datos 15%, controles y regularización 15%).</p>
+    <p class="nota">Una dimensión sin antecedentes no se puntúa con cero: se declara «no evaluable» y su peso se redistribuye entre las demás.</p>
+    <p class="nota">El índice nunca oculta una contingencia crítica: las alertas de severidad alta se muestran siempre, con independencia del puntaje.</p>
+    <p class="nota">Escala: 90–100 Sólida · 75–89 Favorable con observaciones · 60–74 Requiere atención · 40–59 Riesgo elevado · 0–39 Crítica.</p>
+    <svg viewBox="0 0 720 210" role="img" aria-label="Índice de salud tributaria por dimensión" class="gfx"><g>
+    <circle cx="110" cy="105" r="48" fill="none" stroke="#E3DACA" stroke-width="12"/>
+    <circle cx="110" cy="105" r="48" fill="none" stroke="#B3372B" stroke-width="12" stroke-linecap="round"
+      stroke-dasharray="223.2 301.6" transform="rotate(-90 110 105)"/>
+    <text x="110" y="107" text-anchor="middle" font-size="30" font-weight="700" fill="#232327">74</text>
+    <text x="110" y="125" text-anchor="middle" font-size="10" fill="#5C5C63">de 100</text>
+  </g><g>
+      <text x="230" y="26" font-size="11.5" fill="#232327">Cumplimiento de obligaciones <tspan fill="#5C5C63">(0.25%)</tspan></text>
+      <rect x="230" y="32" width="380" height="9" rx="4" fill="#F1ECE2"/>
+      <rect x="230" y="32" width="2.0" height="9" rx="4" fill="#5C5C63" opacity="0.9"/>
+      <text x="618" y="41" font-size="11" font-weight="700" fill="#5C5C63">n/e</text>
+    </g><g>
+      <text x="230" y="58" font-size="11.5" fill="#232327">Consistencia y conciliación <tspan fill="#5C5C63">(0.25%)</tspan></text>
+      <rect x="230" y="64" width="380" height="9" rx="4" fill="#F1ECE2"/>
+      <rect x="230" y="64" width="2.0" height="9" rx="4" fill="#5C5C63" opacity="0.9"/>
+      <text x="618" y="73" font-size="11" font-weight="700" fill="#5C5C63">n/e</text>
+    </g><g>
+      <text x="230" y="90" font-size="11.5" fill="#232327">Riesgos y contingencias <tspan fill="#5C5C63">(0.2%)</tspan></text>
+      <rect x="230" y="96" width="380" height="9" rx="4" fill="#F1ECE2"/>
+      <rect x="230" y="96" width="281.2" height="9" rx="4" fill="#5C5C63" opacity="0.9"/>
+      <text x="618" y="105" font-size="11" font-weight="700" fill="#5C5C63">74</text>
+    </g><g>
+      <text x="230" y="122" font-size="11.5" fill="#232327">Calidad y cobertura de datos <tspan fill="#5C5C63">(0.15%)</tspan></text>
+      <rect x="230" y="128" width="380" height="9" rx="4" fill="#F1ECE2"/>
+      <rect x="230" y="128" width="2.0" height="9" rx="4" fill="#5C5C63" opacity="0.9"/>
+      <text x="618" y="137" font-size="11" font-weight="700" fill="#5C5C63">n/e</text>
+    </g><g>
+      <text x="230" y="154" font-size="11.5" fill="#232327">Controles y regularización <tspan fill="#5C5C63">(0.15%)</tspan></text>
+      <rect x="230" y="160" width="380" height="9" rx="4" fill="#F1ECE2"/>
+      <rect x="230" y="160" width="2.0" height="9" rx="4" fill="#5C5C63" opacity="0.9"/>
+      <text x="618" y="169" font-size="11" font-weight="700" fill="#5C5C63">n/e</text>
+    </g></svg>
+    <h3>Origen de los datos</h3>
+    <table class="tabla"><thead><tr><th>Categoría</th><th>Qué significa</th></tr></thead><tbody>
+      <tr><td>Datos obtenidos directamente</td><td>Ficha del contribuyente, RCV, estados y casillas de declaraciones: consultados desde el SII con la sesión del contribuyente.</td></tr><tr><td>Datos importados</td><td>Documentos y movimientos cargados por el cliente o su contador (bandeja, tesorería y contabilidad).</td></tr><tr><td>Datos calculados</td><td>Indicadores derivados con fórmulas documentadas (IVA, PPM, ratios, aging de cobranza, índice de salud).</td></tr><tr><td>Datos estimados</td><td>Proyecciones y escenarios que requieren validación del contador.</td></tr><tr><td>Datos no disponibles</td><td>Materias que no se pueden evaluar todavía (remuneraciones, retenciones,Declaraciones juradas).</td></tr>
+    </tbody></table>
+    <h3>Limitaciones</h3>
+    <ul class="lista"><li>El informe no constituye una auditoría de estados financieros ni una certificación tributaria.</li><li>Las diferencias detectadas son materia de investigación: no prueban por sí mismas un incumplimiento.</li><li>Los plazos legales y la prescripción deben evaluarse caso a caso.</li></ul>
+    <ul class="lista"><li>Opinión automatizada sobre datos verificables. No es una certificación tributaria ni reemplaza la revisión de un asesor.</li><li>No se consultó el estado oficial del F29: los montos mensuales son estimaciones desde el RCV.</li><li>No se consultó el F22 (renta): la existencia de la declaración anual no está verificada.</li><li>No se consultaron las boletas de honorarios: su ausencia en el informe no significa que no existan.</li><li>Los montos de IVA, PPM y F29 son ESTIMACIONES calculadas desde el RCV, no lo declarado.</li><li>La prescripción y los plazos legales deben evaluarse caso a caso (Código Tributario art. 200 y normas especiales).</li></ul>
+    <h3>Base normativa de referencia</h3>
+    <ul class="lista"><li>D.L. 825 art. 29 — declaración y pago mensual del IVA (F29).</li><li>Ley de la Renta art. 65 — declaración anual de renta (F22).</li><li>Ley 21.210 — regímenes Pro Pyme (14 D N°3 transparente y N°3 general).</li><li>Ley 20.727 — boleta de honorarios electrónica.</li><li>Código Tributario art. 200 — plazos de prescripción.</li></ul>
+    <h3>Documentos y fuentes consultadas</h3>
+    <table class="tabla"><thead><tr><th>Fuente</th><th>Cobertura</th></tr></thead><tbody>
+      <tr><td>Ficha del contribuyente (SII)</td><td>empresas (ficha SII no descargada)</td></tr>
+      <tr><td>Registro de Compras y Ventas (RCV)</td><td>0 período(s) con datos entre 202407 y 202606</td></tr>
+      <tr><td>Consulta Integral F29 (SII)</td><td>No consultada</td></tr>
+      <tr><td>Formulario Compacto del F29 (SII)</td><td>No disponible</td></tr>
+      <tr><td>Renta (F22)</td><td>No consultada</td></tr>
+      <tr><td>Tesorería y contabilidad del sistema</td><td>Sin movimientos registrados</td></tr>
+    </tbody></table>
+  
+  </section>
+
+    <section class="final">
+      <div class="marca"><svg class="marca-simbolo" viewBox="52 8 350 216" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JMV Consultores">
+  <g fill="#8a5a2b">
+    <circle cx="392" cy="128" r="30"/><circle cx="368" cy="82" r="24"/><circle cx="330" cy="50" r="18"/>
+    <circle cx="286" cy="34" r="13"/><circle cx="244" cy="36" r="9"/><circle cx="322" cy="96" r="10"/><circle cx="298" cy="130" r="7"/>
+  </g>
+  <g fill="#c2a077">
+    <circle cx="128" cy="150" r="32"/><circle cx="172" cy="188" r="24"/><circle cx="222" cy="206" r="17"/>
+    <circle cx="268" cy="208" r="11"/><circle cx="306" cy="196" r="7"/><circle cx="168" cy="120" r="12"/><circle cx="212" cy="102" r="8"/>
+  </g>
+</svg><span class="marca-txt"><b>JMV</b> CONSULTORES</span></div>
+      <p><b>JMV Tax Health Intelligence</b> — Informe Ejecutivo de Salud Tributaria</p>
+      <p>Este informe se entrega al contribuyente identificado en la portada y recoge el estado de su situación tributaria
+      a la fecha de emisión, sobre la base de los antecedentes verificados y de las limitaciones declaradas en el capítulo 08.</p>
+      <p>Se recomienda su uso como base de la conversación con el equipo contador, y su contraste con la documentación de respaldo
+      antes de adoptar decisiones sobre regularizaciones o rediseño de procesos.</p>
+      <p class="firma">Emitido por JMV Consultores · 22 de octubre de 2026 · JMV-TH-11-202606-20261022043810 · Documento confidencial</p>
+    </section>
+
+    <div class="pie">
+      <span>JMV Consultores · Tax Health Intelligence</span>
+      <span>JMV-TH-11-202606-20261022043810 · Emitido el 22 oct 2026</span>
+    </div>
+  </div></body>
+</html>

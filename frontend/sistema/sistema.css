@@ -731,6 +731,37 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   flex-wrap: wrap;
 }
 .sys .centro-hola h2 { margin: 0; font-size: var(--fs-xl); }
+/* Robot de bienvenida: flota suave (respeta prefers-reduced-motion). */
+.sys .centro-robot {
+  width: 88px; height: 88px; flex: none;
+  filter: drop-shadow(0 8px 18px rgb(15 23 42 / .14));
+  animation: robot-flotar 6s ease-in-out infinite;
+}
+@keyframes robot-flotar {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(-2deg); }
+}
+
+/* Entrada escalonada de la rejilla de módulos: cada ícono entra con un
+   retardo mínimo. El retardo vive aquí (no en un estilo inline) para poder
+   apagarlo de un solo lugar y para no ensuciar el marcado. */
+.sys .ios-app { animation: ios-entra .34s cubic-bezier(.22, .9, .3, 1) both; }
+.sys .ios-app:nth-child(1) { animation-delay: 0ms; }
+.sys .ios-app:nth-child(2) { animation-delay: 34ms; }
+.sys .ios-app:nth-child(3) { animation-delay: 68ms; }
+.sys .ios-app:nth-child(4) { animation-delay: 102ms; }
+.sys .ios-app:nth-child(5) { animation-delay: 136ms; }
+.sys .ios-app:nth-child(6) { animation-delay: 170ms; }
+.sys .ios-app:nth-child(7) { animation-delay: 204ms; }
+.sys .ios-app:nth-child(8) { animation-delay: 238ms; }
+.sys .ios-app:nth-child(9) { animation-delay: 272ms; }
+.sys .ios-app:nth-child(10) { animation-delay: 306ms; }
+.sys .ios-app:nth-child(11) { animation-delay: 340ms; }
+.sys .ios-app:nth-child(n + 12) { animation-delay: 374ms; }
+@keyframes ios-entra {
+  from { opacity: 0; transform: translateY(10px) scale(.94); }
+  to { opacity: 1; transform: none; }
+}
 
 .sys .centro-continuar { padding: var(--space-3) var(--space-5); }
 .sys .centro-card-seguir {
@@ -946,6 +977,8 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 @media (prefers-reduced-motion: reduce) {
   .sys .ios-ico, .sys-dock .dock-ico { transition: none; }
   .sys .ios-app:hover .ios-ico, .sys-dock .dock-item-inicio:hover .dock-ico { transform: none; }
+  .sys .ios-app { animation: none; }
+  .sys .centro-robot { animation: none; }
 }
 
 /* ============================================================
@@ -1657,4 +1690,116 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 
 @media (max-width: 960px) {
   .sys .sys-main { padding-bottom: calc(var(--space-10) + 96px); }
+}
+
+/* ==========================================================================
+   SALUD TRIBUTARIA v2 — JMV Tax Health Intelligence (2026-10-21)
+   Portada ejecutiva, KPI de 8 indicadores, pestañas, gráficos SVG y el
+   progreso paso a paso de la reunión de antecedentes. Todo con los tokens
+   del sistema: sin colores sueltos (verde/ámbar/rojo SOLO para riesgo).
+   ========================================================================== */
+.sys .hint { color: var(--fg-muted); font-size: var(--fs-xs); line-height: 1.55; }
+.sys .sl-panel.hidden { display: none; }
+
+.sl-portada { border-left: 3px solid var(--accent); }
+.sl-portada-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(240px, 100%), 320px); gap: var(--space-6); align-items: start; }
+.sl-titulo { font-family: var(--font-display); font-size: var(--fs-2xl, 1.5rem); margin: var(--space-1) 0 0; letter-spacing: -0.01em; }
+.sl-indice { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; }
+.sl-indice-num { font-family: var(--font-mono); font-size: 2.6rem; font-weight: 600; line-height: 1; }
+.sl-indice-num small { font-size: 1rem; color: var(--fg-muted); font-weight: 400; }
+.sl-indice-meta { display: grid; grid-template-columns: repeat(2, minmax(min(120px, 100%), auto)); gap: var(--space-1) var(--space-5); font-size: var(--fs-sm); color: var(--fg-secondary); }
+.sl-indice-meta b { color: var(--fg-primary); font-weight: 600; }
+.sl-acciones { display: flex; flex-direction: column; gap: var(--space-2); align-items: stretch; }
+
+/* KPI de portada: 8 indicadores, con la definición en el tooltip. */
+.sl-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: var(--space-3); margin: var(--space-4) 0; }
+.sl-kpi { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-4); transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.sl-kpi:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.sl-kpi-k { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--fg-muted); }
+.sl-kpi-v { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; margin: var(--space-2) 0 var(--space-1); line-height: 1.1; }
+.sl-kpi-s { font-size: var(--fs-xs); color: var(--fg-secondary); line-height: 1.45; }
+
+/* Pestañas: el informe se recorre por capítulo, no como un muro de tablas. */
+.sl-tabs { display: flex; gap: var(--space-1); flex-wrap: wrap; border-bottom: 1px solid var(--border-default); margin-bottom: var(--space-4); }
+.sl-tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--fg-secondary); font: inherit; font-size: var(--fs-sm); padding: var(--space-3) var(--space-3); cursor: pointer; border-radius: var(--radius-sm) var(--radius-sm) 0 0; transition: color .16s ease, border-color .16s ease, background .16s ease; }
+.sl-tab:hover { color: var(--fg-primary); background: var(--bg-hover); }
+.sl-tab.active { color: var(--fg-primary); border-bottom-color: var(--accent); font-weight: 600; }
+.sl-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Gráficos: los mismos SVG del PDF (una sola fuente de verdad). */
+.sl-chart { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-3); }
+.sl-chart svg { width: 100%; height: auto; display: block; }
+.sl-chart svg text { font-family: var(--font-sans); }
+/* Matriz de riesgos: la misma información que el informe PDF, agrupada igual
+   (Triage = naturaleza + responsable + plazo) para que panel y papel no
+   se contradigan. */
+.sl-tbl-riesgos .sub span { display: block; }
+.sl-tbl-riesgos .sub span + span { color: var(--fg-muted); font-size: var(--fs-xs); }
+
+/* Opinión profesional: la parte que se lee, no la que se escanea. */
+.sl-opinion { background: var(--bg-surface); border: 1px solid var(--border-default); border-left: 3px solid var(--accent); border-radius: var(--radius-lg); padding: var(--space-5); }
+.sl-opinion-lead { font-size: var(--fs-base); line-height: 1.65; margin: 0 0 var(--space-5); color: var(--fg-primary); }
+.sl-opinion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: var(--space-4) var(--space-6); }
+.sl-opinion h4 { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 0 0 var(--space-2); }
+.sl-adv { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px dashed var(--border-default); }
+.sl-lista { margin: 0; padding-left: 1.1rem; color: var(--fg-secondary); font-size: var(--fs-sm); }
+.sl-lista li { margin-bottom: var(--space-1); }
+
+/* Progreso de la reunión de antecedentes. */
+.sl-progreso:empty { display: none; }
+.sl-prog { margin-top: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-4); background: var(--bg-elevated); }
+.sl-prog-estado { font-weight: 600; margin-bottom: var(--space-2); }
+.sl-prog-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.sl-prog-paso { display: grid; grid-template-columns: 14px minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--space-2); align-items: baseline; font-size: var(--fs-sm); color: var(--fg-secondary); }
+.sl-prog-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-muted); display: inline-block; }
+.sl-prog-paso.is-en_curso .sl-prog-dot { background: var(--accent); animation: sl-pulse 1.1s ease-in-out infinite; }
+.sl-prog-paso.is-ok .sl-prog-dot { background: var(--success); }
+.sl-prog-paso.is-error .sl-prog-dot { background: var(--danger); }
+.sl-prog-paso.is-omitido { opacity: .45; }
+.sl-prog-detalle { color: var(--fg-muted); font-size: var(--fs-xs); text-align: right; }
+@keyframes sl-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+
+@media (max-width: 860px) {
+  .sl-portada-grid { grid-template-columns: minmax(0, 1fr); }
+  .sl-indice-num { font-size: 2.1rem; }
+  .sl-acciones { flex-direction: row; flex-wrap: wrap; }
+  .sl-acciones .btn { flex: 1 1 auto; }
+  .sl-acciones .hint { flex-basis: 100%; text-align: left !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-kpi, .sl-tab { transition: none; }
+  .sl-kpi:hover { transform: none; }
+  .sl-prog-paso.is-en_curso .sl-prog-dot { animation: none; }
+}
+
+/* ==========================================================================
+   SELECCIÓN DE MÓDULO — color y movimiento (2026-10-21)
+   La vista elegida se reconoce de un vistazo: el ítem activo del menú y el
+   del dock reciben el color de marca y un pulso breve (no un parpadeo), y el
+   ícono del home se hunde al pulsarlo. El estado activo NO depende solo del
+   color: además se desplaza y engorda, para que se lea sin color.
+   ========================================================================== */
+.sys-nav a { transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast); }
+.sys-nav a.active { animation: sel-menu .32s cubic-bezier(.22, .9, .3, 1) both; }
+@keyframes sel-menu {
+  0% { transform: translateX(0); }
+  45% { transform: translateX(3px); }
+  100% { transform: none; }
+}
+
+.sys-dock .dock-item.active .dock-ico { animation: sel-dock .34s cubic-bezier(.22, .9, .3, 1) both; }
+@keyframes sel-dock {
+  0% { transform: scale(.92); }
+  55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.sys .ios-app { transition: color .16s ease; }
+.sys .ios-app:active { color: var(--fg-primary); }
+.sys .ios-app:active .ios-ico { transform: scale(.94); }
+.sys .ios-app:hover .ios-ico { box-shadow: 0 8px 18px rgb(15 23 42 / .12), 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sys-nav a.active, .sys-dock .dock-item.active .dock-ico { animation: none; }
+  .sys .ios-app:active .ios-ico { transform: none; }
 }

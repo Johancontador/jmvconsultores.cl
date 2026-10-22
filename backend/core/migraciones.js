@@ -1010,6 +1010,42 @@ function migracionesDeclaracionesSii(db) {
 }
 
 // ============================================================
+// Formulario Compacto del F29 (2026-10-21) — LA VERDAD DECLARADA.
+//
+// Una fila por empresa y período con las CASILLAS del F29 tal como se
+// presentó (502/510/538 ventas, 520/528/537 compras, 089 IVA, 063 PPM,
+// 091–094 total a pagar), el estado de la consulta y el historial de
+// eventos del SII. Permite comparar «lo declarado» contra «lo que el
+// sistema estima desde el RCV»: la comparación de verdad.
+// ============================================================
+function migracionesF29Formularios(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS f29_formularios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      rut TEXT NOT NULL,
+      periodo TEXT NOT NULL,
+      folio TEXT,
+      estado TEXT,
+      situacion TEXT,
+      monto_observado INTEGER,
+      declaraciones_vigentes INTEGER,
+      intentos INTEGER,
+      indicadores_json TEXT NOT NULL DEFAULT '{}',
+      casillas_json TEXT NOT NULL DEFAULT '[]',
+      verificaciones_json TEXT NOT NULL DEFAULT '[]',
+      eventos_json TEXT NOT NULL DEFAULT '[]',
+      url TEXT,
+      datos_json TEXT NOT NULL DEFAULT '{}',
+      consultado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, periodo)
+    );
+    CREATE INDEX IF NOT EXISTS idx_f29_formularios_empresa
+      ON f29_formularios(empresa_id, periodo);
+  `)
+}
+
+// ============================================================
 // CRM (Fase B): pipeline de clientes, recordatorios y campañas.
 // ============================================================
 function migracionesCrm(db) {
@@ -1027,4 +1063,4 @@ function migracionesCrmComercial(db) {
   require('./crm-comercial').migracionesCrmComercial(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesF29Formularios, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }

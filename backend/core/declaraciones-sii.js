@@ -38,6 +38,7 @@
 const fs = require('fs')
 const { loginSII, fetchConCookies } = require('../services/sii-session')
 const { claveSiiDescifrada } = require('./empresas')
+const f29Formulario = require('./f29-formulario')
 
 const PORTAL = (form) => `https://www4.sii.cl/sifmConsultaInternet/index.html?dest=cifxx&form=${form}`
 const BHE_EMITIDAS = 'https://loa.sii.cl/cgi_IMT/TMBCOC_InformeAnualBhe.cgi'
@@ -406,6 +407,324 @@ async function leerBhe(page, { rut, dv, anio, tipo }) {
 }
 
 // ---------------------------------------------------------------------------
+// CONSULTA DE ESTADO + FORMULARIO COMPACTO (la verdad declarada del F29)
+// ---------------------------------------------------------------------------
+//
+// La búsqueda anual entrega folio, fecha, estado y MONTO de cada declaración.
+// El Formulario Compacto es el PDF del F29 tal como se presentó: ahí están
+// las casillas 502/510/538 (ventas declaradas), 520/528/537 (compras),
+// 089 (IVA determinado), 063 (PPM), 091/092/093/094 (total a pagar) y las
+// notas de crédito. Es la ÚNICA fuente que permite comparar «lo declarado»
+// contra «lo que el sistema estima desde el RCV».
+//
+// El PDF no se baja con una URL estable: el SII exige un `codInt` que se
+// genera al pulsar la pestaña «Formulario Compacto» de la consulta de estado
+// del período. Por eso el flujo es: resultados → «Ver» del período →
+// «Formulario Compacto» → descarga en el MISMO origen con la sesión viva.
+
+/** Normaliza '$1.234.567' a 1234567; null si no hay número. */
+function montoDeTexto(txt) {
+  const m = String(txt || '').match(/[\d][\d\.]*/)
+  if (!m) return null
+  const n = Number(m[0].replace(/\./g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Parsea el texto de la «CONSULTA DE ESTADO» de un período.
+ * Es una función PURA: recibe el innerText y devuelve los antecedentes
+ * (folio, situación, vigentes, intentos, monto observado, observaciones e
+ * historial de eventos). Si el texto no trae algo, ese dato queda en null:
+ * el informe lo declara como ausente, nunca lo completa por su cuenta.
+ */
+function parsearEstadoF29(texto) {
+  const t = String(texto || '')
+  const out = {
+    folio: null,
+    situacion: null,
+    declaraciones_vigentes: null,
+    intentos_declaracion: null,
+    monto_observado: null,
+    notificaciones: [],
+    observaciones: [],
+    eventos: [],
+    texto: t.slice(0, 6000),
+  }
+
+  // «8103205416 - DECLARACION VIGENTE»
+  const mFolio = t.match(/(\d{6,12})\s*-\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s.-]{3,60})/)
+  if (mFolio) {
+    out.folio = mFolio[1]
+    out.situacion = mFolio[2].trim().replace(/\s+/g, ' ')
+  }
+
+  const mVig = t.match(/Declaraciones\s+Vigentes\s*[\t\r\n\s]*(\d+)/i)
+  if (mVig) out.declaraciones_vigentes = Number(mVig[1])
+
+  const mInt = t.match(/Intentos\s+de\s+Declaraci[oó]n\s*[\t\r\n\s]*(\d+)/i)
+  if (mInt) out.intentos_declaracion = Number(mInt[1])
+
+  const mMonto = t.match(/Monto\s+Observado\s*[\t\r\n\s]*\$?\s*([\d\.]+)/i)
+  if (mMonto) out.monto_observado = montoDeTexto(mMonto[1])
+
+  // Historial de eventos: cada entrada empieza con dd/mm/yyyy [hh:mm:ss]
+  const idx = t.search(/Historial\s+de\s+Eventos/i)
+  if (idx >= 0) {
+    const lineas = t.slice(idx).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    for (let i = 0; i < lineas.length; i++) {
+      const md = lineas[i].match(/^(\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2}:\d{2})?)$/)
+      if (!md) continue
+      out.eventos.push({
+        fecha: md[1],
+        descripcion: lineas[i + 1] || null,
+        detalle: lineas[i + 2] || null,
+      })
+      i += 2
+    }
+  }
+  return out
+}
+
+/** Vuelve a la pestaña «Resultado Búsqueda» del portal (GWT). */
+async function volverAResultados(page) {
+  const punto = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('a')].find((x) => /Resultado\s+B[uú]squeda/i.test((x.innerText || '').trim()))
+    if (!el) return null
+    el.scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  })
+  if (!punto) return false
+  await page.mouse.click(punto.x, punto.y)
+  await dormir(1500)
+  return true
+}
+
+/**
+ * Coordenadas del enlace «Ver» de un período en la tabla de resultados.
+ * @returns {Promise<{x:number,y:number}|null>}
+ */
+async function puntoVerPeriodo(page, periodo) {
+  return page.evaluate((per) => {
+    const objetivo = per.replace('-', '')
+    for (const tr of document.querySelectorAll('tr')) {
+      const c = [...tr.querySelectorAll('td')].map((td) => (td.innerText || '').trim())
+      if (c[0] && c[0].replace('-', '') === objetivo) {
+        const a = tr.querySelectorAll('td')[6]?.querySelector('a')
+        if (!a) return null
+        a.scrollIntoView({ block: 'center' })
+        const r = a.getBoundingClientRect()
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      }
+    }
+    return null
+  }, periodo)
+}
+
+/** Lee el texto de la consulta de estado (pestaña abierta tras pulsar «Ver»). */
+async function leerEstadoF29(page) {
+  await dormir(2500)
+  const texto = await page.evaluate(() => document.body ? document.body.innerText : '')
+  return parsearEstadoF29(texto)
+}
+
+/**
+ * Pulsa «Formulario Compacto», descarga el PDF y lo parsea.
+ * @returns {Promise<{ok:boolean, error?:string, url?:string, folio?:string,
+ *   bytes?:number, casillas?:Array, indicadores?:object, verificaciones?:Array}>}
+ */
+async function leerFormularioCompacto(page, { periodo } = {}) {
+  const punto = await page.evaluate(() => {
+    const sel = ['a', 'button', 'td', 'span', 'div']
+    for (const tag of sel) {
+      for (const el of document.querySelectorAll(tag)) {
+        if ((el.innerText || '').trim() === 'Formulario Compacto') {
+          el.scrollIntoView({ block: 'center' })
+          const r = el.getBoundingClientRect()
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+        }
+      }
+    }
+    return null
+  })
+  if (!punto) return { ok: false, error: 'No se encontró la pestaña «Formulario Compacto» en la consulta de estado' }
+
+  const browser = page.browser()
+  const antes = (await browser.pages()).length
+  await page.mouse.click(punto.x, punto.y)
+  await dormir(4000)
+  const paginas = await browser.pages()
+  const destino = paginas.length > antes ? paginas[paginas.length - 1] : page
+  const url = destino.url()
+  const mFolio = url.match(/folio=(\d+)/)
+
+  // La descarga se hace desde la PESTAÑA CON SESIÓN (mismo origen): así la
+  // cookie de sesión del SII viaja con la petición del PDF.
+  const b64 = await page.evaluate(async (u) => {
+    const r = await fetch(u, { credentials: 'include' })
+    const buf = await r.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let bin = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+    return btoa(bin)
+  }, url)
+
+  if (paginas.length > antes) await destino.close().catch(() => { /* la pestaña auxiliar */ })
+
+  const buffer = Buffer.from(b64, 'base64')
+  if (buffer.length < 1000 || buffer.slice(0, 4).toString('latin1') !== '%PDF') {
+    return { ok: false, error: 'El SII no devolvió un PDF (¿sesión vencida o folio sin formulario compacto?)', url }
+  }
+
+  const { casillas, lineas } = f29Formulario.parsearFormularioF29(buffer)
+  const { indicadores, verificaciones } = f29Formulario.indicadores(casillas)
+  return {
+    ok: true,
+    url,
+    folio: mFolio ? mFolio[1] : null,
+    bytes: buffer.length,
+    casillas,
+    indicadores,
+    verificaciones,
+    lineas: lineas.slice(0, 400),
+  }
+}
+
+/** Últimos n períodos (YYYYMM) terminando en `hasta`. */
+function ultimosPeriodos(n, hasta) {
+  const y = Number(hasta.slice(0, 4))
+  const m = Number(hasta.slice(4, 6))
+  const out = []
+  for (let i = n - 1; i >= 0; i--) {
+    let mm = m - i
+    let yy = y
+    while (mm <= 0) { mm += 12; yy-- }
+    out.push(`${yy}${String(mm).padStart(2, '0')}`)
+  }
+  return out
+}
+
+/**
+ * Sincroniza el detalle DECLARADO de los F29: estado y Formulario Compacto
+ * (casillas) de cada período declarado. Es idempotente (UPSERT por empresa y
+ * período) y va en la tabla `f29_formularios`.
+ *
+ * @param {function} onProgress (info) => void — reporta avance por período.
+ */
+async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo, periodos = 12, onProgress = null }) {
+  const emp = db.prepare(`SELECT id, rut FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!emp) throw new Error('Empresa no encontrada')
+  const clave = claveSiiDescifrada(db, empresaId)
+  if (!clave) throw new Error('La empresa no tiene clave SII configurada')
+
+  const lista = ultimosPeriodos(periodos, periodo)
+  const desde = lista[0]
+  const resultado = { periodos: 0, con_formulario: 0, errores: [], consultados: [] }
+  let ctx = null
+
+  try {
+    ctx = await abrirSesion(emp.rut, clave)
+    const { page } = ctx
+
+    // Se agrupan por año: la búsqueda anual del SII devuelve los 12 períodos
+    // del año de una sola vez.
+    const porAnio = new Map()
+    for (const p of lista) {
+      const a = p.slice(0, 4)
+      if (!porAnio.has(a)) porAnio.set(a, [])
+      porAnio.get(a).push(p)
+    }
+
+    for (const [anio, periodosAnio] of [...porAnio.entries()].sort((a, b) => b[0].localeCompare(a[0]))) {
+      let filas = []
+      try {
+        filas = await buscarF29Anio(page, anio)
+      } catch (err) {
+        resultado.errores.push(`Búsqueda F29 ${anio}: ${err.message}`)
+        continue
+      }
+      const porPeriodo = new Map(filas.map((f) => [f.periodo, f]))
+
+      for (const per of periodosAnio) {
+        const fila = porPeriodo.get(per)
+        if (!fila || !fila.folio) continue // no hay declaración: nada que leer
+        if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'leyendo' })
+        try {
+          // La consulta de estado se abre desde la pestaña de resultados.
+          let punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
+          if (!punto) {
+            await volverAResultados(page)
+            punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
+          }
+          if (!punto) {
+            resultado.errores.push(`${per}: no se encontró el enlace «Ver» en los resultados`)
+            continue
+          }
+          await page.mouse.click(punto.x, punto.y)
+          const estado = await leerEstadoF29(page)
+          const compacto = await leerFormularioCompacto(page, { periodo: per })
+
+          const indicadores = compacto.ok ? compacto.indicadores : null
+          db.prepare(`
+            INSERT INTO f29_formularios
+              (empresa_id, rut, periodo, folio, estado, situacion, monto_observado,
+               declaraciones_vigentes, intentos, indicadores_json, casillas_json,
+               verificaciones_json, eventos_json, url, datos_json, consultado_en)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(empresa_id, periodo) DO UPDATE SET
+              folio = excluded.folio,
+              estado = excluded.estado,
+              situacion = excluded.situacion,
+              monto_observado = excluded.monto_observado,
+              declaraciones_vigentes = excluded.declaraciones_vigentes,
+              intentos = excluded.intentos,
+              indicadores_json = excluded.indicadores_json,
+              casillas_json = excluded.casillas_json,
+              verificaciones_json = excluded.verificaciones_json,
+              eventos_json = excluded.eventos_json,
+              url = excluded.url,
+              datos_json = excluded.datos_json,
+              consultado_en = datetime('now')
+          `).run(
+            empresaId, emp.rut, per,
+            fila.folio || null,
+            fila.estado || null,
+            estado.situacion || null,
+            estado.monto_observado != null ? estado.monto_observado : (fila.monto != null ? montoDeTexto(fila.monto) : null),
+            estado.declaraciones_vigentes,
+            estado.intentos_declaracion,
+            JSON.stringify(indicadores || {}),
+            JSON.stringify(comacto.ok ? compacto.casillas : []),
+            JSON.stringify(comacto.ok ? compacto.verificaciones : []),
+            JSON.stringify(estado.eventos || []),
+            compacto.url || null,
+            JSON.stringify({
+              estado_texto: estado.texto,
+              eventos: estado.eventos,
+              compactado: compacto.ok ? { bytes: compacto.bytes, folio: compacto.folio } : { error: compacto.error },
+              origen: 'Consulta Integral F29 + Formulario Compacto (SII)',
+            }),
+          )
+          resultado.periodos++
+          if (comulto.ok) resultado.con_formulario++
+          resultado.consultados.push(per)
+          if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'ok', compactado: compacto.ok })
+        } catch (err) {
+          resultado.errores.push(`${per}: ${err.message}`)
+          if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'error', error: err.message })
+        }
+        // Vuelve a los resultados para el siguiente período.
+        await volverAResultados(page)
+      }
+    }
+  } finally {
+    if (ctx) await cerrarSesion(ctx)
+  }
+
+  return resultado
+}
+
+// ---------------------------------------------------------------------------
 // Orquestación
 // ---------------------------------------------------------------------------
 
@@ -552,6 +871,7 @@ function ultimaConsulta(db, empresaId) {
 
 module.exports = {
   sincronizar,
+  sincronizarFormularios,
   ultimaConsulta,
   // helpers puros (tests)
   estadoDesdeTooltip,
@@ -559,6 +879,9 @@ module.exports = {
   normalizarFecha,
   normalizarMonto,
   parsearTablaBhe,
+  parsearEstadoF29,
+  montoDeTexto,
+  ultimosPeriodos,
   // disponibilidad del navegador headless (no toca el SII)
   navegadorDisponible,
 }

@@ -581,14 +581,19 @@ function menuVisible() {
  */
 const MENU = [
   {
+    // Orden del inicio (2026-10-21): primero el trabajo del día, después el
+    // diagnóstico ejecutivo, después lo que requiere atención y por último
+    // el lanzador de todos los módulos. Antes arrancaba por el Centro, que
+    // es una pantalla de navegación: se quedaba el «día a día» escondido.
     seccion: 'Inicio', items: [
-      { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
       { key: 'inicio', label: 'Panel del período', permiso: null },
-      // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV.
-      // Lo no integrado (F22, juradas) se declara. `pill: 'salud'` pinta el
-      // score en el menú (y «!» cuando requiere revisión).
-      { key: 'salud', label: 'Consulta Salud Tributaria', permiso: 'salud:ver', pill: 'salud' },
+      // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV,
+      // índice de salud, riesgos y plan de acción. Lo no integrado (F22,
+      // juradas) se declara. `pill: 'salud'` pinta el score en el menú (y
+      // «!» cuando requiere revisión).
+      { key: 'salud', label: 'Salud Tributaria — Diagnóstico Ejecutivo', permiso: 'salud:ver', pill: 'salud' },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
+      { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
     ]
   },
   {
@@ -1351,8 +1356,11 @@ async function refrescarPillSalud() {
     const alerta = s.nivel === 'REQUIERE_REVISION' || s.nivel === 'SIN_INFORMACION'
     a.dataset.nivel = s.nivel
     a.textContent = alerta ? '!' : String(s.score)
-    a.title = `${s.titulo} · ${s.score}/100 · ${s.hallazgos} hallazgo(s)`
-    a.setAttribute('aria-label', `Salud tributaria: ${s.titulo}, ${s.score} de 100, ${s.hallazgos} hallazgos`)
+    // Sin antecedentes verificados no hay índice: no se muestra un puntaje
+    // que la lectura del menúaría como una calificación.
+    const puntaje = s.indice_evaluable === false ? 'índice no evaluable' : `${s.score}/100`
+    a.title = `${s.titulo} · ${puntaje} · ${s.hallazgos} hallazgo(s)`
+    a.setAttribute('aria-label', `Salud tributaria: ${s.titulo}, ${puntaje}, ${s.hallazgos} hallazgos`)
   } catch { /* el pill es informativo: nunca rompe la navegación */ }
 }
 
