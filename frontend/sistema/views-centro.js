@@ -53,23 +53,20 @@ VIEWS['centro'] = {
 
     const continuarPrimero = recientes[0] || null
 
-    const appCard = (app) => `
-      <div class="centro-card" data-app="${esc(app.key)}">
-        <div class="centro-card-head">
-          <span class="centro-ico">${iconoHTML(app.icono)}</span>
-          <div>
-            <h3>${esc(app.titulo)}${app.restringida ? ' <span class="chip neutral" title="Área restringida a roles autorizados">Restringida</span>' : ''}${app.modoExterno ? ' <span class="chip neutral" title="Experiencia externa de clientes">Externo</span>' : ''}</h3>
-          </div>
-          <span class="spacer"></span>
-          ${chipLicencia(app, lic)}
-        </div>
-        <p class="centro-desc">${esc(app.descripcion)}</p>
-        <div class="centro-secciones">
-          ${app.secciones.map((s, i) => `
-            <a class="chip ${i === 0 ? 'clasificado' : 'neutral'}" href="#${esc(s.ruta)}" title="Ir a ${esc(s.grupo)}">${esc(s.grupo)}</a>`).join('')}
-        </div>
-        <a class="centro-abrir btn btn-secondary" href="#${esc(app.secciones[0].ruta)}">Abrir módulo →</a>
-      </div>`
+    // Home estilo iOS: cada módulo es un ícono GRANDE con su nombre debajo.
+    // La descripción y las subsecciones no se pierden: van en el title del
+    // ícono y en el menú (dock → Menú), para que la pantalla quede limpia.
+    const appTile = (app) => {
+      const ruta = app.secciones[0] ? app.secciones[0].ruta : 'inicio'
+      // Lo restringido se marca con un «!» visible; nunca se oculta en silencio.
+      const alerta = app.restringida || (lic && !lic.ok && !lic.en_gracia)
+      return `
+      <a class="ios-app" href="#${esc(ruta)}" data-app="${esc(app.key)}" title="${esc(app.titulo)} — ${esc(app.descripcion)}">
+        <span class="ios-ico" data-icono="${esc(app.icono)}">${iconoHTML(app.icono)}</span>
+        <span class="ios-label">${esc(app.titulo)}</span>
+        ${alerta ? '<span class="ios-badge" aria-label="Restringida o con licencia pendiente">!</span>' : ''}
+      </a>`
+    }
 
     cont.innerHTML = `
       <h1 style="display:none"></h1>
@@ -107,10 +104,12 @@ VIEWS['centro'] = {
         </div>
       </div>` : ''}
 
-      <div class="centro-grid">
-        ${data.apps.map(appCard).join('')}
+      <div class="ios-titulo">Mis aplicaciones</div>
+      <div class="ios-grid">
+        ${data.apps.map(appTile).join('')}
       </div>
       ${data.apps.length === 0 ? '<div class="empty">Tu rol no tiene módulos habilitados en esta empresa. Contacta a JMV Consultores.</div>' : ''}
+      <p class="ios-hint">La casa del dock (abajo) siempre vuelve aquí · <b>Menú</b> abre todas las secciones.</p>
     `
   },
 }

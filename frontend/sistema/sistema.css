@@ -809,6 +809,146 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 /* ============================================================
+   HOME ESTILO iOS + DOCK (fase 1 de la estructura tipo iPhone)
+   Iconos grandes, etiqueta debajo y una CASA siempre visible para volver al
+   inicio. Minimalista: sin sombras duras, radios grandes y tintes suaves.
+   ============================================================ */
+
+.sys .ios-titulo {
+  padding: 0 var(--space-5);
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--fg-muted); font-weight: var(--fw-semibold);
+}
+.sys .ios-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(92px, 100%), 1fr));
+  gap: var(--space-5) var(--space-3);
+  padding: var(--space-2) var(--space-5) var(--space-6);
+  max-width: 760px;
+}
+.sys .ios-app {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: var(--space-1); border-radius: var(--radius-lg);
+  text-decoration: none; color: var(--fg-secondary); text-align: center;
+}
+.sys .ios-app:hover { color: var(--fg-primary); }
+.sys .ios-app:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sys .ios-ico {
+  width: 68px; height: 68px;
+  display: grid; place-items: center;
+  border-radius: 20px;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .06);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.sys .ios-app:hover .ios-ico {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgb(15 23 42 / .12);
+}
+/* Un tinte por familia de módulo: la cuadrícula se lee de un vistazo sin
+   agregar texto ni decoración. */
+.sys .ios-ico[data-icono="libro"] { background: #eef2ff; color: #4338ca; }
+.sys .ios-ico[data-icono="grafico"] { background: #ecfdf5; color: #047857; }
+.sys .ios-ico[data-icono="usuarios"] { background: #fef3f2; color: #b42318; }
+.sys .ios-ico[data-icono="banco"] { background: #eff8ff; color: #175cd3; }
+.sys .ios-ico[data-icono="escudo"] { background: #fffaeb; color: #b54708; }
+.sys .ios-ico[data-icono="pipeline"] { background: #f4f3ff; color: #5925dc; }
+/* El icono del Centro se pinta con .centro-ico-svg (views-centro.js); el
+   tamaño lo manda el contenedor iOS para no quedar en 36 px heredados. */
+.sys .ios-ico .centro-ico-svg { width: 32px; height: 32px; }
+.sys .ios-label {
+  font-size: var(--fs-xs); line-height: 1.25; font-weight: var(--fw-medium);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; max-width: 92px;
+}
+.sys .ios-badge {
+  position: absolute; top: -2px; right: 4px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: grid; place-items: center; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 11px; font-weight: var(--fw-bold);
+}
+.sys .ios-hint {
+  padding: 0 var(--space-5); margin: 0;
+  font-size: var(--fs-xs); color: var(--fg-muted);
+}
+
+/* ---------- Dock flotante (casa + apps) ---------- */
+.sys-dock {
+  position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%); z-index: 130;
+  display: flex; align-items: flex-end; gap: var(--space-1);
+  padding: 8px 10px 6px;
+  border-radius: 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 30px rgb(15 23 42 / .14);
+}
+@supports (backdrop-filter: blur(12px)) {
+  .sys-dock {
+    background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+    backdrop-filter: blur(16px) saturate(1.4);
+  }
+}
+.sys-dock .dock-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 54px; padding: 4px 6px 2px;
+  background: none; border: 0; border-radius: 16px;
+  color: var(--fg-muted); text-decoration: none; cursor: pointer;
+  font: inherit;
+}
+.sys-dock .dock-ico {
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border-radius: 13px; transition: background .15s ease, transform .15s ease;
+}
+.sys-dock .dock-ico svg { width: 23px; height: 23px; }
+.sys-dock .dock-label { font-size: 10px; line-height: 1; letter-spacing: .01em; }
+.sys-dock .dock-item:hover { color: var(--fg-primary); }
+.sys-dock .dock-item:hover .dock-ico { background: var(--bg-hover); }
+.sys-dock .dock-item.active { color: var(--accent); }
+.sys-dock .dock-item.active .dock-ico { background: var(--accent-soft); }
+.sys-dock .dock-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* La CASA: siempre más grande que el resto y con el color de la marca. */
+.sys-dock .dock-item-inicio .dock-ico {
+  width: 52px; height: 52px; border-radius: 17px;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 4px 12px rgb(15 23 42 / .18);
+}
+.sys-dock .dock-item-inicio .dock-ico svg { width: 28px; height: 28px; }
+.sys-dock .dock-item-inicio:hover .dock-ico { background: var(--accent); transform: translateY(-1px); }
+.sys-dock .dock-item-inicio.active .dock-ico { background: var(--accent); }
+/* «Menú» solo donde el sidebar está plegado (≤960 px): en escritorio el menú
+   ya está a la vista y un botón que no abre nada solo confunde. */
+.sys-dock .dock-menu { display: none; }
+@media (max-width: 960px) { .sys-dock .dock-menu { display: flex; } }
+
+/* El dock flota sobre el contenido: se reserva su alto para no tapar nada. */
+.sys-main { padding-bottom: calc(var(--space-16) + 96px); }
+
+@media (max-width: 640px) {
+  .sys-dock {
+    left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
+    transform: none; justify-content: space-between; gap: 0;
+    padding: 6px 4px 4px; border-radius: 20px;
+  }
+  .sys-dock .dock-item { min-width: 0; flex: 1; }
+  .sys-dock .dock-ico { width: 38px; height: 38px; }
+  .sys-dock .dock-item-inicio .dock-ico { width: 46px; height: 46px; }
+  .sys .ios-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4) var(--space-2); padding: 0 var(--space-3) var(--space-5); }
+  .sys .ios-ico { width: 60px; height: 60px; border-radius: 18px; }
+  .sys .ios-ico .centro-ico-svg { width: 28px; height: 28px; }
+  .sys .ios-label { max-width: 78px; }
+  .sys .ios-titulo, .sys .ios-hint { padding-left: var(--space-3); padding-right: var(--space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sys .ios-ico, .sys-dock .dock-ico { transition: none; }
+  .sys .ios-app:hover .ios-ico, .sys-dock .dock-item-inicio:hover .dock-ico { transform: none; }
+}
+
+/* ============================================================
    BANDEJA DE DOCUMENTOS — piloto UX/UI (2026-10-17)
    Tema claro por defecto, superficies blancas y densidad contable.
    Solo tokens existentes; no altera otras vistas.
@@ -1503,4 +1643,18 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sys .rep-fav { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
   .alertas .alerta, .alerta { gap: var(--space-2); }
   .tbl th, .tbl td { padding-left: var(--space-3); padding-right: var(--space-3); }
+}
+
+/* ==========================================================================
+   ESPACIO PARA EL DOCK MÓVIL — 2026-10-21
+   La capa móvil (≤960 px) recorta el padding inferior de .sys-main a 40 px,
+   pero el dock flota con 76 px de alto + 8 px de margen: las últimas filas de
+   listas y tablas quedaban debajo de la barra. Se reserva su alto real al
+   final del archivo (la capa móvil se declara antes) y con mayor
+   especificidad, sin !important.
+   ========================================================================== */
+.sys .sys-main { padding-bottom: calc(var(--space-16) + 104px); }
+
+@media (max-width: 960px) {
+  .sys .sys-main { padding-bottom: calc(var(--space-10) + 96px); }
 }

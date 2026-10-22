@@ -473,3 +473,44 @@ test('T11: contexto de ruta — empresa y período viajan en el hash sin perder 
   // Carga antes de app.js (el router lo usa en la primera ruta).
   assert.ok(html.indexOf('/sistema/url-estado.js') < html.indexOf('/sistema/app.js'), 'url-estado.js se carga antes de app.js')
 })
+
+// ---------- T13: home estilo iOS + dock con casa ---------------------------
+test('T13: home iOS — rejilla de íconos grandes, casa que vuelve al inicio y dock sin tapar contenido', () => {
+  const app = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(FRONT, 'sistema', 'sistema.css'), 'utf8')
+  const centro = fs.readFileSync(path.join(FRONT, 'sistema', 'views-centro.js'), 'utf8')
+
+  // El home pinta MÓDULOS del backend, no una lista fija: si el rol no puede
+  // abrir un módulo, su ícono no existe (misma regla que el Centro anterior).
+  assert.match(centro, /data\.apps\.map\(appTile\)/, 'los íconos salen de /api/auth/centro')
+  assert.match(centro, /class="ios-grid"/, 'rejilla de aplicaciones')
+  assert.match(centro, /class="ios-app" href="#\$\{esc\(ruta\)\}"/, 'cada ícono es un enlace a su módulo')
+  assert.match(centro, /class="ios-label"/, 'cada ícono lleva su nombre debajo')
+  assert.ok(!/class="centro-grid"/.test(centro), 'el home ya no usa la rejilla de tarjetas')
+  assert.match(centro, /Continuar donde quedó/, 'se conserva el atajo de continuidad')
+
+  // Iconos: 68 px de escritorio / 60 px en teléfono (pedido: íconos grandes).
+  assert.match(css, /\.sys \.ios-ico \{\s*width: 68px; height: 68px;/, 'ícono grande de escritorio')
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.sys \.ios-ico \{ width: 60px; height: 60px;/, 'ícono grande en teléfono')
+  // El SVG del Centro se pinta con .centro-ico-svg: el tamaño lo manda el
+  // contenedor iOS (si se apunta a otra clase el ícono queda en 36 px).
+  assert.match(css, /\.sys \.ios-ico \.centro-ico-svg \{ width: 32px; height: 32px; \}/, 'el ícono hereda el tamaño del contenedor')
+
+  // La CASA: primer acceso del dock, más grande que el resto y al home.
+  assert.match(app, /\{ ruta: 'centro', label: 'Inicio', icono: 'casa', inicio: true \}/, 'la casa es el primer acceso')
+  assert.match(app, /casa: '<path d="M4 11\.6 12 4\.6l8 7"\/>/, 'ícono de casa dibujado a mano (sin librerías)')
+  assert.match(css, /\.sys-dock \.dock-item-inicio \.dock-ico \{\s*width: 52px; height: 52px;/, 'la casa es más grande')
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*?\.sys-dock \.dock-item-inicio \.dock-ico \{ width: 46px; height: 46px; \}/, 'la casa sigue siendo la mayor en teléfono')
+
+  // El dock flota: el contenido reserva su alto o la barra tapa la última fila
+  // (la capa móvil dejaba .sys-main en 40 px de padding inferior).
+  assert.match(css, /\.sys \.sys-main \{ padding-bottom: calc\(var\(--space-16\) \+ 104px\); \}/, 'escritorio reserva el alto del dock')
+  assert.match(css, /@media \(max-width: 960px\) \{\s*\.sys \.sys-main \{ padding-bottom: calc\(var\(--space-10\) \+ 96px\); \}/, 'teléfono reserva el alto del dock')
+
+  // «Menú» del dock: solo donde el sidebar está plegado y delegando en el
+  // mecanismo real (#sys-menu-btn), sin inventar una clase paralela.
+  assert.match(css, /@media \(max-width: 960px\) \{ \.sys-dock \.dock-menu \{ display: flex; \} \}/, 'Menú visible en móvil')
+  assert.match(app, /function conectarDock[\s\S]*?getElementById\('sys-menu-btn'\)\?\.click\(\)/, 'el dock dispara el panel existente')
+  assert.ok(!app.includes('sys-menu-abierto'), 'sin estado paralelo del menú')
+  assert.match(app, /function estadoMenuMovil[\s\S]*?getElementById\('sys-dock-menu'\)\?\.setAttribute\('aria-expanded'/, 'el dock refleja el estado real del panel')
+})

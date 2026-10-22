@@ -97,6 +97,23 @@ suspendida debe poder reactivarse sola).
 
 ## 4. Funcionalidades y procedimientos paso a paso
 
+### 4.0 Cómo moverse — home de íconos y la casa
+
+Al entrar aterrizas en el **home de aplicaciones** (`#centro`): una rejilla de
+íconos grandes con el nombre debajo. Cada ícono abre su módulo y solo aparecen
+los que tu rol puede abrir en la empresa activa (si no tienes permiso, el ícono
+no existe).
+
+- **La casa** (primer botón del dock, abajo) **siempre vuelve al home**, desde
+  cualquier pantalla. Es el atajo más grande a propósito.
+- **Dock**: casa · Bandeja · Libros · Salud · Tesorería. En el teléfono aparece
+  además **Menú**, que despliega el catálogo completo de secciones.
+- **Continuar donde quedó** y **Módulos recientes** son tuyos: se guardan en este
+  navegador por usuario, no en el servidor.
+- La **descripción** de cada módulo no se repite en el home: pasa el cursor sobre
+  el ícono (o mantén pulsado en el teléfono) para verla, y usa **Menú** para las
+  subsecciones.
+
 ### 4.1 Inicio — panel del período
 
 **Qué muestra:** KPIs financieros del período (ingresos/costos/gastos/resultado

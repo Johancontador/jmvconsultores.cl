@@ -153,6 +153,11 @@ async function boot() {
       return
     }
     renderShell()
+    // Un super admin sin empresas activas ve la tarjeta de aviso del shell: no
+    // hay vista que montar y seguir a renderRoute dejaba un pageerror
+    // («Cannot set properties of null (setting 'textContent')» porque el
+    // #sys-title del shell no existe en ese ramo).
+    if (!S.empresa) return
     // El aterrizaje por rol SIEMPRE aplica en boot(): el navegador puede
     // restaurar el hash de la sesión anterior (reabrir pestaña/historial) y
     // eso no debe mandar al dueño al sistema operativo en vez de su Portal.
@@ -719,6 +724,65 @@ function guardarNavCerradas() {
   try { localStorage.setItem(claveNavCerradas(), JSON.stringify([...navCerradas])) } catch { /* modo privado */ }
 }
 
+/* ---------- Dock estilo iOS: accesos grandes + casa para volver ---------- */
+
+/**
+ * El dock es la navegación de "teléfono": 5 apps grandes y una CASA que
+ * siempre vuelve al inicio (#centro). Solo se pinta lo que el rol puede abrir:
+ * un ícono a una ruta sin permiso sería un callejón con 403.
+ */
+// `ruta` y no `key`: el catálogo del menú (MENU) usa `key` y duplicaría
+// entradas al escanear app.js; el dock son accesos directos a rutas.
+const DOCK = [
+  { ruta: 'centro', label: 'Inicio', icono: 'casa', inicio: true },
+  { ruta: 'documentos', label: 'Bandeja', icono: 'bandeja', permiso: 'documentos:ver' },
+  { ruta: 'libros', label: 'Libros', icono: 'libro', permiso: 'documentos:ver' },
+  { ruta: 'salud', label: 'Salud', icono: 'salud', permiso: 'salud:ver' },
+  { ruta: 'tesoreria', label: 'Tesorería', icono: 'banco', permiso: 'tesoreria:ver' },
+]
+
+const ICONO_DOCK = {
+  casa: '<path d="M4 11.6 12 4.6l8 7"/><path d="M6 10.6V20h12v-9.4"/><path d="M10 20v-5h4v5"/>',
+  bandeja: '<path d="M3 13.6 5.6 5h12.8L21 13.6V19H3z"/><path d="M3 13.6h5l1 2h6l1-2h5"/>',
+  libro: '<path d="M4 5.6A1.6 1.6 0 0 1 5.6 4H19v16H5.6A1.6 1.6 0 0 1 4 18.4z"/><path d="M8 4v16"/>',
+  salud: '<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/><path d="M8.4 12h1.8l1.4-2.2 1.9 4 1.4-1.8h1.7"/>',
+  banco: '<path d="M3 9.5 12 4l9 5.5M5 10v8m4-8v8m6-8v8m4-8v8M3 20h18"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+}
+
+function iconoDock(nombre) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONO_DOCK[nombre] || ICONO_DOCK.casa}</svg>`
+}
+
+function dockHTML() {
+  const items = DOCK.filter((d) => !d.permiso || tiene(d.permiso)).map((d) => `
+    <a href="#${d.ruta}" data-dock="${d.ruta}" class="dock-item${d.inicio ? ' dock-item-inicio' : ''}" title="${esc(d.label)}" aria-label="${esc(d.label)}">
+      <span class="dock-ico">${iconoDock(d.icono)}</span>
+      <span class="dock-label">${esc(d.label)}</span>
+    </a>`).join('')
+  return `<nav class="sys-dock" id="sys-dock" aria-label="Accesos rápidos">
+    ${items}
+    <button type="button" class="dock-item dock-menu" id="sys-dock-menu" aria-controls="sys-nav" aria-expanded="false" title="Todas las secciones" aria-label="Abrir todas las secciones">
+      <span class="dock-ico">${iconoDock('menu')}</span>
+      <span class="dock-label">Menú</span>
+    </button>
+  </nav>`
+}
+
+function conectarDock() {
+  const btn = document.getElementById('sys-dock-menu')
+  const nav = document.getElementById('sys-nav')
+  if (!btn || !nav) return
+  // El panel lateral ya lo maneja conectarMenuMovil (#sys-menu-btn): el botón
+  // del dock solo lo dispara. Duplicar el estado acá divergía del sidebar
+  // (aria-expanded del header y backdrop quedaban desincronizados).
+  btn.addEventListener('click', () => {
+    document.getElementById('sys-menu-btn')?.click()
+    const side = document.getElementById('sys-side')
+    btn.setAttribute('aria-expanded', String(!!side?.classList.contains('abierto')))
+  })
+}
+
 function renderShell() {
   if (!S.empresa) {
     // BUGFIX QA (CYESISTEMA1): el no-admin SIN empresa aterriza en onboarding
@@ -818,9 +882,11 @@ function renderShell() {
        <div id="sys-banner">${banner}</div>
        <div id="sys-view"></div>
      </main>
+     ${dockHTML()}
    </div>`
 
   if (window.Tema) window.Tema.conectar()
+  conectarDock()
   observarTablas()
   conectarMenuMovil()
   conectarSeccionesNav()
@@ -925,6 +991,9 @@ function estadoMenuMovil(abierto) {
   side.classList.toggle('abierto', abierto)
   document.body.classList.toggle('menu-movil', abierto)
   btn.setAttribute('aria-expanded', String(abierto))
+  // El botón «Menú» del dock dispara este mismo panel: si el estado cambia por
+  // el ✕, el fondo o Escape, su aria-expanded también debe seguirlo.
+  document.getElementById('sys-dock-menu')?.setAttribute('aria-expanded', String(abierto))
   if (back) back.hidden = !abierto
 }
 
@@ -1219,6 +1288,13 @@ function renderRoute() {
 
   const activos = new Set([route.key])
   document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
+  // El dock marca la app activa; en la casa el «activo» es el inicio.
+  document.querySelectorAll('#sys-dock a[data-dock]').forEach((a) => {
+    const activo = activos.has(a.dataset.dock)
+    a.classList.toggle('active', activo)
+    if (activo) a.setAttribute('aria-current', 'page')
+    else a.removeAttribute('aria-current')
+  })
   abrirSeccionDeRuta(route.key)
 
   document.getElementById('sys-title').textContent = view.titulo || route.label
