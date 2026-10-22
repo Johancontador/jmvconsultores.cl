@@ -532,7 +532,7 @@ VIEWS.salud = {
             <span class="sys-kicker">JMV Tax Health Intelligence · ${esc(perDisplay)}</span>
             <h2 class="sl-titulo">Diagnóstico de Salud Tributaria</h2>
             <p class="muted" style="max-width:64ch;margin:6px 0 12px">${esc(op.clasificacion?.titulo || op.titulo || '')} — ${esc(op.resumen || '')}</p>
-            ${op.clasificacion?.nota ? `<p class="hint" style="max-width:64ch;margin:-6px 0 12px;color:var(--danger)">${esc(op.clasificacion.nota)}</p>` : ''}
+            ${op.alerta_critica ? `<p class="opinion-nota" style="font-size: var(--fs-sm); color: var(--rojo); border-left: 3px solid var(--rojo); padding: 2px 0 2px 10px; margin: 0 0 12px; font-weight: 600">${esc(op.clasificacion?.nota || op.opinion_profesional?.conclusion || 'Alerta de severidad alta detectada: revisar antes de emitir documentos')}</p>` : ''}
             <div class="sl-indice">
               <div class="sl-indice-num" style="color:${color}">${op.indice_evaluable === false ? '—' : esc(op.score)}<small>/100</small></div>
               <div class="sl-indice-meta">

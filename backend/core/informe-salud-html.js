@@ -728,14 +728,16 @@ function listaBloque(items, vacio = 'Sin elementos para este capítulo.') {
 
 function bloqueOpinion(op) {
   const p = op?.opinion_profesional || {}
-  // La nota de la clasificación explica por qué una alerta alta impide leer el
-  // índice como conformidad plena. Se calculaba pero NUNCA se mostraba: el
-  // informe mostraba «84» en rojo con la etiqueta «Favorable con
-  // observaciones» y ninguna explicación de la contradicción.
-  const notaClasificacion = op?.clasificacion?.nota || ''
+  // Nota de alerta crítica: se muestra siempre que haya alerta de severidad
+  // alta, independientemente de la clasificación (SOLIDA, FAVORABLE, ATENCIÓN,
+  // RIESGO o CRÍTICA). El cálculo ya está en salud-tributaria.js líneas 1028-1032.
+  const alertaCritica = op?.alerta_critica
+  const notaAlerta = alertaCritica
+    ? op?.clasificacion?.nota || 'Alerta de severidad alta detectada: revisar antes de emitir documentos'
+    : ''
   return `
   <div class="opinion">
-    ${notaClasificacion ? `<p class="opinion-nota">${esc(notaClasificacion)}</p>` : ''}
+    ${notaAlerta ? `<p class="opinion-nota" style="color: var(--rojo); border-left: 3px solid var(--rojo); padding: 2px 0 2px 10px; font-weight: 600">${esc(notaAlerta)}</p>` : ''}
     <p class="opinion-lead">${esc(p.conclusion || op?.resumen || '')}</p>
     <div class="opinion-grid">
       <div><h4>Hechos comprobados</h4>${listaBloque(p.hechos, 'Sin hechos comprobables en la ventana analizada.')}</div>
