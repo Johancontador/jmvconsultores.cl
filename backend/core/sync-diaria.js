@@ -40,6 +40,12 @@ const saludTributaria = require('./salud-tributaria')
 
 const PAUSA_MS = Number(process.env.SII_PAUSA_MS || 2000)   // entre consultas al SII
 const MAX_EMPRESAS = Number(process.env.SII_MAX_EMPRESAS || 20) // techo por corrida
+// Declaraciones (F29 + boletas) automáticas: abren un navegador y recorren el
+// portal, así que NO se hacen todos los días. Solo si la última consulta de la
+// empresa tiene más de N días, y como máximo M empresas por corrida para que el
+// cron no se quede colgado una hora.
+const DECL_DIAS = Number(process.env.SII_DECLARACIONES_DIAS || 30)
+const DECL_MAX = Number(process.env.SII_DECLARACIONES_MAX || 1)
 
 function periodoActual() {
   // El período BD objetivo es el MES EN CURSO (el RCV del mes se llena en vivo).
@@ -54,7 +60,14 @@ function dormir(ms) { return new Promise((r) => setTimeout(r, ms)) }
  * SII (o de las empresaIds recibidas). Devuelve el resumen observable.
  * Idempotente: si el job (empresa, período) ya vive, se salta — sin duplicar.
  */
-async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip = null } = {}) {
+async function ejecutarSyncDiaria(db, {
+  usuarioId = null, empresaIds = null, ip = null,
+  // Inyectable para tests: descarga las declaraciones sin red. En producción
+  // es `declaraciones-sii.sincronizar` (puppeteer + portal del SII).
+  declaracionesSync = null,
+} = {}) {
+  const declarar = declaracionesSync || ((opts) => require('./declaraciones-sii').sincronizar(db, opts))
+  let declHechas = 0
   const periodo = periodoActual()
   // Ver la nota del encabezado: sin usuario explícito (cron / arranque) firma
   // el admin semilla. Si no existiera ninguno, `registrarAccion` fallará —
@@ -164,6 +177,34 @@ async function ejecutarSyncDiaria(db, { usuarioId = null, empresaIds = null, ip 
       if (ficha.actualizada) {
         // El informe de salud ya mostrado en el panel deja de valer.
         saludTributaria.olvidarResumen(emp.id)
+      }
+
+      // DECLARACIONES AUTOMÁTICAS (F29 + boletas): con la ficha ya resuelta y
+      // el RCV de hoy ingerido, se refresca el estado oficial si venció. Un
+      // fallo se nombra en el resumen y la corrida sigue.
+      if (declHechas < DECL_MAX) {
+        const ultima = require('./declaraciones-sii').ultimaConsulta(db, emp.id)
+        // `consultado_en` viene de SQLite (datetime('now') = UTC sin zona): se
+        // interpreta como UTC para no comparar contra la hora local.
+        const ms = ultima
+          ? Date.parse(ultima.length <= 19 ? `${ultima.replace(' ', 'T')}Z` : ultima)
+          : NaN
+        const dias = Number.isFinite(ms) ? (Date.now() - ms) / 86400000 : Infinity
+        if (dias >= DECL_DIAS) {
+          try {
+            const r = await declarar({ empresaId: emp.id, usuarioId: actor, periodo, anios: 5, ip })
+            declHechas += 1
+            resumen.declaraciones = resumen.declaraciones || {}
+            resumen.declaraciones[emp.id] = {
+              f29: (r.resultado && r.resultado.f29 && r.resultado.f29.periodos) || 0,
+              aviso: r.aviso || null,
+            }
+            saludTributaria.olvidarResumen(emp.id)
+          } catch (err) {
+            resumen.declaraciones = resumen.declaraciones || {}
+            resumen.declaraciones[emp.id] = { error: err.message, codigo: err.codigo || null }
+          }
+        }
       }
     }
 

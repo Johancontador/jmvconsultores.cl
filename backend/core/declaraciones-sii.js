@@ -540,8 +540,19 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
   return { resultado, aviso: avisos.length ? avisos.join(' · ') : null }
 }
 
+/**
+ * Última vez que se consultaron declaraciones de una empresa (ISO) o null.
+ * La usa la sincronización diaria para no volver a abrir una sesión de
+ * navegador todos los días: las declaraciones no cambian a diario.
+ */
+function ultimaConsulta(db, empresaId) {
+  const fila = db.prepare(`SELECT MAX(consultado_en) AS ult FROM declaraciones_sii WHERE empresa_id = ?`).get(empresaId)
+  return fila && fila.ult ? fila.ult : null
+}
+
 module.exports = {
   sincronizar,
+  ultimaConsulta,
   // helpers puros (tests)
   estadoDesdeTooltip,
   estadoDesdeBusqueda,

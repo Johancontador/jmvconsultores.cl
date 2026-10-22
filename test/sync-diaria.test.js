@@ -293,6 +293,50 @@ test('T8: la corrida deja la ficha SII resuelta (vigente) y no la busca con RCV 
   }
 })
 
+// ===== T9: declaraciones automáticas (F29/boletas) =====
+
+/**
+ * Las declaraciones se leen del portal con navegador: NO se pueden intentar en
+ * cada corrida. Reglas fijadas aquí:
+ *  - empresa sin consulta previa (o con >30 días) → se consulta;
+ *  - consulta reciente → no se gasta un navegador;
+ *  - un fallo del portal queda en el resumen y el RCV de la corrida sigue OK.
+ */
+test('T9: declaraciones automáticas — solo si vencieron y sin tumbar la corrida', async () => {
+  const boveda = require('../backend/core/boveda')
+  const crear = (rut) => {
+    const id = Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES (?, 'Decl SpA', 'k', 1)`).run(rut).lastInsertRowid)
+    db.prepare(`UPDATE empresas SET clave_sii = ? WHERE id = ?`).run(boveda.cifrar('k'), id)
+    return id
+  }
+  const llamadas = []
+  const fake = async (opts) => { llamadas.push(opts.empresaId); return { resultado: { f29: { periodos: 7 } }, aviso: null } }
+
+  // 1) Sin consulta previa → se consulta y queda en el resumen.
+  const EA = crear('77999000-4')
+  mockearRCV({ vacio: true })
+  const r1 = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [EA], declaracionesSync: fake })
+  assert.strictEqual(r1.ok, 1, 'el RCV se sincronizó')
+  assert.strictEqual(r1.declaraciones[EA].f29, 7)
+  assert.deepStrictEqual(llamadas, [EA])
+
+  // 2) Consulta reciente (hoy) → NO se vuelve a abrir el navegador.
+  const EB = crear('77999000-5')
+  db.prepare(`INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, datos_json, consultado_en)
+              VALUES (?, '77999000-5', 'F29', '202610', 'declarada', '{}', datetime('now'))`).run(EB)
+  llamadas.length = 0
+  const r2 = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [EB], declaracionesSync: fake })
+  assert.strictEqual(llamadas.length, 0, 'una consulta reciente no gasta otra sesión de navegador')
+  assert.ok(!r2.declaraciones || r2.declaraciones[EB] === undefined)
+
+  // 3) El portal falla → se nombra el error, el RCV de la corrida sigue OK.
+  const EC = crear('77999000-6')
+  const falla = async () => { throw new Error('el portal del SII cambió') }
+  const r3 = await sync.ejecutarSyncDiaria(db, { usuarioId: adminId, empresaIds: [EC], declaracionesSync: falla })
+  assert.strictEqual(r3.ok, 1, 'el RCV quedó sincronizado igual')
+  assert.match(r3.declaraciones[EC].error, /cambió/)
+})
+
 // ===== T7: credencial rechazada = 1 login, no 2 =====
 
 /**
