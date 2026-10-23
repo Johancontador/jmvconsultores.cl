@@ -7,7 +7,8 @@
  *   3. declarac. → matriz de estados F29, boletas de honorarios y juradas
  *   4. form       → Formulario Compacto del F29 (casillas declaradas)
  *   5. renta      → estado de la declaración anual (F22)
- *   6. informe    → reconstrucción del informe + evidencia (snapshot)
+ *   6. tesorería  → deuda fiscal real en la TGR (certificado de deuda)
+ *   7. informe    → reconstrucción del informe + evidencia (snapshot)
  *
  * Por qué un job y no un request: cada paso abre sesión en el portal del SII
  * y puede tardar minutos. El request HTTP no puede quedarse abierto: el
@@ -35,6 +36,7 @@ const PASOS = [
   { clave: 'declaraciones', nombre: 'Declaraciones F29, boletas y juradas' },
   { clave: 'formularios', nombre: 'Formulario Compacto del F29' },
   { clave: 'renta', nombre: 'Renta (F22)' },
+  { clave: 'tesoreria', nombre: 'Deuda fiscal (TGR)' },
   { clave: 'informe', nombre: 'Informe y evidencia' },
 ]
 
@@ -48,11 +50,14 @@ function dependenciasPorDefecto() {
   return {
     asegurarFicha: (db, opts) => require('./empresas-sii').asegurarFicha(db, opts),
     consultarRCV: (rut, clave, tipo, periodo) => require('../services/rcv').consultarRCV(rut, clave, tipo, periodo),
+    consultarAgregadosVenta: (rut, clave, periodo) => require('../services/rcv').consultarAgregadosVenta(rut, clave, periodo),
+    guardarAgregados: (db, opts) => require('./salud-tributaria').guardarAgregados(db, opts),
     ingestarBatch: (db, opts) => require('./documentos').ingestarBatch(db, opts),
     sincronizarDeclaraciones: (db, opts) => require('./declaraciones-sii').sincronizar(db, opts),
     sincronizarFormularios: (db, opts) => require('./declaraciones-sii').sincronizarFormularios(db, opts),
     consultarRenta: (opts) => require('./renta-sii').consultarRenta(opts),
     guardarRenta: (db, opts) => require('./renta-sii').guardar(db, opts),
+    consultarDeudaTgr: (db, opts) => require('./deuda-tgr').consultar(db, opts),
     descifrarClave: (db, empresaId) => require('./empresas').claveSiiDescifrada(db, empresaId),
   }
 }
@@ -220,6 +225,7 @@ async function ejecutar(jobId, opciones) {
     let insertados = 0
     let duplicados = 0
     let errores = 0
+    let agregados = 0
     for (const p of lista) {
       for (const [tipo, flujo] of [['compras', 'compra'], ['ventas', 'venta']]) {
         try {
@@ -234,9 +240,18 @@ async function ejecutar(jobId, opciones) {
           errores += 1
         }
       }
+      // Boletas/comprobantes de pago: el SII solo los entrega como total
+      // mensual; se guardan en rcv_agregados para completar la conciliación.
+      try {
+        const ags = await deps.consultarAgregadosVenta(rut, clave, p)
+        const g = deps.guardarAgregados(db, { empresaId, rut, periodo: p, agregados: ags })
+        agregados += g.guardados || 0
+      } catch (err) {
+        errores += 1
+      }
     }
-    resumen.rcv = { periodos: lista, insertados, duplicados, errores }
-    return { detalle: `${lista.length} período(s) · ${insertados} documento(s) nuevo(s) · ${errores} error(es)` }
+    resumen.rcv = { periodos: lista, insertados, duplicados, errores, agregados }
+    return { detalle: `${lista.length} período(s) · ${insertados} documento(s) nuevo(s) · ${agregados} agregado(s) · ${errores} error(es)` }
   })
   salud.olvidarResumen(empresaId)
 
@@ -270,14 +285,36 @@ async function ejecutar(jobId, opciones) {
     const aniosLista = []
     const anioHasta = Number(periodo.slice(0, 4))
     for (let a = anioHasta; a >= anioHasta - Math.max(0, opciones.anios - 1); a--) aniosLista.push(a)
-    const r = await deps.consultarRenta({ rut: emp.rut, dv, anios: aniosLista })
+    const clave = deps.descifrarClave(db, empresaId)
+    if (!clave) throw new Error('La empresa no tiene clave SII configurada')
+    const r = await deps.consultarRenta({ rut: emp.rut, dv, anios: aniosLista, clave })
     const guardados = deps.guardarRenta(db, { empresaId, rut: emp.rut, anios: r?.anios || [] })
     resumen.renta = { anios: (r?.anios || []).length, guardados, aviso: r?.aviso || null }
     return { detalle: `${(r?.anios || []).length} año(s) consultado(s), ${guardados} guardado(s)` }
   })
   salud.olvidarResumen(empresaId)
 
-  // ---- 6. Informe + evidencia ----
+  // ---- 6. Deuda fiscal en la Tesorería (TGR) ----
+  // Es un portal distinto del SII (aunque autentica con la misma Clave
+  // Tributaria) y puede estar caído o cambiar: su fallo NO invalida el resto
+  // del informe, y la sección queda «no consultado» con el motivo.
+  await ejecutarPaso('tesoreria', async () => {
+    const r = await deps.consultarDeudaTgr(db, { empresaId, usuarioId, ip })
+    resumen.tesoreria = {
+      estado: r.estado,
+      total: r.total == null ? null : Number(r.total),
+      fecha_emision: r.fecha_emision || null,
+      pdf: r.pdf_ruta || null,
+    }
+    return {
+      detalle: r.estado === 'sin_deuda'
+        ? `Certificado TGR del ${r.fecha_emision || 'día'}: sin deuda fiscal`
+        : `Certificado TGR del ${r.fecha_emision || 'día'}: ${r.total == null ? 'deuda registrada (monto no legible)' : `${Number(r.total).toLocaleString('es-CL')} CLP de deuda`}`,
+    }
+  })
+  salud.olvidarResumen(empresaId)
+
+  // ---- 7. Informe + evidencia ----
   await ejecutarPaso('informe', async () => {
     const inf = salud.construirInforme(db, { empresaId, periodo, meses: opciones.meses })
     let snapshotId = null

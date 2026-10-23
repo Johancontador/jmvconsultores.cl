@@ -377,6 +377,11 @@ require('./core/migraciones').migracionesPerfilYSalud(db)
 require('./core/migraciones').migracionesDeclaracionesSii(db)
 // Formulario Compacto del F29: casillas declaradas (la verdad del F29).
 require('./core/migraciones').migracionesF29Formularios(db)
+// Deuda fiscal TGR: certificados de deuda consultados (historial).
+require('./core/migraciones').migracionesDeudaTgr(db)
+// Agregados mensuales del RCV de ventas (boletas 39/41 y comprobantes 48):
+// el SII no los entrega documento a documento, solo el total del mes.
+require('./core/migraciones').migracionesRcvAgregados(db)
 // CRM (Fase B): pipeline de clientes, recordatorios, campañas, engagement.
 require('./core/migraciones').migracionesCrm(db)
 // CRM comercial (rediseño 2026-10-15): fichas, contactos, prospectos,

@@ -418,3 +418,68 @@ test('T5d: sin asientos seleccionados no se abre el diálogo ni se cierra el per
   assert.ok(!env.urls.some((u) => u.startsWith('POST')), 'no se cerró el período')
   assert.ok(env.toasts.some((t) => /No hay asientos de cierre seleccionados/.test(t.msg)), 'explica por qué no hizo nada')
 })
+
+// La deuda FISCAL (TGR) es una obligación con el Fisco, distinta de la deuda
+// comercial. Se muestra como tarjeta propia en Tesorería, con su certificado,
+// y solo ofrece consultar a quien puede operar tesorería.
+const DEUDA_TGR = {
+  ok: true,
+  deuda: {
+    estado: 'con_deuda',
+    etiqueta: 'Deuda fiscal registrada (TGR)',
+    total: 1460500,
+    fecha_emision: '2026-10-22',
+    liquidada_al: '2026-10-22',
+    codigo_verificacion: '001SD202629571457999',
+    consultado_en: '2026-10-23 01:41:41',
+    pdf: 'data/certificados-tgr/76312274-3-2026-10-22.pdf',
+    documentos: [{ documento: 'F29', periodo: '202504', monto: 1250000, glosa: 'Formulario 29 2025-04 1.250.000' }],
+    nota: 'La deuda del Fisco (TGR) es distinta de las cuentas por pagar comerciales.',
+    detalle: 'El certificado emitido el 2026-10-22 registra deuda por 1.460.500 CLP en 1 documento(s).',
+  },
+}
+
+const conDeuda = (url, def) => (url.includes('deuda-fiscal') ? DEUDA_TGR : def(url))
+
+test('T6: Tesorería muestra la deuda fiscal TGR con su detalle y certificado', async () => {
+  const env = crearSandbox({ permisos: ['tesoreria:ver', 'tesoreria:operar'], fixture: conDeuda })
+  await env.sandbox.VIEWS.tesoreria.render(env.el())
+  const html = env.htmls.join('\n')
+
+  assert.match(html, /Deuda fiscal \(TGR\)/)
+  assert.match(html, /Deuda fiscal registrada \(TGR\)/, 'no la presenta como al día')
+  assert.match(html, /1\.460\.500/, 'muestra el monto certificado')
+  assert.match(html, /2026-10-22/, 'muestra la fecha del certificado')
+  assert.match(html, /001SD202629571457999/, 'muestra el código de verificación')
+  assert.match(html, /Detalle por documento/, 'el detalle no queda solo en el total')
+  assert.match(html, /202504/)
+  assert.match(html, /id="teso-deuda-pdf"/, 'ofrece el certificado oficial')
+  assert.match(html, /id="teso-deuda-consultar"/, 'con tesoreria:operar puede consultar')
+  assert.match(html, /distinta de las cuentas por pagar comerciales/, 'no la confunde con deuda comercial')
+})
+
+test('T6b: sin tesoreria:operar la tarjeta se ve pero no se ofrece consultar', async () => {
+  const env = crearSandbox({ permisos: ['tesoreria:ver'], fixture: conDeuda })
+  await env.sandbox.VIEWS.tesoreria.render(env.el())
+  const html = env.htmls.join('\n')
+
+  assert.match(html, /Deuda fiscal \(TGR\)/)
+  assert.match(html, /1\.460\.500/)
+  assert.ok(!/id="teso-deuda-consultar"/.test(html), 'solo lectura no dispara la consulta')
+})
+
+test('T6c: si la TGR no responde, Tesorería igual carga y lo dice', async () => {
+  const env = crearSandbox({
+    permisos: ['tesoreria:ver', 'tesoreria:operar'],
+    fixture: (url, def) => {
+      if (url.includes('deuda-fiscal')) throw new Error('TGR caída')
+      return def(url)
+    },
+  })
+  await env.sandbox.VIEWS.tesoreria.render(env.el())
+  const html = env.htmls.join('\n')
+
+  assert.match(html, /Deuda fiscal \(TGR\)/)
+  assert.match(html, /No consultada/, 'no inventa un cero ni un «sin deuda»')
+  assert.match(html, /id="teso-deuda-consultar"/, 'el botón queda disponible para reintentar')
+})

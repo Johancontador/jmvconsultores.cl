@@ -48,8 +48,24 @@ async function consultarRCV(rut, clave, tipo, periodo) {
   return datos
 }
 
+async function consultarAgregadosVenta(rut, clave, periodo) {
+  if (PROVIDER !== 'sii') return [] // simpleapi no expone estos agregados
+  const cerrado = periodoCerrado(periodo)
+
+  if (cerrado) {
+    const cache = obtenerDeCache(rut, periodo, 'agregados:venta')
+    if (cache) return cache
+  }
+
+  const datos = await require('./sii-rcv').consultarAgregadosVenta(rut, clave, periodo)
+
+  if (cerrado) guardarEnCache(rut, periodo, 'agregados:venta', datos)
+
+  return datos
+}
+
 function getProvider() {
   return PROVIDER
 }
 
-module.exports = { consultarRCV, getProvider, periodoCerrado, obtenerDeCache, guardarEnCache }
+module.exports = { consultarRCV, consultarAgregadosVenta, getProvider, periodoCerrado, obtenerDeCache, guardarEnCache }

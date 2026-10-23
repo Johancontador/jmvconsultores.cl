@@ -1,6 +1,10 @@
-# Integración con Tesorería General de la República (TGR) — investigación verificada
+# Integración con Tesorería General de la República (TGR) — implementada
 
-> Fecha: 2026-10-22 · Estado: **investigado y viable, NO implementado todavía**.
+> Fecha: 2026-10-22 · Estado: **IMPLEMENTADA y verificada contra el portal real**
+> (certificado descargado, parseado y guardado para tres empresas del portafolio).
+> Ver §5 para el código, la tabla y los endpoints.
+>
+> Investigación original:
 > Todo lo de este documento se comprobó contra el portal real con la clave SII de
 > una empresa del portafolio (empresa 1, `76312274-3`). Nada es suposición.
 
@@ -67,3 +71,65 @@ tal como hoy se guardan los snapshots del informe.
   (`TGR_SIN_NAVEGADOR`, `TGR_SESION_INVALIDA`, `TGR_TOPE`) y nunca inventar deuda.
 - **No confundir** la deuda TGR (fisco) con la deuda comercial de la empresa:
   son cuentas distintas y la UI debe rotularlo.
+
+---
+
+## 5. Implementación (2026-10-22)
+
+### 5.1 Qué quedó construido
+
+| Pieza | Archivo |
+|---|---|
+| Consulta, login TGR, token `vr`, PDF y parseo | `backend/core/deuda-tgr.js` |
+| Tabla `deuda_tgr` (historial de certificados) | migración `migracionesDeudaTgr` (`backend/core/migraciones.js` + `backend/db.js`) |
+| Endpoints de Tesorería | `backend/routes/tesoreria.js`: `GET …/tesoreria/deuda-fiscal`, `POST …/tesoreria/deuda-fiscal/consultar`, `GET …/tesoreria/deuda-fiscal/certificado` |
+| Paso de la reunión de antecedentes | `backend/core/salud-sincronizacion.js` (paso 6 «Deuda fiscal (TGR)») |
+| Informe de salud | `backend/core/salud-tributaria.js`: `deudas.fiscal_tgr`, hallazgo `DEUDA_TGR`, exposición y fortalezas |
+| Informe imprimible | `backend/core/informe-salud-html.js` (capítulo 06 + fuentes) |
+| UI | `frontend/sistema/views-salud.js` (pestaña «Deuda fiscal (TGR)» + botón de consulta y PDF) |
+| Tests | `test/deuda-tgr.test.js` (D1–D5) |
+
+### 5.2 Cómo funciona (verificado)
+
+1. Chrome headless abre `tgr.gob.cl/tramites-tgr/certificado-de-deuda-fiscal/`.
+2. Clic en `#id-button-idp-claveTributaria` → formulario del SII
+   (`#inputRut` **con DV**: `76312274-3`, `#inputPass`, `#bt_ingresar`).
+3. Tras el SSO, la URL del portal contiene `?go=` con el redirect
+   `LoginPortalPagosTGR12Web/redirect?vr=…`. Se sondea hasta 30 s porque el
+   token aparece después del encabezado; si no está en la URL, se busca el
+   `src` del iframe del trámite.
+4. Se navega al token (de un solo uso; sin él la app legada responde 401).
+5. El certificado es un PDF embebido (`data:application/pdf;base64,…`). Se
+   guarda en `data/certificados-tgr/<rut>-<fecha>.pdf` y se extrae su texto con
+   `pdf-parse` (nueva dependencia de producción).
+6. Parseo: `NO REGISTRA DEUDA` → `sin_deuda` y total 0; con deuda se toma el
+   **TOTAL rotulado** y, si no hay rótulo legible, `total = null` (nunca se
+   suman montos sueltos). Se conservan fecha de emisión, «Liquidada al» y el
+   código de verificación del certificado.
+
+### 5.3 Límites conocidos
+
+- La TGR bloquea clientes sin navegador y su login es un SPA: hay un reintento
+  automático ante errores transitorios de navegación; los fallos se informan
+  con código (`TGR_SIN_NAVEGADOR`, `TGR_SESION_INVALIDA`, `TGR_SIN_TOKEN`,
+  `TGR_SIN_CERTIFICADO`, `TGR_PDF_ILEGIBLE`, `TGR_WAF`).
+- El certificado es una **foto** a su fecha de emisión: no incluye deuda
+  posterior ni acuerdos de pago. La UI lo rotula y no lo mezcla con la deuda
+  comercial (cuentas por cobrar/pagar del sistema).
+- El monto de una deuda con formato distinto al esperado queda en `null` con
+  el PDF como evidencia; el informe lo declara en lugar de inventar un total.
+
+### 5.4 Detalle de la deuda (documento, período, monto)
+
+- **Cartola fiscal (`CartolaFiscalInterWeb`)**: se llegó hasta la app con el
+  token `vr`, pero la consulta está protegida por **reCAPTCHA**. No se
+  automatiza: resolver el captcha programáticamente no es aceptable ni estable.
+- **Certificado de deuda**: cuando el RUT registra deuda, el PDF lista los
+  documentos. `parsearDetalle()` estructura cada línea con período
+  (`04/2025`, `2025-04` o año) y monto; las líneas sin período o sin importe
+  se descartan y **no se suman**. El resultado viaja como
+  `deuda_tgr.datos_json.documentos` y se muestra en Salud Tributaria,
+  Tesorería y el informe imprimible.
+- Si el certificado no rotula un TOTAL, `total` queda `NULL`; la suma de filas
+  se expone como `total_calculado` con una advertencia de que no es el total
+  oficial.

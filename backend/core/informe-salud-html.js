@@ -618,6 +618,39 @@ function tablaDeclaracionesAnuales(anuales) {
   </table>`
 }
 
+/**
+ * Declaraciones juradas presentadas tal como las entrega el SII. Si la
+ * consulta no se hizo, lo dice: no se imprime una tabla vacía que parezca
+ * «sin declaraciones».
+ */
+function tablaJuradas(dj) {
+  if (!dj || dj.estado !== 'disponible') {
+    return '<p class="nota">Declaraciones juradas no consultadas: no se afirma que estén ni que no estén presentadas.</p>'
+  }
+  const lista = Array.isArray(dj.presentadas) ? dj.presentadas : []
+  if (!lista.length) {
+    return '<p class="nota">El SII no registra declaraciones juradas presentadas en los años consultados.</p>'
+  }
+  return `<table class="tabla">
+    <thead><tr><th>Año</th><th>DJ</th><th>Título</th><th>Estado</th><th>Folio</th><th>Presentada</th><th>Vencimiento</th></tr></thead>
+    <tbody>${lista.map((d) => `<tr>
+      <td>${esc(d.anio || '—')}</td>
+      <td>${esc(d.dj || '—')}</td>
+      <td>${esc(d.titulo || '—')}</td>
+      <td><span class="chip">${esc(d.estado || 'sin estado')}</span></td>
+      <td>${esc(d.folio || '—')}</td>
+      <td>${esc(fechaCorta(d.fecha_presentacion))}</td>
+      <td>${esc(fechaCorta(d.fecha_vencimiento))}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+  ${(dj.pendientes || []).length ? `<h4>Sin presentación registrada según el SII</h4>
+  <table class="tabla">
+    <thead><tr><th>Año</th><th>DJ</th><th>Título</th><th>Vencimiento</th></tr></thead>
+    <tbody>${dj.pendientes.map((d) => `<tr><td>${esc(d.anio || '—')}</td><td>${esc(d.dj || '—')}</td><td>${esc(d.titulo || '—')}</td><td>${esc(fechaCorta(d.fecha_vencimiento))}</td></tr>`).join('')}</tbody>
+  </table>` : ''}
+  <p class="nota">${esc(dj.nota || '')}</p>`
+}
+
 function tablaMensual(mensuales) {
   if (!mensuales?.length) return '<p class="nota">Sin períodos analizados.</p>'
   // Nueve columnas no caben en los 608 px útiles de A4: la tabla se fija con
@@ -928,6 +961,7 @@ function renderInformeHtml(informe, opts = {}) {
       <div>
         ${bloqueDeclaraciones(informe?.declaraciones?.f29, 'F29 — IVA mensual', `Períodos con RCV en el período analizado: ${informe?.cobertura?.desde || '—'} a ${informe?.cobertura?.hasta || '—'}. El estado del F29 se lee en todo el rango disponible en el SII.`)}
         ${bloqueDeclaraciones(informe?.declaraciones?.juradas, 'Declaraciones juradas', '')}
+        ${tablaJuradas(informe?.declaraciones_juradas)}
       </div>
       <div>
         ${bloqueDeclaraciones(informe?.declaraciones?.renta_f22, 'F22 — Renta anual', '')}
@@ -986,6 +1020,27 @@ function renderInformeHtml(informe, opts = {}) {
         <tr><td>Exposición tributaria identificada</td><td class="der">${mm(op.exposicion?.total)}</td><td>${esc(op.exposicion?.nota || '')}</td></tr>
       </tbody>
     </table>
+    <h3>Deuda fiscal (TGR)</h3>
+    ${(() => {
+      const d = informe?.deudas?.fiscal_tgr || { estado: 'no_consultado' }
+      if (d.estado === 'no_consultado') {
+        return '<p class="nota">Deuda fiscal no consultada en la TGR: la ausencia de deuda en este informe no significa que no exista.</p>'
+      }
+      return `<table class="tabla"><thead><tr><th>Concepto</th><th>Valor</th></tr></thead><tbody>
+        <tr><td>Estado del certificado</td><td><b>${esc(d.etiqueta || '—')}</b></td></tr>
+        <tr><td>Monto certificado</td><td class="der">${d.total == null ? 'no legible en el certificado' : clp(d.total)}</td></tr>
+        <tr><td>Fecha de emisión</td><td>${esc(d.fecha_emision || '—')}</td></tr>
+        <tr><td>Liquidada al</td><td>${esc(d.liquidada_al || '—')}</td></tr>
+        <tr><td>Código de verificación</td><td>${esc(d.codigo_verificacion || '—')}</td></tr>
+        <tr><td>Consultado</td><td>${esc(fechaLarga(d.consultado_en))}</td></tr>
+      </tbody></table>
+      ${(d.documentos || []).length ? `
+      <h4>Detalle por documento</h4>
+      <table class="tabla"><thead><tr><th>Documento</th><th>Período</th><th class="der">Monto</th><th>Glosa</th></tr></thead>
+        <tbody>${d.documentos.map((x) => `<tr><td>${esc(x.documento || '—')}</td><td>${esc(x.periodo || '—')}</td><td class="der">${x.monto != null ? clp(x.monto) : '—'}</td><td class="sub">${esc(x.glosa || '—')}</td></tr>`).join('')}</tbody>
+      </table>` : ''}
+      <p class="nota">${esc(d.nota || '')} ${esc(d.detalle || '')}</p>`
+    })()}
     <h3>Renta (F22) y devoluciones</h3>
     ${informe?.renta?.anios?.length ? `<table class="tabla"><thead><tr><th>Año</th><th>Estado</th><th class="der">Monto declarado</th><th class="der">Remanente devuelto</th><th>Vencimiento</th></tr></thead><tbody>${informe.renta.anios.map((r) => `<tr><td>${esc(r.anio)}</td><td><span class="chip chip-${String(r.estado || 'sin_informacion').toLowerCase()}">${esc(r.estado || '—')}</span></td><td class="der">${r.monto_total == null ? '—' : clp(r.monto_total)}</td><td class="der">${r.remanente_devuelto ? clp(r.remanente_devuelto) : '—'}</td><td>${esc(fechaCorta(r.fecha_vencimiento))}</td></tr>`).join('')}</tbody></table>` : '<p class="nota">Renta no consultada: la existencia de la declaración anual no está verificada.</p>'}
   `)
@@ -1018,6 +1073,8 @@ function renderInformeHtml(informe, opts = {}) {
       <tr><td>Consulta Integral F29 (SII)</td><td>${informe?.declaraciones?.f29?.estado === 'no_consultado' ? 'No consultada' : 'Consultada'}</td></tr>
       <tr><td>Formulario Compacto del F29 (SII)</td><td>${informe?.f29_declarado?.estado === 'disponible' ? `${informe.f29_declarado.periodos.length} período(s), ${informe.f29_declarado.verificaciones_ok}/${informe.f29_declarado.verificaciones_total} verificaciones correctas` : 'No disponible'}</td></tr>
       <tr><td>Renta (F22)</td><td>${informe?.renta?.estado === 'disponible' ? `${informe.renta.anios.length} año(s)` : 'No consultada'}</td></tr>
+      <tr><td>Declaraciones juradas (SII)</td><td>${informe?.declaraciones_juradas?.estado === 'disponible' ? `${informe.declaraciones_juradas.total_presentadas} presentada(s) y ${informe.declaraciones_juradas.total_pendientes || 0} sin presentación registrada en ${informe.declaraciones_juradas.anios_consultados} año(s)` : 'No consultadas'}</td></tr>
+      <tr><td>Deuda fiscal (TGR)</td><td>${informe?.deudas?.fiscal_tgr?.estado === 'no_consultado' ? 'No consultada' : `${esc(informe.deudas.fiscal_tgr.etiqueta || '')} · certificado del ${esc(informe.deudas.fiscal_tgr.fecha_emision || '—')}`}</td></tr>
       <tr><td>Tesorería y contabilidad del sistema</td><td>${esc(tes.estado === 'disponible' ? 'Disponible' : 'Sin movimientos registrados')}</td></tr>
     </tbody></table>
   `)

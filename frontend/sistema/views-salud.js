@@ -229,6 +229,47 @@ VIEWS.salud = {
         <p class="hint">«Consultado» significa que el dato se leyó del portal autenticado del SII. «No consultado» no es «al día»: es ausencia de información.</p>
       </div>
       <div class="card mt">
+        <h3>Declaraciones juradas presentadas (SII)</h3>
+        ${(() => {
+          const dj = inf.declaraciones_juradas || {}
+          if (dj.estado !== 'disponible') {
+            return '<div class="empty">Declaraciones juradas no consultadas. Ejecuta «Reunir antecedentes» para leerlas de «Mis Declaraciones Juradas» del SII.</div>'
+          }
+          const lista = dj.presentadas || []
+          return `
+            <div class="kpi-grid">
+              <div class="kpi"><small>Años consultados</small><strong>${dj.anios_consultados || 0}</strong></div>
+              <div class="kpi"><small>Presentadas</small><strong>${dj.total_presentadas || 0}</strong></div>
+              <div class="kpi ${(dj.total_pendientes || 0) > 0 ? 'bad' : 'up'}"><small>Sin presentación registrada</small><strong>${dj.total_pendientes || 0}</strong><span class="sub">${(dj.vencidas || 0) > 0 ? `${dj.vencidas} vencida(s)` : 'dentro de plazo'}</span></div>
+              <div class="kpi ${(dj.observadas || 0) > 0 ? 'bad' : 'up'}"><small>Observadas / rechazadas</small><strong>${dj.observadas || 0}</strong></div>
+            </div>
+            ${lista.length ? `<div class="tbl-wrap mt"><table class="tbl">
+              <thead><tr><th>Año</th><th>DJ</th><th>Título</th><th>Estado</th><th>Folio</th><th>Presentada</th><th>Vencimiento</th></tr></thead>
+              <tbody>${lista.map((d) => `<tr>
+                <td class="mono">${esc(d.anio || '—')}</td>
+                <td class="mono">${esc(d.dj || '—')}</td>
+                <td class="sub">${esc(d.titulo || '—')}</td>
+                <td><span class="chip ${/acept/i.test(d.estado || '') ? 'contabilizado' : 'propuesto'}">${esc(d.estado || 'sin estado')}</span></td>
+                <td class="mono">${esc(d.folio || '—')}</td>
+                <td class="mono">${esc(d.fecha_presentacion || '—')}</td>
+                <td class="mono">${esc(d.fecha_vencimiento || '—')}</td>
+              </tr>`).join('')}</tbody>
+            </table></div>` : '<div class="empty">El SII no registra declaraciones juradas presentadas en los años consultados.</div>'}
+            ${(dj.pendientes || []).length ? `<h4 class="mt">Sin presentación registrada según el SII</h4>
+              <div class="tbl-wrap"><table class="tbl">
+                <thead><tr><th>Año</th><th>DJ</th><th>Título</th><th>Vencimiento</th><th>Estado</th></tr></thead>
+                <tbody>${dj.pendientes.map((d) => `<tr>
+                  <td class="mono">${esc(d.anio || '—')}</td>
+                  <td class="mono">${esc(d.dj || '—')}</td>
+                  <td class="sub">${esc(d.titulo || '—')}</td>
+                  <td class="mono">${esc(d.fecha_vencimiento || '—')}</td>
+                  <td><span class="chip ${d.fecha_vencimiento && d.fecha_vencimiento < new Date().toISOString().slice(0, 10) ? 'error' : 'propuesto'}">${d.fecha_vencimiento && d.fecha_vencimiento < new Date().toISOString().slice(0, 10) ? 'Vencida' : 'En plazo'}</span></td>
+                </tr>`).join('')}</tbody>
+              </table></div>` : ''}
+            <p class="hint">${esc(dj.nota || '')}</p>`
+        })()}
+      </div>
+      <div class="card mt">
         <h3>Detalle por período · declarado (SII) vs. estimado (RCV)</h3>
         <div class="tbl-wrap"><table class="tbl">
           <thead><tr><th>Período</th><th>F29 SII</th><th class="num">Ventas netas</th><th class="num">IVA est.</th>
@@ -260,7 +301,7 @@ VIEWS.salud = {
             <thead><tr><th>Período</th><th class="num">Ventas F29</th><th class="num">Ventas RCV</th><th class="num">Dif. Ventas</th><th class="num">Dif. %</th></tr></thead>
             <tbody>${(inf.mensuales || []).slice(0, 6).map((m) => `<tr>
               <td>${esc(m.nombre)}</td>
-              <td class="num mono">${m.f29_formulario && m.f29_formulario.indicadores ? fmtM(m.f29_formulario.indicadores.total_debitos || 0) : sub}</td>
+              <td class="num mono">${m.comparacion?.ventas_declaradas != null ? fmtM(m.comparacion.ventas_declaradas) : sub}</td>
               <td class="num mono">${fmtM(m.ventas_neto)}</td>
               <td class="num mono">${m.comparacion?.diferencia_ventas != null ? fmtM(m.comparacion.diferencia_ventas) : '—'}</td>
               <td class="num mono">${m.comparacion?.diferencia_ventas != null ? `${Math.round((m.comparacion.diferencia_ventas / Math.max(1, m.ventas_neto)) * 1000) / 10}%` : '—'}</td>
@@ -304,6 +345,43 @@ VIEWS.salud = {
             </tr>`).join('')}</tbody>
           </table></div>
         ` : '<div class="empty">Formulario Compacto no consultado. Ejecuta «Reunir antecedentes» para leer las casillas declaradas del F29.</div>'}
+      </div>`
+
+    // ---------------------------------------------------------
+    // Deuda FISCAL (TGR). Se rotula como Fisco: no es deuda comercial.
+    // ---------------------------------------------------------
+    const deuda = inf.deudas?.fiscal_tgr || { estado: 'no_consultado' }
+    const puedeDeuda = tiene('tesoreria:operar')
+    const chipDeuda = deuda.estado === 'sin_deuda' ? 'contabilizado' : deuda.estado === 'con_deuda' ? 'error' : 'neutral'
+    const panelDeuda = `
+      <div class="card">
+        <h3>Deuda fiscal (TGR) <span class="chip ${chipDeuda}">${esc(deuda.etiqueta || 'No consultada')}</span></h3>
+        <p class="muted">${esc(deuda.detalle || 'Sin consulta registrada en la Tesorería General de la República.')}</p>
+        <div class="tbl-wrap"><table class="tbl"><tbody>
+          <tr><th>Monto certificado</th><td class="num mono">${deuda.total != null ? fmt(deuda.total) : '—'}</td></tr>
+          <tr><th>Fecha de emisión</th><td class="mono">${esc(deuda.fecha_emision || '—')}</td></tr>
+          <tr><th>Liquidada al</th><td class="mono">${esc(deuda.liquidada_al || '—')}</td></tr>
+          <tr><th>Código de verificación</th><td class="mono">${esc(deuda.codigo_verificacion || '—')}</td></tr>
+          <tr><th>Última consulta</th><td class="mono">${esc(deuda.consultado_en || '—')}</td></tr>
+          <tr><th>Fuente</th><td class="sub">${esc(deuda.fuente || 'TGR — Certificado de Deuda Fiscal')}</td></tr>
+        </tbody></table></div>
+        ${(deuda.documentos || []).length ? `
+        <h4 class="mt">Detalle por documento (según el certificado)</h4>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Documento</th><th>Período</th><th class="num">Monto</th><th>Glosa del certificado</th></tr></thead>
+          <tbody>${deuda.documentos.map((d) => `<tr>
+            <td>${esc(d.documento || '—')}</td>
+            <td class="mono">${esc(d.periodo || '—')}</td>
+            <td class="num mono">${d.monto != null ? fmt(d.monto) : '—'}</td>
+            <td class="sub">${esc(d.glosa || '—')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${deuda.total == null && deuda.total_calculado != null ? `<p class="hint">El total no venía rotulado; la suma de las filas es ${fmt(deuda.total_calculado)} y NO se usa como total oficial.</p>` : ''}` : ''}
+        <div class="sl-acciones" style="margin-top: var(--space-3)">
+          ${deuda.pdf ? '<button class="btn btn-secondary" id="sl-certificado">Ver certificado (PDF)</button>' : ''}
+          ${puedeDeuda ? '<button class="btn btn-primary" id="sl-deuda">Consultar deuda fiscal</button>' : ''}
+        </div>
+        <p class="hint">${esc(deuda.nota || 'La deuda fiscal del Fisco (TGR) es distinta de la deuda comercial del sistema.')}</p>
       </div>`
 
     const panelRiesgos = `
@@ -469,6 +547,14 @@ VIEWS.salud = {
               <td><span class="chip ${c.estado === 'disponible' ? 'contabilizado' : c.estado === 'parcial' ? 'propuesto' : 'error'}">${esc(c.estado)}</span></td>
               <td class="sub">${esc(c.detalle || '')}</td></tr>`).join('')}</tbody>
           </table></div>
+          <h3 class="mt">Capacidades reales de la conexión TGR (Tesorería)</h3>
+          <div class="tbl-wrap"><table class="tbl">
+            <thead><tr><th>Consulta</th><th>Estado</th><th>Detalle</th></tr></thead>
+            <tbody>${(inf.capacidades_tgr || []).map((c) => `<tr>
+              <td><b>${esc(c.nombre)}</b></td>
+              <td><span class="chip ${c.estado === 'disponible' ? 'contabilizado' : c.estado === 'parcial' ? 'propuesto' : 'error'}">${esc(c.estado)}</span></td>
+              <td class="sub">${esc(c.detalle || '')}</td></tr>`).join('')}</tbody>
+          </table></div>
         </div>
       </div>`
 
@@ -505,6 +591,7 @@ VIEWS.salud = {
       { id: 'iva', label: 'IVA y conciliación', html: panelIva },
       { id: 'riesgos', label: 'Riesgos', html: panelRiesgos },
       { id: 'tendencias', label: 'Tendencias', html: panelTendencias },
+      { id: 'deuda', label: 'Deuda fiscal (TGR)', html: panelDeuda },
       { id: 'impacto', label: 'Impacto financiero', html: panelImpacto },
       { id: 'plan', label: 'Plan de acción', html: panelPlan },
       { id: 'metodologia', label: 'Metodología', html: panelMetodologia },
@@ -557,7 +644,7 @@ VIEWS.salud = {
         <div class="sl-acciones">
             ${puede ? '<button class="btn btn-primary" id="sl-reunion">Reunir antecedentes</button>' : ''}
             <button class="btn btn-secondary" id="sl-emitir">Emitir informe (PDF)</button>
-            <p class="hint" style="text-align:right;margin:6px 0 0">«Reunir antecedentes» consulta el SII (ficha, compras y ventas, declaraciones, F29 compacto y renta) y rehace el informe. Puede tardar varios minutos.</p>
+            <p class="hint" style="text-align:right;margin:6px 0 0">«Reunir antecedentes» consulta el SII (ficha, compras y ventas, declaraciones, F29 compacto, juradas y renta) y la deuda fiscal en la TGR, y rehace el informe. Puede tardar varios minutos.</p>
           </div>
         </div>
         <div id="sl-progreso" class="sl-progreso"></div>
@@ -611,6 +698,29 @@ VIEWS.salud = {
       const url = `/api/contable/empresas/${eid}/salud-tributaria/informe?periodo=${periodo}`
       const w = window.open(url, '_blank')
       if (!w) showToast('El navegador bloqueó la ventana emergente: abre el informe desde el enlace.', 'error')
+    })
+
+    // Certificado de deuda de la TGR: el PDF oficial tal como lo entregó la
+    // Tesorería (evidencia descargable, no una reconstrucción).
+    document.getElementById('sl-certificado')?.addEventListener('click', () => {
+      const url = `/api/contable/empresas/${eid}/tesoreria/deuda-fiscal/certificado`
+      const w = window.open(url, '_blank')
+      if (!w) showToast('El navegador bloqueó la ventana emergente: abre el certificado desde el enlace.', 'error')
+    })
+
+    document.getElementById('sl-deuda')?.addEventListener('click', async (ev) => {
+      const b = ev.currentTarget
+      b.disabled = true
+      b.textContent = 'Consultando la TGR…'
+      try {
+        await apiPost(`/api/contable/empresas/${eid}/tesoreria/deuda-fiscal/consultar`, {})
+        showToast('Certificado de deuda consultado en la TGR.', 'success')
+        renderRoute()
+      } catch (err) {
+        showToast(err.message, 'error')
+        b.disabled = false
+        b.textContent = 'Consultar deuda fiscal'
+      }
     })
 
     // Agregar estilo para la portada y animaciones

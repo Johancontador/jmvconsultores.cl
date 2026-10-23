@@ -184,15 +184,20 @@ async function consultarAnio(jar, { rut, dv, anio }) {
 
 /**
  * Consulta la renta de varios años con UNA sola sesión.
- * @param {object} opts { rut, dv, anios:number[], sesion:'nueva'|'existente', jar }
+ * @param {object} opts { rut, dv, anios:number[], jar?, clave?, cierre? }
+ *   `jar`: sesión ya autenticada (recomendado: reusa la del portal).
+ *   `clave`: clave tributaria para abrir sesión propia. Sin jar NI clave se
+ *   rechaza en vez de mandar el dígito verificador como clave (era el bug que
+ *   dejaba la Renta «no consultada» en la reunión de antecedentes).
  */
-async function consultarRenta({ rut, dv, anios, jar = null, cierre = true }) {
+async function consultarRenta({ rut, dv, anios, jar = null, clave = null, cierre = true }) {
   const [cuerpo, ...resto] = String(rut).split('-')
   const dvRut = resto.join('-') || dv || '0'
   let sesion = jar
   let propia = false
   if (!sesion) {
-    sesion = await loginSII(rut, dv)
+    if (!clave) throw new Error('Falta la clave SII para consultar la renta (o una sesión ya abierta)')
+    sesion = await loginSII(rut, clave)
     propia = true
   }
   const resultado = { anios: [], aviso: null }

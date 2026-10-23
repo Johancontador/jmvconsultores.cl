@@ -239,3 +239,220 @@ estimaciones desde el RCV. La prescripción (Código Tributario art. 200) y los
 plazos especiales deben evaluarse caso a caso. Las citas normativas del
 informe son referencias generales (D.L. 825 art. 29, Ley de la Renta art. 65,
 Ley 21.210, Ley 20.727).
+
+---
+
+## 6. Auditoría de conexiones 2026-10-22 (correcciones)
+
+Se revisó el módulo completo contra el SII/TGR reales. Cuatro conexiones que el
+informe declaraba «disponibles» estaban rotas en silencio y se corrigieron:
+
+| # | Problema encontrado | Efecto real | Corrección |
+|---|---|---|---|
+| 1 | `declaraciones-sii.js` usaba `comacto` / `comulto` (typo) en el INSERT del Formulario Compacto | El INSERT fallaba dentro del `try`: `f29_formularios` **nunca se llenaba** y la conciliación «declarado vs RCV» era imposible aunque la capacidad decía `disponible` | Se extrajo `guardarFormularioF29()` (probada en `test/deuda-tgr.test.js` D6) y se corrigió el flujo |
+| 2 | `abrirBuscador()` esperaba 1,2 s fijos tras el encabezado GWT | La sincronización de formularios fallaba entera: «No se encontró el botón Buscar Formulario» | Sondeo hasta 25 s del botón; verificado en vivo (202608 y 202609 con 33/31 casillas y 5/5 verificaciones) |
+| 3 | `renta-sii.consultarRenta()` sin `jar` llamaba `loginSII(rut, dv)` (el DV como clave) | El paso «Renta (F22)» de la reunión siempre fallaba y el informe mostraba F22 «no consultado» | `consultarRenta` exige `clave`; la reunión la descifra desde la bóveda. Verificado: F22 2026 vigente con folio real |
+| 4 | La conciliación comparaba `total_debitos` (538 = **IVA débito**) contra las ventas netas del RCV | Diferencia fantasma de millones por período (p. ej. «dif. ventas 3.340.054» con RCV vacío) | Se compara `base_imponible` (563 = ventas netas). Sin RCV del mes no se calculan diferencias (`comparable: false`) |
+
+Además:
+
+- **Login SII intermitente:** con la misma clave válida el SII a veces responde
+  200 solo con la cookie del balanceador. `loginSII` reintenta UNA vez antes de
+  culpar a la credencial y ya no considera el texto genérico «no existe» como
+  clave incorrecta.
+- **Declaraciones juradas (nuevo):** `backend/core/dj-sii.js` lee «Mis
+  Declaraciones Juradas» (`www4.sii.cl/perfilamientodjui`) por año. Requiere
+  enviar SOLO los atributos de RÉGIMEN; con el segmento incluido el SII
+  responde «No Existen Datos para la Consulta». Entrega DJ presentadas (estado,
+  folio, fechas) y DJ aplicables **sin presentación registrada**. Verificado:
+  empresa 77255326-9 → DJ 1947 Aceptada en 2026, DJ 1948 Aceptada en 2024, DJ
+  1947 sin presentación en 2025 (hallazgo `DJ_PENDIENTE` severidad alta).
+- **Deuda fiscal (nuevo):** certificado de deuda de la TGR con la misma Clave
+  Tributaria. Ver `docs/INTEGRACION-TGR.md` §5.
+
+Matriz de capacidades actualizada: `declaraciones_juradas` pasa a
+`disponible`; la deuda fiscal se declara en `capacidades_tgr` (no en las del
+SII, porque la emite la Tesorería).
+
+---
+
+## 7. Conciliación F29 declarado vs RCV — corrida real de 12 meses (2026-10-23)
+
+Corrida completa sobre **77.255.326-9 (Inversiones Santa Camila SpA)**,
+períodos `202510`–`202609`, contra el SII real:
+
+| Resultado | Valor |
+|---|---|
+| Formulario Compacto F29 leído | **12/12** períodos (folios reales) |
+| Verificaciones internas de casillas | **42/42** cuadran |
+| Cobertura RCV | **12/12** meses (436 documentos) |
+| Períodos comparables | **12/12** |
+| Diferencias de ventas relevantes | **2** (202603 y 202606) |
+
+Lo que se corrigió para que esa conciliación fuera posible:
+
+- **Lectura de respaldo del compacto.** El parser por posiciones (bloques `BT`
+  con coordenadas) no reconoce todos los PDF que emite el SII: el compacto
+  imprime `563BASE IMPONIBLE16.840.242`, con código, glosa y valor **pegados**.
+  Ahora, si el parseo por posiciones no devuelve casillas, se lee el texto plano
+  (`pdf-parse`) y se aceptan solo códigos del catálogo del SII. Probado con el
+  PDF real (202609: 16 casillas, 4/4 cuadraturas) y en `test/declaraciones-sii.test.js` T7.
+- **Casillas 512/513 (notas de débito).** Cuando existen, suman al total de
+  débitos: en 202604 la cuadratura «502 − 510 = 538» fallaba por exactamente
+  31.933, el monto de la nota de débito. El catálogo las incluye y la
+  verificación `DEBITOS_NETOS` calcula `502 + 513 − 510`. Ese mes pasó de
+  4/5 a 5/5 y el hallazgo falso `F29_INCONSISTENTE` desapareció del informe
+  (índice 81 → 85).
+- **`total_a_pagar` (091):** el compacto imprime el código pegado al monto
+  (`TOTAL A PAGAR DENTRO DEL PLAZO LEGAL911.769.027`). Se contrasta con 547
+  para no leer 911.769.027 donde dice 1.769.027.
+
+### Hallazgos reales que quedan (no son errores del sistema)
+
+Diez períodos cuadran con el RCV dentro de ±10 CLP (redondeo del SII). Dos no:
+
+- **202603:** declarado 11.470.574 vs RCV 8.571.426 → **+2.899.148** de base.
+  La casilla 502 (débitos facturas) coincide exactamente con el RCV, pero 538
+  (total débitos) supera a 502 en 550.841 de IVA: la declaración incluye
+  documentos que el RCV no trae (boletas u otros débitos fuera de la bandeja).
+- **202606:** declarado 12.047.311 vs RCV 10.576.723 → **+1.470.588**, mismo
+  patrón (538 − 502 = 279.412 de IVA).
+
+El informe los expone como `F29_VS_RCV` (severidad alta) con el monto exacto y
+la explicación de que el F29 declarado es la verdad y la diferencia apunta a
+documentos faltantes en el RCV. No se ajusta el monto declarado ni se inventan
+casillas para "cuadrar" el mes.
+
+---
+
+## 8. Corrida del portafolio completo (2026-10-23)
+
+La misma sincronización de 12 meses se repitió sobre las 22 empresas activas.
+El portafolio destapó cuatro casos que una sola empresa no mostraba:
+
+| Síntoma en el informe | Causa real | Corrección |
+|---|---|---|
+| «Total créditos» no cuadraba y el IVA determinado salía negativo | La empresa **arrastra remanente de crédito** (casilla 504) y el formulario trae además 077 (remanente resultante) | Casillas 504 y 077 al catálogo; la cuadratura es `537 = 511 + 504` (antes se comparaba `520 − 528` contra 537) |
+| Débitos declarados mayores que facturas, sin explicación | Boletas (**111**) y recibos de medios electrónicos (**759**) también son débito | Casillas 110/111/758/759 al catálogo; `538 = 502 + 111 + 759 + 513 − 510` |
+| Tasa PPM leída como 125 % y PPM descuadrado | La tasa se imprime con tres decimales («0,125») y el lector por posiciones convertía «0.125» en 125 | La tasa se relee siempre desde el texto impreso; acepta cualquier cantidad de decimales |
+| Meses con IVA a pagar 0 marcados como inconsistentes | Con remanente, `538 − 537` es negativo y 089 es 0 por definición | La resta solo se exige cuando los débitos superan los créditos; si no, se verifica que 089 sea 0 |
+
+Además:
+
+- **RCV sin documentos no es un error.** El SII responde «No es posible realizar
+  esta consulta, no hay documentos o debe ser de forma diferida» en los meses
+  sin movimiento. En un período cerrado eso es un mes vacío (0 documentos, se
+  cachea); en el período en curso se devuelve `SII_RCV_DIFERIDO` en vez de
+  inventar un vacío. Antes cada mes sin movimiento contaba como falla.
+- **La grilla anual del F29 se sondea.** Se esperaban 4 s fijos tras
+  «Consultar»: si la tabla se pintaba después, la corrida «no encontraba»
+  períodos con declaración y el año quedaba vacío sin error visible.
+- **Sesión por año.** El SII corta la sesión al pasar de un año al siguiente
+  (y a veces a mitad de año). Antes el año completo se perdía con «sesión
+  expirada»; ahora cada año abre sesión propia y, si se cae a mitad, se reabre
+  y se reintenta una vez.
+- **Las cuadraturas se recalculan al conservar casillas.** Si una lectura nueva
+  no trae casillas se conservan las anteriores, pero indicadores y
+  verificaciones se recalculan con el catálogo vigente (antes quedaban con las
+  reglas viejas para siempre).
+- **El Formulario Compacto cuenta como declaración consultada.** La sección
+  «Estado de las declaraciones», el historial de cumplimiento y el detalle
+  mensual se armaban sólo con `declaraciones_sii`; el lector nuevo escribe en
+  `f29_formularios`, así que 18 de 20 empresas mostraban «F29 — No consultado»
+  junto a sus 12 meses ya conciliados (y la dimensión de cumplimiento quedaba
+  «no evaluable»). Ahora el compacto con casillas entra al historial como
+  `declarada` y el detalle mensual declara de dónde salió (`origen: compacto`).
+  Un período leído que el SII marca «No Declarante» queda `sin_informacion`: se
+  muestra como leído, pero no se cuenta como pendiente del contribuyente.
+
+### Diferencias de ventas explicadas
+
+Cuando la diferencia entre el F29 declarado y el RCV coincide con la base
+reconstruida desde las casillas 111 (boletas) o 759 (recibos de medios
+electrónicos), el informe lo dice: `diferencia_ventas_explicada_por`. En
+77.255.326-9 las dos diferencias de la corrida anterior quedaron explicadas:
+marzo 2026 → 2 boletas ($550.841 de IVA, ≈ $2.899.163 de base) y junio 2026 →
+1 boleta ($279.412 de IVA, ≈ $1.470.589 de base). No son documentos perdidos:
+son documentos propios que el RCV no trae en esa bandeja.
+
+**Ingesta de esos agregados (2026-10-23, súpercede la explicación).** El SII no
+entrega boletas (39) ni comprobantes de pago electrónico (48) documento a
+documento: `getDetalleVentaExport` con `codTipoDoc='0'` devuelve solo facturas.
+Al pedirlo filtrado por tipo (`codTipoDoc='39'/'48'`) responde UNA fila por mes
+(y por «Tipo Venta»), con la **cantidad** de documentos en la columna «Folio» y
+sin fecha de documento ni Rut cliente. La bandeja nueva guarda ese total en la
+tabla `rcv_agregados` (`guardarAgregados`, UPSERT por empresa+período+tipo+
+«Tipo Venta») y el informe lo suma a las ventas del mes (campo
+`ventas_agregados`; `documentos` NO cambia: un total mensual no es un
+documento). Con los dos meses de 77.255.326-9 ya ingeridos, 202603 quedó en
+dif −11 y 202606 en dif 0 (redondeo del SII, bajo el umbral de $1.000). Falta
+correr la reunión de antecedentes de las demás empresas para ingerir los ~61
+meses — **~$52,6M de IVA débito declarado en boletas/comprobantes que el
+informe aún contará como diferencia** hasta re-sincronizarlas: el paso «rcv» de
+la reunión ya lo hace automáticamente para los períodos que consulta.
+
+### Resultado de la corrida: 21 empresas activas
+
+Ventana 202510–202609. «F29» son los períodos con Formulario Compacto leído en
+la ventana; «RCV» los meses con algún documento; «Conc.» los meses que el
+informe pudo conciliar contra el F29 declarado (los demás son meses sin
+movimiento: el SII no tiene documentos, no es una falla); «Dif.» los meses con
+diferencia de ventas de al menos $1.000; «Verif.» las cuadraturas internas del
+compacto que pasan.
+
+| # | RUT | Empresa | F29 | RCV | Conc. | Dif. | Verif. |
+|---|---|---|---|---|---|---|---|
+| 1 | 76312274-3 | Comercializadora C&E Clima Ltda. | 12/12 | 12/12 | 12 | 2 | 60/60 |
+| 3 | 77255326-9 | Inversiones Santa Camila SpA | 12/12 | 12/12 | 12 | 2 | 58/58 |
+| 4 | 78198601-1 | Inversiones Santa Ignacia SpA | 12/12 | 12/12 | 12 | 0 | 39/39 |
+| 5 | 78478611-0 | Maestranza Santa Camila SpA | 2/12 | 2/12 | 2 | 1 | 4/4 |
+| 6 | 78181543-8 | Panadería San Juan SpA | 12/12 | 12/12 | 12 | 12 | 53/53 |
+| 7 | 77539337-8 | Laserpiente.13 SpA | 12/12 | 9/12 | 9 | 0 | 28/28 |
+| 8 | 77838371-3 | Rrealstateht SpA | 6/12 | 2/12 | 2 | 0 | 0/0 |
+| 9 | 77747139-2 | Inversiones Castell SpA | 12/12 | 12/12 | 12 | 9 | 57/57 |
+| 10 | 77810509-8 | Producciones Castell SpA | 12/12 | 11/12 | 11 | 0 | 53/53 |
+| 11 | 77721016-5 | Comercializador de Alimentos Ivana Rattalino E.I.R.L. | 12/12 | 12/12 | 12 | 12 | 58/58 |
+| 12 | 77338917-9 | Transportes Atacama Express Ltda. | 12/12 | 12/12 | 12 | 12 | 24/24 |
+| 13 | 78087844-4 | Trasporte de Carga por Carretera… Sepúlveda Ortiz E.I.R.L. | 12/12 | 12/12 | 12 | 0 | 60/60 |
+| 14 | 14322956-4 | Mariela Angelina Rodríguez Jofré | 12/12 | 9/12 | 9 | 0 | 20/20 |
+| 15 | 78174505-7 | D.A.V.A. Servicios SpA | 12/12 | 11/12 | 11 | 5 | 35/35 |
+| 16 | 77351074-1 | Oso de Agua SpA | 12/12 | 12/12 | 12 | 7 | 44/44 |
+| 17 | 76104079-0 | Sociedad Comercial Pao Food SpA | 12/12 | 12/12 | 12 | 0 | 60/60 |
+| 18 | 77854044-4 | Gas Lasm Organic SpA | 12/12 | 1/12 | 1 | 0 | 5/5 |
+| 19 | 77907448-K | All-Ford SpA | 10/12 | 12/12 | 10 | 4 | 33/33 |
+| 20 | 77468067-5 | Carbón Libros SpA | — | 0/12 | 0 | 0 | 0/0 |
+| 21 | 15806078-7 | Simey Diana Mena Arancibia | 7/12 | 10/12 | 7 | 6 | 12/12 |
+| 22 | 78206354-5 | Family Burger SpA | 12/12 | 11/12 | 11 | 9 | 35/35 |
+
+Total: **193 meses conciliables, 738/738 cuadraturas internas OK y 81 meses
+con diferencia de ventas** entre lo declarado y el RCV ingerido. Las 738
+verificaciones sin excepción confirman que el lector del compacto funciona
+igual en las 20 empresas con datos: remanentes, boletas, recibos y tasas con
+decimales quedan cubiertos por el catálogo nuevo.
+
+### Lo que quedó pendiente (y por qué)
+
+- **77.468.067-5 (Carbón Libros):** el SII rechaza la clave guardada
+  («Clave SII incorrecta»). No hay dato que sincronizar hasta corregirla en el
+  maestro de la empresa; el informe queda en «F29 no consultado», sin inventar
+  ceros.
+- **Rrealstateht:** la grilla del SII devuelve sólo 202510 para 2025 y marca
+  202601–202605 como «No Declarante» (folios sin casillas, por definición). Sus
+  únicos dos meses con documentos coinciden con los conciliables.
+- **Maestranza Santa Camila:** sólo se leyeron 202608 y 202609, y el RCV sólo
+  trae documentos de agosto; el resto de la ventana queda como mes sin
+  movimiento. Una relectura posterior devolvió la grilla vacía, así que con los
+  datos del SII no se puede afirmar más que eso.
+- **All-Ford:** la grilla no trae 202606 ni 202609 (no hay declaración), y
+  202605 y 202608 llegaron como «No Declarante».
+- **Simey Diana Mena:** faltan 202510–202511 en la grilla de 2025 y 202607–202609
+  en la de 2026; el resto concilia.
+
+### Nota operativa: la grilla anual se cae al cambiar de año
+
+En tres empresas la búsqueda del año anterior falló con «sesión perdida» aunque
+se reabriera la sesión, y la corrida dejaba ese año vacío. Consultar **sólo** el
+año pendiente (ventana de tres meses, `sincronizarFormularios` con
+`periodo=202512`, `periodos=3`) lo recupera de inmediato: fue lo que completó
+Panadería San Juan (202510–202512) en esta corrida. Cuando el año pendiente no
+aparece ni con sesión propia, la grilla simplemente no tiene declaraciones.

@@ -1046,6 +1046,72 @@ function migracionesF29Formularios(db) {
 }
 
 // ============================================================
+// Deuda fiscal TGR: una foto por consulta (certificado de deuda).
+// Se conserva el historial completo como evidencia: cada fila es un
+// certificado oficial firmado, no un valor mutable del contribuyente.
+// ============================================================
+function migracionesDeudaTgr(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS deuda_tgr (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      rut TEXT NOT NULL,
+      estado TEXT NOT NULL,
+      total INTEGER,
+      moneda TEXT NOT NULL DEFAULT 'CLP',
+      liquidada_al TEXT,
+      fecha_emision TEXT,
+      codigo_verificacion TEXT,
+      nombre TEXT,
+      pdf_ruta TEXT,
+      texto TEXT,
+      datos_json TEXT NOT NULL DEFAULT '{}',
+      consultado_por INTEGER REFERENCES users(id),
+      consultado_en TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_deuda_tgr_empresa
+      ON deuda_tgr(empresa_id, consultado_en DESC);
+  `)
+}
+
+// ============================================================
+// Agregados mensuales del RCV que el SII NO entrega documento a documento
+// (2026-10-23). Boletas (39, 41) y comprobantes de pago electrónico (48) del
+// RCV de ventas vienen SOLO como una fila agregada por mes al pedir el
+// export filtrado por tipo (getDetalleVentaExport con codTipoDoc=39/48): una
+// fila con la CANTIDAD en la columna "Folio", sin fecha de documento ni
+// Rut cliente. No son documentos: son el total del mes。 Meterlos en
+// `documentos` los haría aparecer en la bandeja y generar asientos con
+// folios reales iguales a la cantidad. Esta tabla guarda ese total por
+// empresa+período+tipo+"Tipo Venta" (puede haber varias si el SII separa
+// "Del Giro" de otras), para que el informe de salud sume las ventas reales.
+// ============================================================
+function migracionesRcvAgregados(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rcv_agregados (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+      rut TEXT NOT NULL,
+      periodo TEXT NOT NULL,
+      tipo_flujo TEXT NOT NULL DEFAULT 'venta',
+      tipo_doc INTEGER NOT NULL,
+      tipo_venta TEXT,
+      cantidad INTEGER,
+      monto_exento INTEGER NOT NULL DEFAULT 0,
+      monto_neto INTEGER NOT NULL DEFAULT 0,
+      monto_iva INTEGER NOT NULL DEFAULT 0,
+      monto_total INTEGER NOT NULL DEFAULT 0,
+      origen TEXT NOT NULL DEFAULT 'sii_agregado',
+      fila_json TEXT NOT NULL DEFAULT '{}',
+      consultado_en TEXT DEFAULT (datetime('now')),
+      UNIQUE(empresa_id, periodo, tipo_flujo, tipo_doc, tipo_venta)
+    );
+    CREATE INDEX IF NOT EXISTS idx_rcv_agregados_empresa_periodo
+      ON rcv_agregados(empresa_id, periodo);
+  `)
+}
+
+// ============================================================
 // CRM (Fase B): pipeline de clientes, recordatorios y campañas.
 // ============================================================
 function migracionesCrm(db) {
@@ -1063,4 +1129,4 @@ function migracionesCrmComercial(db) {
   require('./crm-comercial').migracionesCrmComercial(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesF29Formularios, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesF29Formularios, migracionesDeudaTgr, migracionesRcvAgregados, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }

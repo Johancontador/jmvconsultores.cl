@@ -367,6 +367,79 @@ function parsearFormularioF29(buffer) {
   return { casillas, lineas: lineasTexto, texto: lineasTexto.join('\n'), filas: lineas, columnas_codigo: columnasCodigo }
 }
 
+/** Valor de una casilla leído de texto plano, respetando su tipo. */
+function valorDeTexto(txt, tipo) {
+  const t = String(txt == null ? '' : txt).trim().replace(/\s/g, '')
+  if (!t) return null
+  // La tasa PPM se imprime «0.1» / «0,1»: es un porcentaje, no miles.
+  // La tasa se imprime con los decimales que tenga: «0.1», «0,125», «1,5».
+  if (tipo === 'porcentaje' && /^-?\d+[.,]\d+$/.test(t)) return Number(t.replace(',', '.'))
+  return numeroChileno(t)
+}
+
+/**
+ * Respaldo cuando el parser por POSICIONES no reconoce el PDF: se usa el texto
+ * plano (pdf-parse) y se arman las casillas línea a línea.
+ *
+ * El Formulario Compacto imprime cada casilla como código + glosa + valor
+ * PEGADOS, sin espacios:
+ *
+ *   563BASE IMPONIBLE16.840.242
+ *   115TASA PPM 1ra. CATEGORÍA0.1
+ *   931Monto Interés932Monto Multa60Condonación   ← varias en una línea
+ *
+ * Por eso se aceptan solo códigos del catálogo del SII (CASILLAS_F29) y se
+ * exige que el resto de la línea termine en un número: lo que no calza se
+ * descarta. Nada se inventa.
+ *
+ * Los valores monetarios no se pueden confundir con el código cuando van
+ * pegados: la línea «TOTAL A PAGAR DENTRO DEL PLAZO LEGAL911.769.027» se
+ * contrasta con la casilla 547 (TOTAL DETERMINADO), que la propia declaración
+ * imprime unos renglones antes.
+ */
+function casillasDeTexto(texto) {
+  const casillas = []
+  const porClave = new Map()
+  const agregar = (codigo, glosa, valorTexto, tipo) => {
+    const def = CASILLAS_F29[codigo]
+    const valor = valorDeTexto(valorTexto, tipo)
+    if (valor == null) return
+    if (!porClave.has(def.clave)) porClave.set(def.clave, valor)
+    casillas.push({ codigo, glosa: (glosa || def.glosa).trim(), valor_texto: String(valorTexto).trim(), valor })
+  }
+
+  for (const cruda of String(texto || '').split('\n')) {
+    const linea = cruda.replace(/\s+/g, ' ').trim()
+    if (!linea) continue
+
+    // Casilla 91: el SII imprime «TOTAL A PAGAR DENTRO DEL PLAZO LEGAL» + «91»
+    // + monto sin separador. Se prueba con y sin el código y se elige el que
+    // cuadra con la casilla 547 ya leída.
+    if (/^TOTAL A PAGAR DENTRO DEL PLAZO LEGAL/.test(linea)) {
+      const m91 = linea.match(/^TOTAL A PAGAR DENTRO DEL PLAZO LEGAL\s*(\d{2})?([\d.,]+)/)
+      if (m91 && m91[2]) {
+        const conCodigo = m91[1] ? valorDeTexto(m91[1] + m91[2], 'monto') : null
+        const sinCodigo = valorDeTexto(m91[2], 'monto')
+        const totalDet = porClave.get('total_determinado')
+        const elegido = totalDet != null && conCodigo === totalDet ? conCodigo : sinCodigo
+        agregar('091', 'TOTAL A PAGAR DENTRO DEL PLAZO LEGAL', String(elegido), 'monto')
+      }
+      continue
+    }
+
+    const m = linea.match(/^(\d{2,4})(.*)$/)
+    if (!m) continue
+    const codigo = String(m[1]).padStart(3, '0')
+    const def = CASILLAS_F29[codigo]
+    if (!def || def.tipo === 'texto' || def.tipo === 'fecha') continue
+    // glosa = todo hasta la última letra; valor = los dígitos/separadores finales.
+    const mv = m[2].match(/^(.*[A-Za-zÁÉÍÓÚÑáéíóúñ])\s*(-?\d[\d.,]*)$/)
+    if (!mv) continue
+    agregar(codigo, mv[1], mv[2], def.tipo)
+  }
+  return casillas
+}
+
 // ---------------------------------------------------------------------------
 // Semántica: cada indicador dice de qué casilla del SII sale
 // ---------------------------------------------------------------------------
@@ -381,6 +454,20 @@ const CASILLAS_F29 = {
   502: { clave: 'debitos_facturas', glosa: 'DÉBITOS FACTURAS EMITIDAS', tipo: 'monto' },
   509: { clave: 'notas_credito_emitidas', glosa: 'CANT. DCTOS. NOTAS DE CRÉDITOS EMITIDAS', tipo: 'cantidad' },
   510: { clave: 'debitos_notas_credito', glosa: 'DÉBITOS NOTAS DE CRÉDITOS EMITIDAS', tipo: 'monto' },
+  512: { clave: 'notas_debito_emitidas', glosa: 'CANT. DE DCTOS. NOTAS DE DÉBITO EMIT.', tipo: 'cantidad' },
+  513: { clave: 'debitos_notas_debito', glosa: 'NOTAS DE DÉBITOS EMITIDAS', tipo: 'monto' },
+  // Boletas y recibos de medios electrónicos: también son débito y entran en 538.
+  110: { clave: 'boletas_emitidas', glosa: 'CANT. DE DCTOS. BOLETAS', tipo: 'cantidad' },
+  111: { clave: 'debitos_boletas', glosa: 'DÉBITOS / BOLETAS', tipo: 'monto' },
+  758: { clave: 'recibos_medios_electronicos', glosa: 'CANT. RECIBO DE PAGO MEDIOS ELECTRÓNICOS', tipo: 'cantidad' },
+  759: { clave: 'debitos_recibos_medios', glosa: 'DÉB. RECIBO DE PAGO MEDIOS ELECTRÓNICOS', tipo: 'monto' },
+  // Remanente de crédito fiscal: sin la 504, «total créditos» nunca cuadra
+  // cuando la empresa arrastra remanente del mes anterior.
+  504: { clave: 'remanente_credito_anterior', glosa: 'REMANENTE CRÉDITO MES ANTERIOR', tipo: 'monto' },
+  544: { clave: 'recuperacion_diesel', glosa: 'RECUP. IMP. ESP. DIESEL (Art. 2)', tipo: 'monto' },
+  // IVA postergado: explica que 089 sea 0 aunque los débitos superen los créditos.
+  755: { clave: 'iva_postergado', glosa: 'Postergacion pago IVA', tipo: 'monto' },
+  '077': { clave: 'remanente_credito_fiscal', glosa: 'REMANENTE DE CRÉDITO FISC.', tipo: 'monto' },
   538: { clave: 'total_debitos', glosa: 'TOTAL DÉBITOS', tipo: 'monto' },
   511: { clave: 'creditos_iva_electronicos', glosa: 'CRÉD. IVA POR DCTOS. ELECTRÓNICOS', tipo: 'monto' },
   537: { clave: 'total_creditos', glosa: 'TOTAL CRÉDITOS', tipo: 'monto' },
@@ -429,6 +516,14 @@ function indicadores(casillas) {
     if (!porClave.has(def.clave)) porClave.set(def.clave, { ...def, codigo: c.codigo, valor: c.valor, valor_texto: c.valor_texto })
   }
 
+  // El valor numérico de la tasa PPM no se puede tomar del lector por
+  // posiciones: «0.125» se convierte en 125. Se rehace desde el texto impreso.
+  for (const c of porClave.values()) {
+    if (c.tipo !== 'porcentaje' || c.valor_texto == null) continue
+    const n = valorDeTexto(c.valor_texto, 'porcentaje')
+    if (n != null) c.valor = n
+  }
+
   const salida = { casillas: [...porClave.values()], indicadores: {}, verificaciones: [] }
   const v = (clave) => {
     const c = porClave.get(clave)
@@ -455,6 +550,16 @@ function indicadores(casillas) {
     notas_credito_emitidas: v('notas_credito_emitidas'),
     debitos_facturas: v('debitos_facturas'),
     debitos_notas_credito: v('debitos_notas_credito'),
+    notas_debito_emitidas: v('notas_debito_emitidas'),
+    debitos_notas_debito: v('debitos_notas_debito'),
+    boletas_emitidas: v('boletas_emitidas'),
+    debitos_boletas: v('debitos_boletas'),
+    recibos_medios_electronicos: v('recibos_medios_electronicos'),
+    debitos_recibos_medios: v('debitos_recibos_medios'),
+    remanente_credito_anterior: v('remanente_credito_anterior'),
+    remanente_credito_fiscal: v('remanente_credito_fiscal'),
+    recuperacion_diesel: v('recuperacion_diesel'),
+    iva_postergado: v('iva_postergado'),
     documentos_recibidos: v('documentos_recibidos'),
     monto_recibido: v('monto_recibido'),
     nc_recibidas: v('nc_recibidas'),
@@ -467,19 +572,58 @@ function indicadores(casillas) {
 
   const d502 = v('debitos_facturas')
   const d510 = v('debitos_notas_credito')
-  if (d502 != null && d510 != null && totalDebitos != null) {
-    verif('DEBITOS_NETOS', Math.abs((d502 - d510) - totalDebitos) <= 1000,
-      `502 (${d502}) − 510 (${d510}) = ${d502 - d510} vs 538 total débitos (${totalDebitos}).`)
+  // Todos los sumandos del débito: notas de débito (513), boletas (111) y
+  // recibos de medios electrónicos (759). Omitir cualquiera hacía fallar la
+  // cuadratura contra 538 por exactamente el monto de esa casilla.
+  const d513 = v('debitos_notas_debito') || 0
+  const d111 = v('debitos_boletas') || 0
+  const d759 = v('debitos_recibos_medios') || 0
+  if (d502 != null && totalDebitos != null) {
+    const neto = d502 + d111 + d759 + d513 - (d510 || 0)
+    const suma = [
+      `502 (${d502})`,
+      d111 ? ` + 111 (${d111})` : '',
+      d759 ? ` + 759 (${d759})` : '',
+      d513 ? ` + 513 (${d513})` : '',
+      ` − 510 (${d510 || 0})`,
+    ].join('')
+    verif('DEBITOS_NETOS', Math.abs(neto - totalDebitos) <= 1000,
+      `${suma} = ${neto} vs 538 total débitos (${totalDebitos}).`)
   }
   if (totalDebitos != null && totalCreditos != null && ivaDet != null) {
-    verif('IVA_DETERMINADO', Math.abs((totalDebitos - totalCreditos) - ivaDet) <= 1000,
-      `538 (${totalDebitos}) − 537 (${totalCreditos}) = ${totalDebitos - totalCreditos} vs 089 IVA determinado (${ivaDet}).`)
+    // Con remanente de crédito, 089 es 0 y la diferencia pasa al remanente;
+    // con postergación del IVA (755) o anticipos (556/543) 089 también es 0 sin
+    // que las casillas impresas permitan reconstruirlo. En esos casos la
+    // cuadratura NO es concluyente y no se emite (no se inventa un hallazgo).
+    if (ivaDet > 0) {
+      if (totalDebitos >= totalCreditos) {
+        verif('IVA_DETERMINADO', Math.abs((totalDebitos - totalCreditos) - ivaDet) <= 1000,
+          `538 (${totalDebitos}) − 537 (${totalCreditos}) = ${totalDebitos - totalCreditos} vs 089 IVA determinado (${ivaDet}).`)
+      }
+    } else if (totalDebitos < totalCreditos) {
+      verif('IVA_DETERMINADO', true,
+        `537 créditos (${totalCreditos}) > 538 débitos (${totalDebitos}): no hay IVA a pagar, 089 = ${ivaDet}.`)
+    }
   }
+  const c511 = v('creditos_iva_electronicos')
   const c520 = v('monto_recibido')
   const c528 = v('monto_nc_recibidas')
-  if (c520 != null && c528 != null && totalCreditos != null) {
-    verif('CREDITOS_NETOS', Math.abs((c520 - c528) - totalCreditos) <= 1000,
-      `520 (${c520}) − 528 (${c528}) = ${c520 - c528} vs 537 total créditos (${totalCreditos}).`)
+  const c504 = v('remanente_credito_anterior') || 0
+  if (c511 != null && c520 != null) {
+    // No se exige 511 = 520 − 528: hay empresas con otros créditos electrónicos
+    // (importaciones, servicios) que el formulario suma en 511 sin imprimirlos
+    // como casilla propia. Compararlo como cuadratura daba falsos hallazgos.
+    const c544 = v('recuperacion_diesel') || 0
+    if (totalCreditos != null) {
+      const suma = c511 + c504 + c544
+      // Si la suma impresa es MENOR que 537 hay casillas de crédito que el
+      // compacto no imprime (o no catalogamos): no es una inconsistencia, es
+      // una cuadratura no concluyente. Solo se emite cuando cierra o excede.
+      if (suma >= totalCreditos) {
+        verif('TOTAL_CREDITOS', Math.abs(suma - totalCreditos) <= 1000,
+          `511 (${c511})${c504 ? ` + 504 remanente (${c504})` : ''}${c544 ? ` + 544 diesel (${c544})` : ''} = ${suma} vs 537 total créditos (${totalCreditos}).`)
+      }
+    }
   }
   if (base != null && tasa != null && ppm != null) {
     const esperado = Math.round((base * tasa) / 100)
@@ -498,6 +642,7 @@ function indicadores(casillas) {
 
 module.exports = {
   parsearFormularioF29,
+  casillasDeTexto,
   indicadores,
   CASILLAS_F29,
   // helpers puros (tests)

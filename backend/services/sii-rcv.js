@@ -137,13 +137,19 @@ async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null
   const metodo = METODOS[tipo]
   const operacion = OPERACIONES[tipo]
   if (!metodo) throw new Error(`Tipo RCV inválido: ${tipo}`)
+  // codTipoDoc puede venir forzado en `pagina.codTipoDoc`: el SII solo entrega
+  // boletas (39) y comprobantes de pago electrónico (48) del RCV de ventas
+  // cuando el export se pide FILTRADO por ese tipo — con '0' (todos) las
+  //omite y devuelve solo facturas.
+  const codTipoDoc = pagina && pagina.codTipoDoc ? String(pagina.codTipoDoc) : '0'
+  const filasPagina = pagina && pagina.pageNro ? { pageNro: pagina.pageNro, totalPages: pagina.totalPages } : null
 
   const body = {
     metaData: {
       namespace: `cl.sii.sdi.lob.diii.consdcv.data.api.interfaces.FacadeService/${metodo}`,
       conversationId: token,
       transactionId: crypto.randomUUID(),
-      page: pagina,
+      page: filasPagina,
     },
     data: {
       rutEmisor: cuerpo,
@@ -151,8 +157,8 @@ async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null
       ptributario: periodo,
       operacion,
       estadoContab: 'REGISTRO',
-      codTipoDoc: '0',
-      busquedaInicial: pagina === null,
+      codTipoDoc,
+      busquedaInicial: filasPagina === null,
     },
   }
 
@@ -190,6 +196,17 @@ async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null
     console.log(`[SII] ${metodo} respEstado no-ok: ${JSON.stringify(json.respEstado)}`)
     if (String(msg).toLowerCase().includes('autentic')) {
       throw new Error('Sesión SII expirada')
+    }
+    // «No hay documentos» es un período sin movimiento, no una falla: así
+    // responde el SII en los meses sin documentos. En el período en curso el
+    // mismo texto puede significar «consulta diferida»: ahí no se inventa un
+    // vacío, se devuelve el código para que quien consulta lo muestre.
+    if (/no hay documentos/i.test(String(msg))) {
+      if (periodoCerrado(periodo)) {
+        console.log(`[SII] ${metodo} (${periodo}) → sin documentos (período cerrado)`)
+        return { data: [], metaData: {} }
+      }
+      throw new Error('SII_RCV_DIFERIDO: el SII exige consulta diferida del período en curso')
     }
     throw new Error(msg || 'Error al consultar RCV en SII')
   }
@@ -318,6 +335,58 @@ async function consultarResumen(rut, clave, periodo, tipo, reintento = false) {
   }
 }
 
+/**
+ * Agregados mensuales del RCV de ventas que el SII NO trae documento a
+ * documento: boletas (39) y comprobantes de pago electrónico (48). Al pedir
+ * getDetalleVentaExport con codTipoDoc=39/48 el SII responde UNA fila por
+ * tipo (o varias si separa por "Tipo Venta"), con:
+ *   - la CANTIDAD de documentos en la columna "Folio"
+ *   - sin "Fecha Docto" ni "Rut cliente" (vacios o "-")
+ *   - netos/IVA del total del mes
+ * Devuelve una fila por tipo_doc + tipo_venta, marcada origen 'sii_agregado'
+ * para distinguirla de un documento real. Evidence cruda en fila_raw.
+ */
+async function consultarAgregadosVenta(rut, clave, periodo, reintento = false) {
+  const resultados = []
+  for (const codTipoDoc of ['39', '48']) {
+    await esperarRateLimit()
+    try {
+      const agregados = await (async () => {
+        const { jar, token } = await obtenerSesion(rut, clave)
+        const json = await consultarDetalleRCV(jar, token, rut, 'ventas', periodo, { codTipoDoc })
+        // El export filtrado por tipo NO trae columna "Tipo Doc" (ya viene
+        // filtrado) y la fila agregada pone la CANTIDAD en "Folio". La fecha
+        // de recepción viene con hora ("30/03/2026 08:45:41"); nos quedamos
+        // con el día para fecha_agregado.
+        const filas = parsearFilasCSV(json.data)
+        return filas
+          .map((fila) => ({
+            tipoDoc: Number(codTipoDoc),
+            folio: `AG-${periodo}-${codTipoDoc}`,
+            tipoVenta: fila['Tipo Venta'] || null,
+            cantidad: parseMonto(fila['Folio']),
+            montoExento: parseMonto(fila['Monto Exento']),
+            montoNeto: parseMonto(fila['Monto Neto']),
+            montoIVA: parseMonto(fila['Monto IVA']),
+            montoTotal: parseMonto(fila['Monto total']),
+            fechaRecepcion: (fila['Fecha Recepcion'] || fila['Fecha Recepción'] || '').split(' ')[0],
+            filaRaw: fila,
+          }))
+      })()
+      resultados.push(...agregados)
+    } catch (err) {
+      if (!reintento && (err.message.includes('Sesión') || err.message.includes('expirada'))) {
+        invalidarSesion(rut)
+        return consultarAgregadosVenta(rut, clave, periodo, true)
+      }
+      if (err.message.includes('Clave SII')) throw err
+      if (err.name === 'TimeoutError') throw new Error('Timeout — reintentar')
+      throw err
+    }
+  }
+  return resultados
+}
+
 async function probarConexion(rut, clave) {
   const pasos = []
   try {
@@ -362,4 +431,4 @@ async function probarConexion(rut, clave) {
   }
 }
 
-module.exports = { consultarRCV, consultarResumen, probarConexion }
+module.exports = { consultarRCV, consultarResumen, consultarAgregadosVenta, parsearFilasCSV, probarConexion }

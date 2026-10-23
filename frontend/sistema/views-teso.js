@@ -19,6 +19,13 @@ VIEWS.tesoreria = {
       return
     }
 
+    // Deuda FISCAL (TGR): se pide aparte y su fallo no tumba la pantalla. Es
+    // una obligación con el Fisco, distinta de la deuda comercial del sistema.
+    let deuda = null
+    try {
+      deuda = (await apiGet(`/api/contable/empresas/${eid}/tesoreria/deuda-fiscal`)).deuda
+    } catch { deuda = null }
+
     const puedeOperar = tiene('tesoreria:operar')
     const puedeConciliar = tiene('bancos:conciliar')
 
@@ -37,7 +44,7 @@ VIEWS.tesoreria = {
     }))
 
     const body = document.getElementById('teso-body')
-    if (tab === 'bancos') await renderBancos(body, { eid, resumen, puedeOperar })
+    if (tab === 'bancos') await renderBancos(body, { eid, resumen, puedeOperar, deuda })
     else if (tab === 'movimientos') await renderMovimientos(body, { eid, resumen, puedeOperar })
     else await renderConciliacion(body, { eid, puedeConciliar })
   },
@@ -45,7 +52,7 @@ VIEWS.tesoreria = {
 
 /* ============================ BANCOS ============================ */
 
-async function renderBancos(cont, { eid, resumen, puedeOperar }) {
+async function renderBancos(cont, { eid, resumen, puedeOperar, deuda = null }) {
   let bancos = []
   let cuentas = []
   try {
@@ -85,6 +92,34 @@ async function renderBancos(cont, { eid, resumen, puedeOperar }) {
      </div>` : '<div class="empty">Sin cuentas bancarias registradas.</div>'}
    </div>
 
+   <div class="card mt">
+     <h3>Deuda fiscal (TGR) <span class="chip ${deuda?.estado === 'sin_deuda' ? 'contabilizado' : deuda?.estado === 'con_deuda' ? 'error' : 'neutral'}">${esc(deuda?.etiqueta || 'No consultada')}</span></h3>
+     <p class="muted" style="margin-top:-4px">${esc(deuda?.detalle || 'Sin consulta registrada en la Tesorería General de la República.')}</p>
+     <div class="tbl-wrap"><table class="tbl"><tbody>
+       <tr><th>Monto certificado</th><td class="num mono">${deuda?.total != null ? fmt(deuda.total) : '—'}</td></tr>
+       <tr><th>Fecha de emisión</th><td class="mono">${esc(deuda?.fecha_emision || '—')}</td></tr>
+       <tr><th>Liquidada al</th><td class="mono">${esc(deuda?.liquidada_al || '—')}</td></tr>
+       <tr><th>Código de verificación</th><td class="mono">${esc(deuda?.codigo_verificacion || '—')}</td></tr>
+       <tr><th>Última consulta</th><td class="mono">${esc(deuda?.consultado_en || '—')}</td></tr>
+     </tbody></table></div>
+     ${(deuda?.documentos || []).length ? `
+     <h4 class="mt">Detalle por documento (según el certificado)</h4>
+     <div class="tbl-wrap"><table class="tbl">
+       <thead><tr><th>Documento</th><th>Período</th><th class="num">Monto</th><th>Glosa</th></tr></thead>
+       <tbody>${deuda.documentos.map((d) => `<tr>
+         <td>${esc(d.documento || '—')}</td>
+         <td class="mono">${esc(d.periodo || '—')}</td>
+         <td class="num mono">${d.monto != null ? fmt(d.monto) : '—'}</td>
+         <td class="sub">${esc(d.glosa || '—')}</td>
+       </tr>`).join('')}</tbody>
+     </table></div>` : ''}
+     <div class="frm-row mt">
+       ${deuda?.pdf ? '<button class="btn btn-secondary" id="teso-deuda-pdf">Ver certificado (PDF)</button>' : ''}
+       ${puedeOperar ? '<button class="btn btn-primary" id="teso-deuda-consultar">Consultar deuda fiscal</button>' : ''}
+     </div>
+     <p class="hint">${esc(deuda?.nota || 'La deuda del Fisco (TGR) es distinta de las cuentas por pagar comerciales. El certificado es una foto a su fecha de emisión y no incluye acuerdos de pago vigentes.')}</p>
+   </div>
+
     ${puedeOperar ? `
    <div class="card mt">
      <h3>Nueva cuenta bancaria</h3>
@@ -99,6 +134,27 @@ async function renderBancos(cont, { eid, resumen, puedeOperar }) {
        <button class="btn btn-primary" id="b-crear">Crear</button>
      </div>
    </div>` : ''}`
+
+  document.getElementById('teso-deuda-pdf')?.addEventListener('click', () => {
+    const w = window.open(`/api/contable/empresas/${eid}/tesoreria/deuda-fiscal/certificado`, '_blank')
+    if (!w) showToast('El navegador bloqueó la ventana emergente: abre el certificado desde el enlace.', 'error')
+  })
+
+  document.getElementById('teso-deuda-consultar')?.addEventListener('click', async (ev) => {
+    const b = ev.currentTarget
+    b.disabled = true
+    const texto = b.textContent
+    b.textContent = 'Consultando la TGR…'
+    try {
+      await apiPost(`/api/contable/empresas/${eid}/tesoreria/deuda-fiscal/consultar`, {})
+      showToast('Certificado de deuda consultado en la TGR.', 'success')
+      renderRoute()
+    } catch (err) {
+      showToast(err.message, 'error')
+      b.disabled = false
+      b.textContent = texto
+    }
+  })
 
   const btn = document.getElementById('b-crear')
   if (btn) btn.addEventListener('click', async () => {

@@ -294,4 +294,62 @@ router.post('/empresas/:empresaId/tesoreria/conciliar', requirePermiso('bancos:c
   }
 })
 
+// ---------- Deuda FISCAL (TGR) ----------
+// La deuda con el Fisco no es deuda comercial: la emite la Tesorería General
+// de la República y se acredita con su certificado. Se consulta con la MISMA
+// Clave Tributaria del SII que ya está en la bóveda.
+
+const deudaTgr = require('../core/deuda-tgr')
+const path = require('path')
+const fs = require('fs')
+
+router.get('/empresas/:empresaId/tesoreria/deuda-fiscal', requirePermiso('tesoreria:ver'), (req, res) => {
+  try {
+    res.json({ ok: true, deuda: deudaTgr.resumen(db, req.empresaId), ultima: deudaTgr.ultima(db, req.empresaId) })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+router.post('/empresas/:empresaId/tesoreria/deuda-fiscal/consultar', requirePermiso('tesoreria:operar'), async (req, res) => {
+  try {
+    const r = await deudaTgr.consultar(db, {
+      empresaId: req.empresaId, usuarioId: req.user.id, ip: ip(req),
+    })
+    // El resumen del menú (KPI/pill) cachea 60 s el informe: la deuda recién
+    // consultada tiene que verse de inmediato, no en la próxima navegación.
+    try { require('../core/salud-tributaria').olvidarResumen(req.empresaId) } catch { /* sin salud, no aplica */ }
+    res.json({ ok: true, deuda: deudaTgr.resumen(db, req.empresaId), registro: r })
+  } catch (err) {
+    // 424 = falta el navegador headless en el servidor; 422 = la TGR rechazó
+    // la Clave Tributaria; 502 = el portal falló o cambió.
+    const code = err.codigo === 'TGR_SIN_NAVEGADOR' ? 424
+      : err.codigo === 'TGR_SESION_INVALIDA' ? 422
+        : err.codigo === 'TGR_PORTAL_CAMBIADO' ? 502
+          : err.codigo ? 502 : 400
+    res.status(code).json({ ok: false, codigo: err.codigo || null, error: err.message })
+  }
+})
+
+// Certificado oficial tal como lo entregó la TGR (evidencia descargable).
+router.get('/empresas/:empresaId/tesoreria/deuda-fiscal/certificado', requirePermiso('tesoreria:ver'), (req, res) => {
+  try {
+    const u = deudaTgr.ultima(db, req.empresaId)
+    if (!u || !u.pdf_ruta) return res.status(404).json({ ok: false, error: 'No hay certificado descargado para esta empresa' })
+    const base = path.resolve(process.cwd(), 'data', 'certificados-tgr')
+    const archivo = path.resolve(process.cwd(), u.pdf_ruta)
+    // El archivo debe estar DENTRO del directorio de certificados: nunca se
+    // sirve una ruta arbitraria de la base.
+    if (!archivo.startsWith(base + path.sep)) {
+      return res.status(400).json({ ok: false, error: 'Ruta de certificado inválida' })
+    }
+    if (!fs.existsSync(archivo)) return res.status(404).json({ ok: false, error: 'El archivo del certificado ya no existe en disco' })
+    res.set('Content-Type', 'application/pdf')
+    res.set('Content-Disposition', `inline; filename="certificado-deuda-${String(u.fecha_emision || 'tgr')}.pdf"`)
+    res.send(fs.readFileSync(archivo))
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 module.exports = router

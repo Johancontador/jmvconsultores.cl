@@ -115,7 +115,7 @@ async function fetchConCookies(url, options, jar, _hop = 0) {
   return res
 }
 
-async function loginSII(rut, clave) {
+async function loginSII(rut, clave, _reintento = false) {
   const { cuerpo, dv, completo } = parseRut(rut)
   const jar = new CookieJar()
 
@@ -166,7 +166,9 @@ async function loginSII(rut, clave) {
   // misma clave mala (2 logins por empresa y corrida, con riesgo de bloqueo).
   const urlFinal = res.url || ''
   const volvioAlLogin = /IngresoRutClave/i.test(urlFinal) || /location\.replace\([^)]*IngresoRutClave/i.test(texto)
-  const mensajeRechazo = /clave incorrecta|clave tributaria ingresada no es correcta|no existe/i.test(texto)
+  // «no existe» se sacó de esta lista: aparece en páginas genéricas del SII y
+  // hacía pasar por «clave mala» un fallo intermitente del login.
+  const mensajeRechazo = /clave incorrecta|clave tributaria ingresada no es correcta/i.test(texto)
   // Tope de sesiones simultáneas del SII (código 01.01.2xx.500.720.27): NO es
   // una clave mala. Se confunde con ella porque también responde 200 sin
   // cookies de sesión. Sin este mensaje, el usuario cambiaba la clave en vano
@@ -187,6 +189,17 @@ async function loginSII(rut, clave) {
   }
 
   if (volvioAlLogin || mensajeRechazo || cookiesSesion.length === 0) {
+    // El SII falla de forma intermitente: con la MISMA clave válida a veces
+    // responde 200 con la página de login y solo la cookie del balanceador
+    // (observado 2026-10-22 en tres consultas seguidas; el intento inmediato
+    // siguiente sí abrió sesión). Se reintenta UNA vez antes de culpar a la
+    // credencial; NUNCA cuando el SII dijo explícitamente que la clave es
+    // incorrecta (evita sumar intentos fallidos y bloquear la cuenta).
+    if (!_reintento && !mensajeRechazo && !topeSesiones) {
+      console.log('[SII] login sin cookies de sesión: reintentando una vez')
+      await new Promise((r) => setTimeout(r, 1500))
+      return loginSII(rut, clave, true)
+    }
     console.log(
       `[SII] login rechazado: sin cookies de sesión (${volvioAlLogin ? 'redirigió al formulario' : mensajeRechazo ? 'mensaje de clave inválida' : 'solo cookies de balanceador'})`
     )

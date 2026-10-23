@@ -36,9 +36,12 @@
  */
 
 const fs = require('fs')
+const path = require('path')
 const { loginSII, fetchConCookies } = require('../services/sii-session')
 const { claveSiiDescifrada } = require('./empresas')
 const f29Formulario = require('./f29-formulario')
+const djSii = require('./dj-sii')
+const rentaSii = require('./renta-sii')
 
 const PORTAL = (form) => `https://www4.sii.cl/sifmConsultaInternet/index.html?dest=cifxx&form=${form}`
 const BHE_EMITIDAS = 'https://loa.sii.cl/cgi_IMT/TMBCOC_InformeAnualBhe.cgi'
@@ -270,17 +273,27 @@ async function leerMatrizF29(page) {
 async function abrirBuscador(page) {
   await page.goto(PORTAL(29), { waitUntil: 'networkidle2', timeout: 90000 })
   await esperarPortal(page)
-  await dormir(1200)
-  const b = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('button')].find((x) => /buscar formulario/i.test(x.innerText || ''))
+
+  // El encabezado («Cerrar Sesión») pinta antes que el cuerpo GWT. Antes se
+  // esperaban 1,2 s fijos y el botón «Buscar Formulario» todavía no existía:
+  // la sincronización fallaba entera con «No se encontró el botón» aunque el
+  // portal estuviera bien. Ahora se sondea hasta 25 s.
+  const buscarBoton = () => page.evaluate(() => {
+    const el = [...document.querySelectorAll('button, a.gwt-Anchor, [role=button]')]
+      .find((x) => /buscar formulario/i.test((x.innerText || x.textContent || '').trim()))
     if (!el) return null
     el.scrollIntoView({ block: 'center' })
     const r = el.getBoundingClientRect()
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
   })
+  let b = null
+  for (let i = 0; i < 25 && !b; i++) {
+    b = await buscarBoton()
+    if (!b) await dormir(1000)
+  }
   if (!b) throw new Error('No se encontró el botón «Buscar Formulario» en la Consulta Integral')
   await page.mouse.click(b.x, b.y)
-  await dormir(1500)
+  await dormir(2000)
 }
 
 /**
@@ -321,16 +334,18 @@ async function buscarF29Anio(page, anio) {
   })
   if (!boton) return []
   await page.mouse.click(boton.x, boton.y)
-  await dormir(4000)
 
-  return page.evaluate(() => {
-    const filas = []
+  // La grilla del SII se pinta después del click y a veces tarda más de los 4 s
+  // que se esperaban fijos: se leía una tabla vacía y la corrida «no encontraba»
+  // períodos con declaración, en silencio. Se sondea hasta tener los 12 meses.
+  const leerFilas = () => page.evaluate(() => {
+    const salida = []
     for (const tr of document.querySelectorAll('tr')) {
       const c = [...tr.querySelectorAll('td')].map((td) => (td.innerText || '').trim())
       if (c.length < 6) continue
       // Periodo (YYYY-MM) · Folio · Contribuyente · Fecha · Estado · Monto · Ver
       if (!/^\d{4}-\d{2}$/.test(c[0])) continue
-      filas.push({
+      salida.push({
         periodo: c[0].replace('-', ''),
         folio: c[1] || null,
         fecha: c[3] || null,
@@ -338,8 +353,26 @@ async function buscarF29Anio(page, anio) {
         monto: c[5] || null,
       })
     }
-    return filas
+    return salida
   })
+
+  const limite = Date.now() + 30000
+  let filas = []
+  let anterior = -1
+  let estables = 0
+  while (Date.now() < limite) {
+    await dormir(1000)
+    filas = await leerFilas()
+    if (filas.length >= 12) return filas
+    if (filas.length > 0 && filas.length === anterior) {
+      // Estable sin llegar a 12: hay períodos sin declaración, se usa lo leído.
+      if (++estables >= 6) return filas
+    } else {
+      anterior = filas.length
+      estables = 0
+    }
+  }
+  return filas
 }
 
 // ---------------------------------------------------------------------------
@@ -576,13 +609,38 @@ async function leerFormularioCompacto(page, { periodo } = {}) {
     return { ok: false, error: 'El SII no devolvió un PDF (¿sesión vencida o folio sin formulario compacto?)', url }
   }
 
-  const { casillas, lineas } = f29Formulario.parsearFormularioF29(buffer)
+  // Diagnóstico opt-in: guarda el PDF crudo para revisar por qué una lectura
+  // no trae casillas (SII_DEBUG_PDF=1). No se activa en producción.
+  if (process.env.SII_DEBUG_PDF === '1') {
+    try { fs.writeFileSync(path.join(process.cwd(), `tmp-f29-${periodo || Date.now()}.pdf`), buffer) } catch { /* sin disco */ }
+  }
+  let { casillas, lineas } = f29Formulario.parsearFormularioF29(buffer)
+  let via = 'posiciones'
+  // Respaldo: algunos compactos no exponen bloques BT con coordenadas
+  // utilizables; se leen del texto plano en vez de devolver un PDF «leído»
+  // sin casillas (que aguas arriba parecía una conciliación vacía).
+  if (!casillas.length) {
+    try {
+      const pdfParse = require('pdf-parse')
+      const datos = await pdfParse(buffer)
+      const desdeTexto = f29Formulario.casillasDeTexto(datos.text)
+      if (desdeTexto.length) {
+        casillas = desdeTexto
+        lineas = String(datos.text || '').split('\n').map((l) => l.trim()).filter(Boolean)
+        via = 'texto'
+      }
+    } catch (err) {
+      // Sin texto utilizable: se devuelve el PDF igual (bytes como evidencia).
+    }
+  }
+
   const { indicadores, verificaciones } = f29Formulario.indicadores(casillas)
   return {
     ok: true,
     url,
     folio: mFolio ? mFolio[1] : null,
     bytes: buffer.length,
+    via_lectura: via,
     casillas,
     indicadores,
     verificaciones,
@@ -611,6 +669,92 @@ function ultimosPeriodos(n, hasta) {
  *
  * @param {function} onProgress (info) => void — reporta avance por período.
  */
+/**
+ * Persiste el estado y el Formulario Compacto de UN período del F29.
+ *
+ * Está aislado del navegador a propósito: el flujo del portal no se puede
+ * probar sin el SII, pero esta escritura sí. Un typo en los argumentos de
+ * `run()` (el 2026-10-21 decía `comacto`/`comulto`) hacía fallar el INSERT en
+ * silencio dentro del try: el período quedaba con error y la tabla
+ * `f29_formularios` nunca se llenaba, así que el informe no podía conciliar
+ * lo declarado con el RCV aunque la conexión «estuviera disponible».
+ *
+ * @returns {boolean} true si el Formulario Compacto se leyó y quedó guardado.
+ */
+function guardarFormularioF29(db, { empresaId, rut, periodo, fila = {}, estado = {}, compacto = {} }) {
+  const ok = compacto && compacto.ok === true
+  // Un PDF que llega pero no se deja parsear (0 casillas) NO puede borrar las
+  // casillas que ya estaban guardadas: la corrida de 12 meses del 2026-10-23
+  // sobrescribió 202608 con indicadores null y perdió una lectura válida
+  // anterior. Si la lectura nueva no trae casillas, se conserva la previa.
+  const previa = db.prepare(`
+    SELECT casillas_json, indicadores_json, verificaciones_json, datos_json, url
+    FROM f29_formularios WHERE empresa_id = ? AND periodo = ?
+  `).get(empresaId, periodo)
+  const parseJson = (txt, def) => { try { return JSON.parse(txt) } catch { return def } }
+  const nuevasCasillas = ok && Array.isArray(compacto.casillas) ? compacto.casillas : []
+  const tieneNuevos = nuevasCasillas.length > 0
+  const casillas = tieneNuevos ? nuevasCasillas : (previa ? parseJson(previa.casillas_json, []) : [])
+  // Si la lectura nueva no trae casillas se conservan las anteriores, pero los
+  // indicadores y las cuadraturas se RECALCULAN con esas casillas: si no, una
+  // fila guardada con una versión vieja del catálogo seguía arrastrando sus
+  // verificaciones viejas para siempre.
+  const redim = !tieneNuevos && casillas.length ? f29Formulario.indicadores(casillas) : null
+  const indicadores = tieneNuevos
+    ? compacto.indicadores
+    : (redim ? redim.indicadores : (previa ? parseJson(previa.indicadores_json, {}) : {}))
+  const verificaciones = tieneNuevos
+    ? (compacto.verificaciones || [])
+    : (redim ? redim.verificaciones : (previa ? parseJson(previa.verificaciones_json, []) : []))
+  const datosPrevio = previa ? parseJson(previa.datos_json, {}) : {}
+  const montoObservado = estado.monto_observado != null
+    ? estado.monto_observado
+    : (fila.monto != null ? montoDeTexto(fila.monto) : null)
+  db.prepare(`
+    INSERT INTO f29_formularios
+      (empresa_id, rut, periodo, folio, estado, situacion, monto_observado,
+       declaraciones_vigentes, intentos, indicadores_json, casillas_json,
+       verificaciones_json, eventos_json, url, datos_json, consultado_en)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(empresa_id, periodo) DO UPDATE SET
+      folio = excluded.folio,
+      estado = excluded.estado,
+      situacion = excluded.situacion,
+      monto_observado = excluded.monto_observado,
+      declaraciones_vigentes = excluded.declaraciones_vigentes,
+      intentos = excluded.intentos,
+      indicadores_json = excluded.indicadores_json,
+      casillas_json = excluded.casillas_json,
+      verificaciones_json = excluded.verificaciones_json,
+      eventos_json = excluded.eventos_json,
+      url = excluded.url,
+      datos_json = excluded.datos_json,
+      consultado_en = datetime('now')
+  `).run(
+    empresaId, rut, periodo,
+    fila.folio || null,
+    fila.estado || null,
+    estado.situacion || null,
+    montoObservado,
+    estado.declaraciones_vigentes ?? null,
+    estado.intentos_declaracion ?? null,
+    JSON.stringify(indicadores || {}),
+    JSON.stringify(casillas),
+    JSON.stringify(verificaciones),
+    JSON.stringify(estado.eventos || []),
+    compacto.url || (previa && previa.url) || null,
+    JSON.stringify({
+      estado_texto: estado.texto || datosPrevio.estado_texto || null,
+      eventos: (estado.eventos && estado.eventos.length) ? estado.eventos : (datosPrevio.eventos || []),
+      compactado: tieneNuevos
+        ? { bytes: compacto.bytes, folio: compacto.folio }
+        : (datosPrevio.compactado || { error: compacto.error || 'PDF sin casillas legibles' }),
+      origen: 'Consulta Integral F29 + Formulario Compacto (SII)',
+    }),
+  )
+  return tieneNuevos
+}
+
 async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo, periodos = 12, onProgress = null }) {
   const emp = db.prepare(`SELECT id, rut FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
   if (!emp) throw new Error('Empresa no encontrada')
@@ -623,9 +767,6 @@ async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo
   let ctx = null
 
   try {
-    ctx = await abrirSesion(emp.rut, clave)
-    const { page } = ctx
-
     // Se agrupan por año: la búsqueda anual del SII devuelve los 12 períodos
     // del año de una sola vez.
     const porAnio = new Map()
@@ -636,86 +777,91 @@ async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo
     }
 
     for (const [anio, periodosAnio] of [...porAnio.entries()].sort((a, b) => b[0].localeCompare(a[0]))) {
-      let filas = []
+      // El SII corta la sesión al cambiar de año (y a veces a mitad de año):
+      // cada año arranca con sesión nueva. Antes el año entero quedaba sin leer
+      // con un «sesión expirada» que parecía un problema de credenciales.
       try {
-        filas = await buscarF29Anio(page, anio)
+        ctx = await abrirSesion(emp.rut, clave)
       } catch (err) {
-        resultado.errores.push(`Búsqueda F29 ${anio}: ${err.message}`)
+        resultado.errores.push(`Sesión SII ${anio}: ${err.message}`)
         continue
       }
-      const porPeriodo = new Map(filas.map((f) => [f.periodo, f]))
+      let { page } = ctx
 
-      for (const per of periodosAnio) {
-        const fila = porPeriodo.get(per)
-        if (!fila || !fila.folio) continue // no hay declaración: nada que leer
-        if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'leyendo' })
+      const reabrir = async () => {
+        try { await cerrarSesion(ctx) } catch { /* la anterior ya no sirve */ }
+        ctx = await abrirSesion(emp.rut, clave)
+        page = ctx.page
+        await dormir(1500)
+      }
+      // Hasta dos vueltas por año: la segunda solo ocurre si la sesión se perdió.
+      for (let vuelta = 1; vuelta <= 2; vuelta++) {
+        let filas = []
         try {
-          // La consulta de estado se abre desde la pestaña de resultados.
-          let punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
-          if (!punto) {
-            await volverAResultados(page)
-            punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
-          }
-          if (!punto) {
-            resultado.errores.push(`${per}: no se encontró el enlace «Ver» en los resultados`)
+          filas = await buscarF29Anio(page, anio)
+        } catch (err) {
+          if (vuelta === 1 && err.codigo === 'SII_SESION_INVALIDA') {
+            resultado.errores.push(`Búsqueda F29 ${anio}: sesión perdida, se reabre`)
+            await reabrir()
             continue
           }
-          await page.mouse.click(punto.x, punto.y)
-          const estado = await leerEstadoF29(page)
-          const compacto = await leerFormularioCompacto(page, { periodo: per })
-
-          const indicadores = compacto.ok ? compacto.indicadores : null
-          db.prepare(`
-            INSERT INTO f29_formularios
-              (empresa_id, rut, periodo, folio, estado, situacion, monto_observado,
-               declaraciones_vigentes, intentos, indicadores_json, casillas_json,
-               verificaciones_json, eventos_json, url, datos_json, consultado_en)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(empresa_id, periodo) DO UPDATE SET
-              folio = excluded.folio,
-              estado = excluded.estado,
-              situacion = excluded.situacion,
-              monto_observado = excluded.monto_observado,
-              declaraciones_vigentes = excluded.declaraciones_vigentes,
-              intentos = excluded.intentos,
-              indicadores_json = excluded.indicadores_json,
-              casillas_json = excluded.casillas_json,
-              verificaciones_json = excluded.verificaciones_json,
-              eventos_json = excluded.eventos_json,
-              url = excluded.url,
-              datos_json = excluded.datos_json,
-              consultado_en = datetime('now')
-          `).run(
-            empresaId, emp.rut, per,
-            fila.folio || null,
-            fila.estado || null,
-            estado.situacion || null,
-            estado.monto_observado != null ? estado.monto_observado : (fila.monto != null ? montoDeTexto(fila.monto) : null),
-            estado.declaraciones_vigentes,
-            estado.intentos_declaracion,
-            JSON.stringify(indicadores || {}),
-            JSON.stringify(comacto.ok ? compacto.casillas : []),
-            JSON.stringify(comacto.ok ? compacto.verificaciones : []),
-            JSON.stringify(estado.eventos || []),
-            compacto.url || null,
-            JSON.stringify({
-              estado_texto: estado.texto,
-              eventos: estado.eventos,
-              compactado: compacto.ok ? { bytes: compacto.bytes, folio: compacto.folio } : { error: compacto.error },
-              origen: 'Consulta Integral F29 + Formulario Compacto (SII)',
-            }),
-          )
-          resultado.periodos++
-          if (comulto.ok) resultado.con_formulario++
-          resultado.consultados.push(per)
-          if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'ok', compactado: compacto.ok })
-        } catch (err) {
-          resultado.errores.push(`${per}: ${err.message}`)
-          if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'error', error: err.message })
+          resultado.errores.push(`Búsqueda F29 ${anio}: ${err.message}`)
+          break
         }
-        // Vuelve a los resultados para el siguiente período.
-        await volverAResultados(page)
+        const porPeriodo = new Map(filas.map((f) => [f.periodo, f]))
+        let sesionPerdida = false
+
+        for (const per of periodosAnio) {
+          if (resultado.consultados.includes(per)) continue
+          const fila = porPeriodo.get(per)
+          if (!fila || !fila.folio) continue // no hay declaración: nada que leer
+          if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'leyendo' })
+          try {
+            // La consulta de estado se abre desde la pestaña de resultados.
+            let punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
+            if (!punto) {
+              await volverAResultados(page)
+              punto = await puntoVerPeriodo(page, `${anio}-${per.slice(4)}`)
+            }
+            if (!punto) {
+              // Sin el enlace puede ser que la sesión se haya caído y la página
+              // sea el login: esperarPortal lanza SII_SESION_INVALIDA para que
+              // el reintento con sesión nueva se haga cargo.
+              await esperarPortal(page, 5000)
+              resultado.errores.push(`${per}: no se encontró el enlace «Ver» en los resultados`)
+              continue
+            }
+            await page.mouse.click(punto.x, punto.y)
+            const estado = await leerEstadoF29(page)
+            const compacto = await leerFormularioCompacto(page, { periodo: per })
+
+            const conFormulario = guardarFormularioF29(db, {
+              empresaId, rut: emp.rut, periodo: per, fila, estado, compacto,
+            })
+            resultado.periodos++
+            if (conFormulario) resultado.con_formulario++
+            resultado.consultados.push(per)
+            if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'ok', compactado: compacto.ok })
+          } catch (err) {
+            if (err.codigo === 'SII_SESION_INVALIDA' && vuelta === 1) {
+              sesionPerdida = true
+              break
+            }
+            resultado.errores.push(`${per}: ${err.message}`)
+            if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'error', error: err.message })
+          }
+          // Vuelve a los resultados para el siguiente período.
+          await volverAResultados(page)
+        }
+
+        if (!sesionPerdida) break
+        resultado.errores.push(`${anio}: sesión perdida a mitad del año, se reabre y se reintenta`)
+        await reabrir()
       }
+
+      // Cierra el año: el siguiente abre sesión propia.
+      try { await cerrarSesion(ctx) } catch { /* ya cerrada */ }
+      ctx = null
     }
   } finally {
     if (ctx) await cerrarSesion(ctx)
@@ -848,13 +994,45 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       avisos.push(`Boletas de honorarios: ${err.message}`)
       resultado.boletas = { anios: 0, error: err.message }
     }
+
+    // ---------- Declaraciones juradas (fachada JSON, sin navegador) ----------
+    // «Mis declaraciones Juradas» del SII entrega, por año, las DJ presentadas
+    // con formulario, estado, folio y fechas. Se consulta con la MISMA sesión
+    // autenticada que ya está abierta para el portal.
+    try {
+      const r = await djSii.consultarDj({ rut: emp.rut, dv, anios: aniosLista, jar: ctx.jar })
+      const guardados = djSii.guardar(db, { empresaId, rut: emp.rut, anios: r.anios })
+      resultado.juradas = {
+        estado: 'consultado',
+        anios: r.anios.length,
+        guardados,
+        presentadas: r.anios.reduce((s, a) => s + (a.presentadas || []).length, 0),
+        aviso: r.aviso || null,
+      }
+      if (r.aviso) avisos.push(`Declaraciones juradas: ${r.aviso}`)
+    } catch (err) {
+      avisos.push(`Declaraciones juradas: ${err.message}`)
+      resultado.juradas = { estado: 'error', error: err.message }
+    }
+
+    // ---------- Renta (F22): estado de la declaración anual por año ----------
+    try {
+      const r = await rentaSii.consultarRenta({ rut: emp.rut, dv, anios: aniosLista, jar: ctx.jar })
+      const guardados = rentaSii.guardar(db, { empresaId, rut: emp.rut, anios: r.anios })
+      resultado.f22 = {
+        estado: 'consultado',
+        anios: r.anios.length,
+        guardados,
+        aviso: r.aviso || null,
+      }
+      if (r.aviso) avisos.push(`Renta: ${r.aviso}`)
+    } catch (err) {
+      avisos.push(`Renta (F22): ${err.message}`)
+      resultado.f22 = { estado: 'error', error: err.message }
+    }
   } finally {
     if (ctx) await cerrarSesion(ctx)
   }
-
-  // F22 y DDJJ no tienen consulta por RUT con este login: se declaran ausentes.
-  resultado.f22 = { anios: 0, estado: 'no_consultado' }
-  resultado.juradas = { estado: 'no_consultado' }
 
   return { resultado, aviso: avisos.length ? avisos.join(' · ') : null }
 }
@@ -872,6 +1050,7 @@ function ultimaConsulta(db, empresaId) {
 module.exports = {
   sincronizar,
   sincronizarFormularios,
+  guardarFormularioF29,
   ultimaConsulta,
   // helpers puros (tests)
   estadoDesdeTooltip,

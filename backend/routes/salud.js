@@ -33,7 +33,11 @@ function leerMeses(valor, defecto = 12) {
 }
 
 router.get('/salud-tributaria/capacidades', (req, res) => {
-  res.json({ ok: true, capacidades_sii: salud.CAPACIDADES_SII })
+  res.json({
+    ok: true,
+    capacidades_sii: salud.CAPACIDADES_SII,
+    capacidades_tgr: salud.CAPACIDADES_TGR,
+  })
 })
 
 // Resumen para el KPI del panel y el pill del menú: mismo informe, sin el

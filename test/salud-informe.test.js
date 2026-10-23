@@ -4,7 +4,7 @@
  * imprimible.
  *
  * Lo que se prueba:
- *  S1  La reunión corre los seis pasos y termina en «completado».
+ *  S1  La reunión corre los siete pasos y termina en «completado».
  *  S2  Un paso que falla NO tira el resto: queda «completado_con_errores» y el
  *      informe se emite igual (un paso que falla no borra lo que otro trajo).
  *  S3  El estado de un job es privado del usuario que lo lanzó.
@@ -18,6 +18,9 @@
  *  S10 Los montos en millones no se dividen dos veces (miles de millones).
  *  S11 El informe cabe en A4: ninguna tabla desborda la caja imprimible.
  *  S12 La diferencia del detalle mensual es la MISMA del capítulo 1.
+ *  S14 Los agregados mensuales del SII (boletas/comprobantes, rcv_agregados)
+ *      suman a las ventas del informe y evitan el falso «diferencia de
+ *      ventas de millones» en los meses que el SII no entrega doc a doc.
  *
  * BD temporal; sin red (todas las dependencias del SII se inyectan).
  * Ejecutar: node --test test/salud-informe.test.js
@@ -35,6 +38,7 @@ const db = require('../backend/db')
 const salud = require('../backend/core/salud-tributaria')
 const saludSync = require('../backend/core/salud-sincronizacion')
 const informeHtml = require('../backend/core/informe-salud-html')
+const decl = require('../backend/core/declaraciones-sii')
 
 test.after(() => {
   try { db.close() } catch { /* ya cerrada */ }
@@ -84,6 +88,9 @@ function depsFalsas(over = {}) {
     sincronizarFormularios: async () => ({ periodos: 12, con_formulario: 3, errores: [] }),
     consultarRenta: async () => ({ anios: [{ anio: '2025', vigente: true, folio: 'F22-1' }], aviso: null }),
     guardarRenta: async () => 1,
+    consultarDeudaTgr: async () => ({
+      id: 1, estado: 'sin_deuda', total: 0, fecha_emision: '2026-10-22', pdf_ruta: 'data/certificados-tgr/demo.pdf',
+    }),
     descifrarClave: async () => 'clave',
     ...over,
   }
@@ -97,7 +104,7 @@ test('S1: la reunión corre los seis pasos y termina en «completado»', async (
   })
   const est = await esperarJob(jobId, uid)
   assert.equal(est.estado, 'completado')
-  assert.equal(est.pasos.length, 6)
+  assert.equal(est.pasos.length, 7)
   for (const p of est.pasos) {
     assert.equal(p.estado, 'ok', `el paso ${p.clave} debio quedar ok`)
   }
@@ -357,4 +364,122 @@ test('S12: la diferencia del detalle mensual es la misma del capítulo 1', () =>
   assert.ok(html.includes('.dif-alerta'), 'el CSS define la clase de la diferencia')
   assert.ok(html.includes('.dif-ok'), 'el CSS define la clase de la diferencia sin alerta')
   assert.ok(!/class="der neg"|class="der pos"/.test(html), 'no quedan clases de color inexistentes')
+})
+
+test('S13: el F29 leído sólo como Formulario Compacto cuenta como consultado', () => {
+  // Regresión: la sección «Estado de las declaraciones» y el historial de
+  // cumplimiento se armaban SÓLO con `declaraciones_sii`. Las empresas
+  // sincronizadas con el lector nuevo escriben en `f29_formularios`, así que
+  // aparecían con «F29 — No consultado» mientras el mismo informe mostraba los
+  // 12 meses conciliados y sus casillas.
+  const eid = empresa('77999001-7')
+  doc(eid, { periodo: '202509', neto: 1000000, iva: 190000, folio: 'CMP-1' })
+
+  decl.guardarFormularioF29(db, {
+    empresaId: eid,
+    rut: '77999001-7',
+    periodo: '202509',
+    fila: { folio: '9001', estado: 'Vigente' },
+    estado: { situacion: 'DECLARACION VIGENTE I', monto_observado: 0, declaraciones_vigentes: 1, eventos: [] },
+    compacto: {
+      ok: true,
+      folio: '9001',
+      casillas: [{ codigo: '563', monto: 1000000 }, { codigo: '89', monto: 190000 }],
+      verificaciones: [{ codigo: 'IVA_DETERMINADO', ok: true, detalle: 'cuadra' }],
+      indicadores: { base_imponible: 1000000, total_debitos: 190000, iva_determinado: 190000, total_a_pagar: 190000 },
+      url: 'https://www4.sii.cl/rfiInternet/formCompacto?folio=9001',
+      bytes: 4321,
+    },
+  })
+  // Período «No Declarante»: el SII entrega el folio y ninguna casilla.
+  decl.guardarFormularioF29(db, {
+    empresaId: eid,
+    rut: '77999001-7',
+    periodo: '202510',
+    fila: { folio: '9002', estado: 'Vigente' },
+    estado: { situacion: 'NO DECLARANTE I', monto_observado: 0, eventos: [] },
+    compacto: { ok: false, error: 'sin visor' },
+  })
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202510', meses: 2 })
+
+  // La consulta se declara hecha: el compácto cuenta como declaración aunque
+  // no exista fila en `declaraciones_sii`.
+  assert.equal(inf.declaraciones.f29.estado, 'disponible')
+  assert.equal(inf.declaraciones.f29.consultadas, 1)
+  assert.equal(inf.declaraciones.f29.declaradas, 1, 'sólo el período con casillas es declaración')
+  assert.equal(inf.declaraciones.f29.pendientes, 0, '«No Declarante» no es un pendiente del sistema')
+
+  const m = inf.mensuales.map((x) => Object.fromEntries([['p', x.periodo], ['estado', x.f29_estado], ['origen', x.f29_oficial?.origen], ['total', x.f29_oficial?.monto_total]]))
+  const sep = m.find((x) => x.p === '202509')
+  const oct = m.find((x) => x.p === '202510')
+  assert.equal(sep.estado, 'declarada')
+  assert.equal(sep.origen, 'compacto', 'el origen queda declarado en el dato')
+  assert.equal(sep.total, 190000)
+  assert.equal(oct.estado, 'sin_informacion', 'un período leído no puede seguir diciendo «no consultado»')
+  assert.equal(oct.origen, null)
+
+  // El calendario de cumplimiento distingue los dos casos.
+  const cal = inf.opinion.calendario.find((c) => c.periodo === '202509')
+  assert.equal(cal.revisada, true)
+  assert.equal(cal.cumplida, true)
+  assert.ok(!inf.opinion.hallazgos.some((h) => h.codigo === 'F29_PENDIENTE'), 'no se inventan pendientes')
+})
+
+test('S14: los agregados mensuales (boletas 39) suman a las ventas del informe', () => {
+  // Regresión 2026-10-23 (Santa Camila 202603/202606): el SII entrega las
+  // boletas del RCV de ventas SOLO como total del mes (codTipoDoc=39/48),
+  // nunca documento a documento. Sin sumarlos, el informe reportaba
+  // «diferencia de ventas» por millones en meses declarados al día.
+  const eid = empresa({ rut: '77999002-0' })
+  // Facturas individuales del mes: 1.000.000 neto.
+  doc(eid, { periodo: '202603', neto: 1000000, iva: 190000, folio: 'F1' })
+  // Boletas del mes como las entrega el SII: 1 fila agregada, 2 documentos,
+  // neto 2.000.000, iva 380.000 (pasa por guardarAgregados y su UPSERT).
+  const filaArgregados = {
+    tipoDoc: 39, folio: 'AG-202603-39', tipoVenta: 'Del Giro', cantidad: 2,
+    montoExento: 0, montoNeto: 2000000, montoIVA: 380000, montoTotal: 2380000,
+    fechaRecepcion: '30/03/2026', filaRaw: { Folio: '2', 'Monto Neto': '2000000' },
+  }
+  const g = salud.guardarAgregados(db, {
+    empresaId: eid, rut: '77999002-0', periodo: '202603', agregados: [filaArgregados],
+  })
+  assert.equal(g.guardados, 1)
+  // Idempotencia: la misma fila re-guardada actualiza, no duplica.
+  assert.equal(salud.guardarAgregados(db, {
+    empresaId: eid, rut: '77999002-0', periodo: '202603', agregados: [filaArgregados],
+  }).guardados, 1)
+
+  // Compacto del F29 del mes (la comparación viene del formulario declarado).
+  decl.guardarFormularioF29(db, {
+    empresaId: eid,
+    rut: '77999002-0',
+    periodo: '202603',
+    fila: { folio: '9003', estado: 'Vigente' },
+    estado: { situacion: 'DECLARACION VIGENTE I', monto_observado: 0, declaraciones_vigentes: 1, eventos: [] },
+    compacto: {
+      ok: true,
+      folio: '9003',
+      casillas: [{ codigo: '563', monto: 3000000 }],
+      verificaciones: [],
+      indicadores: { base_imponible: 3000000, total_debitos: 570000, iva_determinado: 570000, total_a_pagar: 570000 },
+      url: 'https://www4.sii.cl/rfiInternet/formCompacto?folio=9003',
+      bytes: 4321,
+    },
+  })
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202603', meses: 1 })
+  const m = inf.mensuales.find((x) => x.periodo === '202603')
+  // El RCV del mes = facturas + agregados, y queda rotulado de dónde sale.
+  assert.equal(m.ventas_neto, 3000000)
+  assert.equal(m.ventas_agregados.cantidad, 2)
+  assert.equal(m.ventas_agregados.neto, 2000000)
+  assert.equal(m.ventas_agregados.tipos[0].tipo_doc, 39)
+  assert.equal(m.estado, 'con_datos', 'un mes con sólo boletas agregadas también es con datos')
+  // La conciliación usa el RCV completo: con la misma base declarada ya no
+  // hay diferencia falsa de millones.
+  assert.equal(m.comparacion.ventas_estimadas, 3000000)
+  // Y los documentos de la bandeja NO se tocan: un total mensual no es un doc.
+  const nDocs = db.prepare('SELECT COUNT(*) AS n FROM documentos WHERE empresa_id = ?').get(eid).n
+  assert.equal(nDocs, 1)
 })
