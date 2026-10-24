@@ -12,6 +12,19 @@ process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] Promesa rechazada sin capturar:', reason)
 })
 
+// F5-B — FALLO SEGURO DE CONFIGURACIÓN: en producción, arrancar sin clave
+// maestra (o con una de formato inválido) cifraría las claves SII, los CAF y
+// el certificado de firma con la clave de DESARROLLO, que es pública en el
+// código. Se valida ANTES de abrir la base: el proceso muere con un mensaje
+// accionable y sin imprimir ningún valor. En desarrollo/pruebas no cambia nada
+// (sigue el fallback con advertencia).
+try {
+  require('./core/boveda').validarClaveMaestra()
+} catch (err) {
+  console.error('[FATAL] Configuración de seguridad inválida:', err.message)
+  process.exit(1)
+}
+
 // La instancia se guarda: la reanudación de trabajos del arranque la necesita
 // como parámetro (antes solo se requería el módulo por su efecto de migración).
 let db
@@ -28,6 +41,11 @@ const { requireAuth } = require('./middleware/requireAuth')
 
 const app = express()
 const PORT = process.env.PORT || 3500
+
+// F8-G: Express anuncia su versión en cada respuesta (`X-Powered-By: Express`).
+// El escaneo de solo lectura de producción (doc 27, control A6) lo confirmó en
+// el servidor real. No aporta nada al cliente y regala reconocimiento.
+app.disable('x-powered-by')
 
 // Límite de tamaño del JSON: las rutas de esta app reciben parámetros de
 // consulta (cliente_id, rango), no payloads grandes — 100 KB es generoso y
@@ -98,9 +116,13 @@ app.use('/api/crm', requireAuth, require('./routes/crm'))
 app.use('/api/portal', requireAuth, require('./routes/portal').construirRouter(require('./db')))
 require('./routes/portal').ensureTablaReportes(require('./db'))
 
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, message: 'IVA Mensual API running' })
-})
+// F8-G: health con verificación real de la base (200 / 503). El healthcheck de
+// docker-compose y la espera de ops/deploy.sh se apoyan en este endpoint: uno
+// que responde `ok:true` sin probar nada convierte el deploy en una falsa señal.
+app.get('/api/health', require('./middleware/health').crearHealth({
+  db,
+  version: require('../package.json').version,
+}))
 
 // 404 propio: la API responde JSON (quien la llama espera JSON), las páginas
 // reciben 404.html con la identidad del sitio y accesos útiles. Va después de
@@ -109,10 +131,9 @@ app.use(require('./middleware/no-encontrado').noEncontrado)
 
 // Manejador de errores de Express: cualquier error lanzado dentro de una ruta
 // (síncrono o pasado a next(err)) responde JSON en vez de tumbar el proceso.
-app.use((err, req, res, next) => {
-  console.error('[ERROR]', err.message)
-  res.status(500).json({ ok: false, error: err.message || 'Error interno' })
-})
+// F8-G: en producción el cliente recibe un mensaje genérico; el detalle queda
+// en el log (antes se devolvía `err.message`, que filtraba SQL y rutas).
+app.use(require('./middleware/errores').crearManejadorErrores())
 
 app.listen(PORT, () => {
   console.log(`IVA Mensual corriendo en http://localhost:${PORT}`)

@@ -220,7 +220,12 @@ test('T7: backend/index.js monta el 404 después de las rutas y antes del error'
   assert.ok(pos404 > 0, 'el arranque monta el 404 propio')
   assert.ok(src.indexOf('app.use(express.static') < pos404, 'va después de los estáticos (si no, taparía archivos reales)')
   assert.ok(src.lastIndexOf("app.use('/api/") < pos404, 'va después de todos los routers de la API')
-  assert.ok(src.indexOf('app.use((err, req, res, next)') > pos404, 'va antes del manejador de errores')
+  // F8-G: el manejador de errores se extrajo a `middleware/errores.js` (para
+  // poder probar que no filtra `err.message` en producción). El contrato que
+  // este test protege es el mismo: el 404 va ANTES del manejador de errores.
+  const posErr = src.indexOf("require('./middleware/errores').crearManejadorErrores()")
+  assert.ok(posErr > 0, 'el arranque monta el manejador de errores')
+  assert.ok(posErr > pos404, 'va antes del manejador de errores')
 })
 
 /* ------------- T8 chrome compartido entre las páginas públicas ------------- */

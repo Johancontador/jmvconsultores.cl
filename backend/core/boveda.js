@@ -9,42 +9,97 @@
  * Clave maestra (SECRETOS_MASTER_KEY):
  *  - Preferido: 64 chars hex (32 bytes) → se usa directo.
  *    Generar con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
- *  - Alternativa: cualquier passphrase → se deriva con scrypt (salt fija de la app).
- *  - Si no hay ninguna: se usa un fallback constante SOLO para desarrollo local;
- *    se loggea una advertencia. En producción (docs/SEGURIDAD.md) la variable es
- *    obligatoria: si cambia, los datos cifrados dejan de ser legibles.
+ *  - Alternativa: passphrase de **al menos 32 caracteres** → se deriva con
+ *    scrypt (salt fija de la app).
+ *  - Si no hay ninguna: se usa un fallback constante SOLO en desarrollo/pruebas;
+ *    se loggea una advertencia. **En producción la variable es OBLIGATORIA**:
+ *    `validarClaveMaestra()` lanza y `backend/index.js` aborta el arranque
+ *    (F5-B). Antes de F5 el fallback se usaba en silencio también en producción,
+ *    lo que dejaba las claves SII cifradas con una clave pública conocida.
+ *  - Si cambia, los datos cifrados dejan de ser legibles (rotación: F5-E y
+ *    `scripts/rotar-master-key.js`).
  */
 
 const crypto = require('crypto')
 
 const VERSION = 'v1'
 const SALT_APP = 'jmv-iva-mensual-boveda-v1'
+const HEX64 = /^[0-9a-fA-F]{64}$/
+const MIN_PASSPHRASE = 32
+const FALLBACK_DEV = 'iva-mensual-fallback-dev'
 
 let _clave = null
 let _advertenciaEmitida = false
 
+function esProduccion(env = process.env) {
+  return String(env.NODE_ENV || '').trim().toLowerCase() === 'production'
+}
+
+/**
+ * Valida la configuración de la clave maestra SIN descifrar nada ni exponer
+ * valores. Es la guarda de «fallo seguro» de F5-B.
+ *
+ * @returns {{ok:true, origen:'hex'|'passphrase'|'fallback-dev'|'dev-invalida', produccion:boolean}}
+ * @throws  En producción si falta la clave o su formato es inválido. El mensaje
+ *          NUNCA incluye el valor (solo qué variable y cómo corregirla).
+ */
+function validarClaveMaestra(env = process.env) {
+  const hex = String(env.SECRETOS_MASTER_KEY || '').trim()
+  const pass = String(env.SECRETOS_MASTER_PASS || '').trim()
+  const valor = hex || pass
+  const produccion = esProduccion(env)
+
+  if (!valor) {
+    if (produccion) {
+      throw new Error('SECRETOS_MASTER_KEY es OBLIGATORIA en producción y no está definida: ' +
+        'la aplicación no arranca sin ella. Sin clave maestra real, las claves SII, los CAF y el ' +
+        'certificado de firma quedarían cifrados con una clave conocida del código. ' +
+        'Defínala en .env (64 hex) y reinicie — ver docs/SEGURIDAD.md §Bóveda.')
+    }
+    return { ok: true, origen: 'fallback-dev', produccion: false }
+  }
+
+  if (HEX64.test(valor)) return { ok: true, origen: 'hex', produccion }
+  if (valor.length >= MIN_PASSPHRASE) return { ok: true, origen: 'passphrase', produccion }
+
+  if (produccion) {
+    throw new Error('SECRETOS_MASTER_KEY tiene un formato inválido: use 64 caracteres hexadecimales ' +
+      '(recomendado) o una passphrase de al menos 32 caracteres. El valor no se muestra por seguridad.')
+  }
+  // Desarrollo/pruebas: se mantiene el comportamiento histórico (scrypt del
+  // valor) para no romper entornos locales, pero se avisa.
+  return { ok: true, origen: 'dev-invalida', produccion: false }
+}
+
 function cargarClave() {
   if (_clave) return _clave
 
-  const hex = (process.env.SECRETOS_MASTER_KEY || '').trim()
-  if (/^[0-9a-fA-F]{64}$/.test(hex)) {
-    _clave = Buffer.from(hex, 'hex')
+  const estado = validarClaveMaestra()
+
+  if (estado.origen === 'hex') {
+    _clave = Buffer.from(String(process.env.SECRETOS_MASTER_KEY).trim(), 'hex')
     return _clave
   }
 
-  const passphrase = hex || process.env.SECRETOS_MASTER_PASS
-  if (passphrase) {
+  if (estado.origen === 'passphrase' || estado.origen === 'dev-invalida') {
+    const passphrase = String(process.env.SECRETOS_MASTER_KEY || process.env.SECRETOS_MASTER_PASS || '').trim()
     _clave = crypto.scryptSync(passphrase, SALT_APP, 32)
     return _clave
   }
 
   if (!_advertenciaEmitida) {
     console.warn('[BOVEDA] SECRETOS_MASTER_KEY no definida — usando fallback de desarrollo. ' +
-      'Los secretos cifrados NO estarán protegidos; en producción defina la variable (docs/SEGURIDAD.md).')
+      'Los secretos cifrados NO estarán protegidos; en producción la aplicación NO arranca sin la variable (docs/SEGURIDAD.md).')
     _advertenciaEmitida = true
   }
-  _clave = crypto.scryptSync('iva-mensual-fallback-dev', SALT_APP, 32)
+  _clave = crypto.scryptSync(FALLBACK_DEV, SALT_APP, 32)
   return _clave
+}
+
+/** Solo para pruebas: olvida la clave derivada cacheada. */
+function _olvidarClave() {
+  _clave = null
+  _advertenciaEmitida = false
 }
 
 function cifrar(texto) {
@@ -80,4 +135,8 @@ function esCifrado(almacenado) {
   return typeof almacenado === 'string' && almacenado.startsWith(VERSION + ':')
 }
 
-module.exports = { cifrar, descifrar, esCifrado }
+module.exports = {
+  cifrar, descifrar, esCifrado,
+  validarClaveMaestra, esProduccion, _olvidarClave,
+  MIN_PASSPHRASE,
+}

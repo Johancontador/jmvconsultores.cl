@@ -38,6 +38,9 @@ router.get('/empresas/:empresaId/config', requirePermiso('dte:ver'), (req, res) 
     ok: true,
     config: emisor.configPublica(db, req.empresaId),
     faltantes: emisor.faltantesPorTipo(db, req.empresaId),
+    // F5-D: vigencia/identidad del certificado (metadatos, sin secretos).
+    // La UI puede avisar «vence en N días» antes de intentar emitir.
+    certificado: emisor.estadoCertificado(db, req.empresaId),
   })
 })
 

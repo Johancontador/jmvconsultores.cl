@@ -291,6 +291,108 @@ function faltantesPorTipo(db, empresaId, tipos = Object.keys(TIPOS_DTE).map(Numb
 }
 
 // ============================================================
+// F5-D — CERTIFICADO DE FIRMA: vigencia e identidad (LOCAL, sin red)
+//
+// Antes de F5 la emisión no comprobaba NADA del certificado: uno vencido, de
+// otro RUT o imposible de descifrar llegaba hasta el adaptador y fallaba allá
+// (o, peor, firmaba con el certificado equivocado si el adaptador no valida).
+// Este chequeo es local: parsea el .pfx con la librería del SII, lee `notAfter`
+// y extrae el RUT del firmante. NO consulta al SII: la identidad se compara
+// contra `empresas.rut`, y la comparación con la ficha oficial queda como
+// condición NO VERIFICADA (ver docs/handoff-integral/25).
+// ============================================================
+
+/**
+ * Estado del certificado del emisor. Devuelve SOLO metadatos: jamás el pfx, la
+ * contraseña ni la clave privada.
+ * @returns {{estado:string, bloqueante:boolean, motivo:string|null, rut:string|null,
+ *            dias:number|null, vence:string|null, ambiente:string|null}}
+ */
+function estadoCertificado(db, empresaId, { margenDias = 30 } = {}) {
+  const empresa = db.prepare(`SELECT rut FROM empresas WHERE id = ? AND activo = 1`).get(empresaId)
+  if (!empresa) throw new Error('Empresa no encontrada')
+  const fila = db.prepare(`SELECT cert_pfx, cert_pass, ambiente FROM dte_config WHERE empresa_id = ?`).get(empresaId)
+  const base = { rut: null, dias: null, vence: null, ambiente: fila ? fila.ambiente : null }
+
+  if (!fila || !fila.cert_pfx) {
+    return { ...base, estado: 'ausente', bloqueante: false, motivo: 'Sin certificado de firma cargado' }
+  }
+
+  let pfx
+  let pass
+  try {
+    pfx = Buffer.from(descifrar(fila.cert_pfx), 'base64')
+    pass = descifrar(fila.cert_pass)
+  } catch {
+    return {
+      ...base, estado: 'indescifrable', bloqueante: true,
+      motivo: 'El certificado o su contraseña no se pudieron descifrar con la clave maestra vigente (¿cambió SECRETOS_MASTER_KEY?)',
+    }
+  }
+
+  let datos
+  try {
+    const { loadPfxFromBuffer, isCertificateExpired, getDaysUntilExpiry } = require('@devlas/dte-sii')
+    datos = loadPfxFromBuffer(pfx, pass)
+    const dias = getDaysUntilExpiry(datos.notAfter)
+    const vencido = isCertificateExpired(datos.notAfter)
+    const rutCert = datos.rut || null
+    const coincide = rutCert ? normalizarRut(rutCert) === normalizarRut(empresa.rut) : null
+    const meta = {
+      ...base,
+      rut: rutCert,
+      dias,
+      vence: new Date(datos.notAfter).toISOString().slice(0, 10),
+    }
+
+    if (vencido) {
+      return { ...meta, estado: 'vencido', bloqueante: true, motivo: `El certificado de firma venció el ${meta.vence}` }
+    }
+    if (coincide === false) {
+      return {
+        ...meta, estado: 'rut_no_coincide', bloqueante: true,
+        motivo: `El certificado pertenece al RUT ${rutCert} y la empresa emisora es ${empresa.rut}`,
+      }
+    }
+    if (coincide === null) {
+      // El .pfx no declara RUT: no se puede afirmar identidad. Se emite en
+      // certificación (mock), pero en producción se bloquea por precaución.
+      return {
+        ...meta, estado: 'identidad_no_verificada', bloqueante: false,
+        motivo: 'El certificado no declara RUT en su subject: identidad del emisor NO VERIFICADA',
+      }
+    }
+    if (dias <= margenDias) {
+      return { ...meta, estado: 'por_vencer', bloqueante: false, motivo: `El certificado vence en ${dias} día(s)` }
+    }
+    return { ...meta, estado: 'vigente', bloqueante: false, motivo: null }
+  } catch (err) {
+    return {
+      ...base,
+      estado: 'invalido',
+      bloqueante: false,
+      motivo: `El certificado no se pudo leer (${String(err.message || err).slice(0, 120)})`,
+    }
+  }
+}
+
+/**
+ * Puerta previa a la emisión: lanza si una condición demostrable la bloquea.
+ * Deja pasar `invalido` en certificación (los tests y los mocks usan .pfx
+ * ficticios) pero lo bloquea en producción, donde un certificado ilegible
+ * jamás debe intentar emitir.
+ */
+function exigirCertificadoEmisor(db, empresaId) {
+  const cert = estadoCertificado(db, empresaId)
+  if (cert.bloqueante) throw new Error(`Emisión bloqueada: ${cert.motivo}`)
+  const prod = (cert.ambiente || '') === 'produccion'
+  if (prod && (cert.estado === 'invalido' || cert.estado === 'identidad_no_verificada')) {
+    throw new Error(`Emisión bloqueada en producción: ${cert.motivo}. Cargue un certificado vigente del RUT emisor (Configuración del Emisor).`)
+  }
+  return cert
+}
+
+// ============================================================
 // Validaciones del documento (lo inválido se NOMINA)
 // ============================================================
 
@@ -403,6 +505,9 @@ async function emitir(db, { empresaId, usuarioId, tipo, items, receptor, referen
 
   const faltantes = faltantesPorTipo(db, empresaId, [tipoN])[tipoN]
   if (faltantes.length) throw new Error(`Emisor DTE no configurado: faltan (${faltantes.join(', ')})`)
+
+  // F5-D: certificado vigente y del RUT emisor (chequeo local, sin red).
+  exigirCertificadoEmisor(db, empresaId)
 
   const folioRes = siguienteFolio(db, empresaId, tipoN)
   if (!folioRes.ok) throw new Error(folioRes.razon)
@@ -705,6 +810,7 @@ module.exports = {
   esTipoValido, esNota,
   configPublica, obtenerConfigDescifrada, guardarConfig,
   guardarCaf, listarFolios, siguienteFolio, faltantesPorTipo,
+  estadoCertificado, exigirCertificadoEmisor,
   calcularMontos, validarItems, validarReceptor, validarReferencia,
   emitir, reintentar, consultarEstado, listar, obtener, obtenerPorIdempotencia,
   generarXMLDTE, adaptadorReal,
