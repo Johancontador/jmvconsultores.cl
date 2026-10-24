@@ -67,8 +67,17 @@ function doc(empresaId, { periodo, flujo = 'venta', tipo = 33, neto = 1000, iva 
   `).run(empresaId, flujo, tipo, String(folio || `${Date.now()}-${Math.random()}`), neto, iva, neto + iva, periodo, `${flujo}:${tipo}:${folio || Math.random()}`)
 }
 
-/** Espera a que el job termine (los pasos corren en segundo plano). */
-async function esperarJob(jobId, usuarioId = null, ms = 8000) {
+/**
+ * Espera a que el job termine (los pasos corren en segundo plano).
+ *
+ * El presupuesto es 20 s y no 8: la reunión hace seis pasos reales y, como los
+ * archivos de prueba corren EN PARALELO, la contención de CPU la llevaba a
+ * ~6-8 s. Con 8 s el test fallaba por carga de la suite (no por el producto):
+ * se midió 8,0 s en la corrida completa y 5,8 s en solitario. Sigue siendo un
+ * timeout real —si el job no termina, el test falla—, solo deja de ser un
+ * cronómetro ajustado al estado de carga de la máquina.
+ */
+async function esperarJob(jobId, usuarioId = null, ms = 20000) {
   const limite = Date.now() + ms
   while (Date.now() < limite) {
     const est = saludSync.obtenerEstado(jobId, usuarioId)

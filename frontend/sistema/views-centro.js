@@ -1,13 +1,15 @@
 /**
- * views-centro.js — CENTRO DE APLICACIONES (solicitud 2026-10-15).
- * Punto de entrada después del iniciar sesión: el usuario elige el módulo en
- * el que quiere trabajar sin caer en una pantalla sobrecargada.
+ * views-centro.js — TODOS LOS MÓDULOS (antes «Centro de Aplicaciones»).
+ * Punto de entrada después de iniciar sesión: el usuario elige el área en la
+ * que quiere trabajar sin caer en una pantalla sobrecargada. Conserva el
+ * anchor histórico #centro y es el catálogo completo del sistema; el menú
+ * lateral solo muestra el área activa (navegación de dos niveles, F2).
  *
  * Reglas del diseño:
  *  - CERO módulos ficticios: los datos vienen del backend
  *    (/api/auth/centro), que solo autoriza apps/secciones REALES del menú del
- *    SPA según empresa asiganda + rol + capacidades + licencia. Si el backend
- *    no autoriza, la tarjeta no existe en el DOM (反 registro inválido).
+ *    SPA según empresa asignada + rol + capacidades + licencia. Si el backend
+ *    no autoriza, la tarjeta no existe en el DOM (cero registro inválido).
  *  - Recientes + "Continuar donde quedó" = localStorage POR usuario
  *    (jmv.centro.recientes.<usuarioId>) — graba renderRoute (app.js).
  *  - Retorno claro: navegar hacia acá siempre reconstruye desde /api/centro
@@ -40,7 +42,7 @@ function chipLicencia(app, lic) {
 }
 
 VIEWS['centro'] = {
-  titulo: 'Centro de Aplicaciones',
+  titulo: 'Todos los módulos',
   async render(cont) {
     const eid = S.empresa?.id
     const data = await apiGet(`/api/auth/centro${eid ? `?empresa=${eid}` : ''}`)
@@ -66,7 +68,7 @@ VIEWS['centro'] = {
       <a class="ios-app" href="#${esc(ruta)}" data-app="${esc(app.key)}" title="${esc(app.titulo)} — ${esc(app.descripcion)}">
         <span class="ios-ico" data-icono="${esc(app.icono)}">${iconoHTML(app.icono)}</span>
         <span class="ios-label">${esc(app.titulo)}</span>
-        ${alerta ? '<span class="ios-badge" aria-label="Restringida o con licencia pendiente">!</span>' : ''}
+        ${alerta ? '<span class="ios-badge" title="Área restringida: solo roles autorizados, o licencia pendiente" aria-label="Área restringida: solo roles autorizados, o licencia pendiente">!</span>' : ''}
       </a>`
     }
 

@@ -1,0 +1,635 @@
+{
+  "_doc": "Golden de contratos de navegación (F0). Actualizado en F2 al reorganizar el menú en 6 áreas + Administración + Portal: los LABELS y SECCIONES cambian, los 49 anchors NO. Si un cambio deliberado reagrupa rutas, actualiza este archivo en el mismo commit.",
+  "roles": [
+    "admin_empresa",
+    "contador",
+    "auditor",
+    "tesoreria",
+    "super_admin"
+  ],
+  "anchors": [
+    {
+      "key": "inicio",
+      "label": "Hoy — Panel del período",
+      "seccion": "Inicio",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "alertas",
+      "label": "Alertas — Reclamadas y Pendientes",
+      "seccion": "Inicio",
+      "permiso": "documentos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "centro",
+      "label": "Todos los módulos",
+      "seccion": "Inicio",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "documentos",
+      "label": "Bandeja de Documentos",
+      "seccion": "Documentos",
+      "permiso": "documentos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "libros",
+      "label": "Libros de Compras y Ventas",
+      "seccion": "Documentos",
+      "permiso": "documentos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "onboarding",
+      "label": "Onboarding y Extracción",
+      "seccion": "Documentos",
+      "permiso": "documentos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "dte-emision",
+      "label": "Emitir Factura o Nota",
+      "seccion": "Documentos",
+      "permiso": "dte:emitir",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "dte",
+      "label": "Bandeja de DTEs Emitidos",
+      "seccion": "Documentos",
+      "permiso": "dte:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "dte-config",
+      "label": "Configuración del Emisor",
+      "seccion": "Documentos",
+      "permiso": "dte:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "automatizacion",
+      "label": "Contabilización y Pendientes",
+      "seccion": "Contabilidad",
+      "permiso": "propuestas:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "propuestas",
+      "label": "Propuestas y Conciliación",
+      "seccion": "Contabilidad",
+      "permiso": "propuestas:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "asientos",
+      "label": "Asientos — Diario, Mayor y Plan",
+      "seccion": "Contabilidad",
+      "permiso": "asientos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "memoria",
+      "label": "Memoria de Contabilización",
+      "seccion": "Contabilidad",
+      "permiso": "documentos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "activos",
+      "label": "Activos Fijos y Depreciación",
+      "seccion": "Contabilidad",
+      "permiso": "activos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "cierre",
+      "label": "Cierre de Período",
+      "seccion": "Contabilidad",
+      "permiso": "reportes:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "salud",
+      "label": "Salud Tributaria — Diagnóstico Ejecutivo",
+      "seccion": "Impuestos y Salud",
+      "permiso": "salud:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "analitica",
+      "label": "Dashboard Tributario (IVA)",
+      "seccion": "Impuestos y Salud",
+      "permiso": "reportes:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "calculadora-iva",
+      "label": "Calculadora de IVA",
+      "seccion": "Impuestos y Salud",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "proceso-masivo",
+      "label": "Proceso masivo (F29 del mes)",
+      "seccion": "Impuestos y Salud",
+      "permiso": "crm:ver",
+      "roles_ok": [
+        "contador",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "tesoreria",
+      "label": "Bancos, Libro Banco y Conciliación",
+      "seccion": "Tesorería",
+      "permiso": "tesoreria:ver",
+      "roles_ok": [
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "cobranza",
+      "label": "Cobranza y Mora",
+      "seccion": "Tesorería",
+      "permiso": "tesoreria:ver",
+      "roles_ok": [
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "externos",
+      "label": "Cartola externa (Geo Daniela)",
+      "seccion": "Tesorería",
+      "permiso": "asientos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "reportes",
+      "label": "Centro de Reportes",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "cclientes",
+      "label": "Clientes — Cuenta Corriente",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "cproveedores",
+      "label": "Proveedores — Cuenta Corriente",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "informe-rango",
+      "label": "Informe por rango",
+      "seccion": "Informes",
+      "permiso": "crm:ver",
+      "roles_ok": [
+        "contador",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "exportacion-masiva",
+      "label": "Reporte masivo (ZIP)",
+      "seccion": "Informes",
+      "permiso": "crm:ver",
+      "roles_ok": [
+        "contador",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-inicio",
+      "label": "Dashboard interactivo",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-ventas",
+      "label": "Ventas y movimientos",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-cartera",
+      "label": "Cartera de clientes",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-productos",
+      "label": "Productos vendidos",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-credito",
+      "label": "Crédito autorizado",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-costos",
+      "label": "Hoja de costos",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-comercial",
+      "label": "Mi seguimiento comercial",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-cotizaciones",
+      "label": "Cotizaciones y embudo",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-cobranza",
+      "label": "Cobranza (solo lectura)",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portal-reportes",
+      "label": "Reportes guardados",
+      "seccion": "Portal de cliente",
+      "permiso": null,
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "admin",
+      "label": "Administración",
+      "seccion": "Administración",
+      "permiso": "periodos:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "auditoria",
+      "label": "Auditoría",
+      "seccion": "Administración",
+      "permiso": "auditoria:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "integraciones",
+      "label": "Integraciones",
+      "seccion": "Administración",
+      "permiso": "empresas:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "suscripcion",
+      "label": "Suscripción y Pagos",
+      "seccion": "Administración",
+      "permiso": "empresas:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "crm",
+      "label": "CRM Comercial",
+      "seccion": "Administración",
+      "permiso": "crm:ver",
+      "roles_ok": [
+        "contador",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "portafolio",
+      "label": "Clientes del portafolio",
+      "seccion": "Administración",
+      "permiso": "crm:ver",
+      "roles_ok": [
+        "contador",
+        "super_admin"
+      ]
+    }
+  ],
+  "rutas_fuera_de_menu": [
+    {
+      "key": "balance8",
+      "label": "Balance de 8 Columnas",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "clasificado",
+      "label": "Balance Clasificado",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "comprobacion",
+      "label": "Balance de Comprobación",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "situacion",
+      "label": "Situación Financiera",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "resultados",
+      "label": "Estado de Resultados",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "niif",
+      "label": "NIIF — Estados por Rubros",
+      "seccion": "Informes",
+      "permiso": "reportes:ver",
+      "origen": "centro-reportes:reportes",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
+        "super_admin"
+      ]
+    }
+  ]
+}

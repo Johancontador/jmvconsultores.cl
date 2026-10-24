@@ -770,7 +770,7 @@ function bloqueOpinion(op) {
     : ''
   return `
   <div class="opinion">
-    ${notaAlerta ? `<p class="opinion-nota" style="color: var(--rojo); border-left: 3px solid var(--rojo); padding: 2px 0 2px 10px; font-weight: 600">${esc(notaAlerta)}</p>` : ''}
+    ${notaAlerta ? `<p class="opinion-nota" style="color: ${MARCA.rojo}; border-left: 3px solid ${MARCA.rojo}; padding: 2px 0 2px 10px; font-weight: 600">${esc(notaAlerta)}</p>` : ''}
     <p class="opinion-lead">${esc(p.conclusion || op?.resumen || '')}</p>
     <div class="opinion-grid">
       <div><h4>Hechos comprobados</h4>${listaBloque(p.hechos, 'Sin hechos comprobables en la ventana analizada.')}</div>
@@ -932,7 +932,11 @@ function renderInformeHtml(informe, opts = {}) {
   const idInf = idInforme(informe)
   const color = nivelColor(op.nivel)
   const logoSvg = opts.logoSvg || SIMBOLO_MARCA
-  const marca = `<div class="marca" style="text-align: center; margin: var(--space-4) 0;">${logoSvg}<span class="marca-txt" style="font-size: var(--fs-sm);"><b>JMV</b> CONSULTORES</span></div>`
+  // Los estilos inline del informe NO pueden usar los tokens del SPA
+  // (`--space-4`, `--fs-sm`, `--rojo`): este documento se abre fuera del shell,
+  // su CSS es propio y esas variables no existen, así que el navegador
+  // descartaba la declaración y la marca/aviso perdían margen y color.
+  const marca = `<div class="marca" style="text-align: center; margin: 14px 0;">${logoSvg}<span class="marca-txt" style="font-size: 9.5pt;"><b>JMV</b> CONSULTORES</span></div>`
 
   const hallazgosAltos = (op.hallazgos || []).filter((h) => h.severidad === 'alta')
   const principal = hallazgosAltos[0] || (op.hallazgos || [])[0] || null
@@ -997,7 +1001,7 @@ function renderInformeHtml(informe, opts = {}) {
   const cap5 = capitulo(5, 'Tendencias y comportamiento tributario', `
     ${gfx.tendencia}
     <p class="nota">Ventas netas e IVA determinado por período, desde el RCV ingerido.</p>
-    ${tablaMensual(informe?.mensuales)}
+    <p class="nota">El detalle período a período (declarado vs. estimado) está en el capítulo 03. No se repite aquí: imprimir la misma tabla dos veces alargaba el documento sin agregar información.</p>
   `)
 
   const cap6 = capitulo(6, 'Impacto financiero y proyecciones', `
@@ -1113,7 +1117,7 @@ function renderInformeHtml(informe, opts = {}) {
         <p>${esc(principal.detalle || principal.descripcion || principal.titulo || '')}</p>
       </div>` : ''}
       <div class="semilla">
-        Este informe se emite sobre los antecedentes que el sistema pudo verificar. Los índices, coberturas y cantidades reflecten esa realidad:
+        Este informe se emite sobre los antecedentes que el sistema pudo verificar. Los índices, coberturas y cantidades reflejan esa realidad:
         una materia sin datos aparece como «no evaluable», nunca como conforme. Documento de trabajo técnico; no constituye certificación tributaria.
       </div>
     </header>
@@ -1137,19 +1141,19 @@ function renderInformeHtml(informe, opts = {}) {
     <section class="final">
       ${marca}
       <p><b>JMV Tax Health Intelligence</b> — Informe Ejecutivo de Salud Tributaria</p>
-      ${bloqueOpinion(op)}
       <p>Este informe se entrega al contribuyente identificado en la portada y recoge el estado de su situación tributaria
       a la fecha de emisión, sobre la base de los antecedentes verificados y de las limitaciones declaradas en el capítulo 08.</p>
-      <p>Emisión profesional: Este informe técnico de salud tributaria considera el estado real de las obligaciones declaradas
-      mediante consulta al SII (Formulario F29), el Registro de Compras y Ventas (RCV) y las declaraciones anuales (F22).
-      Los indicadores y coberturas reflejan la realidad verificada; una materia sin datos aparece como «no evaluable»,
-      nunca como conformidad. Se emite con la opinión profesional que sigue y las recomendaciones correspondientes.</p>
+      <p><b>Alcance del documento.</b> Es un informe técnico emitido por JMV Consultores a partir de la consulta al SII
+      (Formulario F29, Registro de Compras y Ventas y declaraciones anuales F22), los documentos del sistema y los cálculos
+      propios declarados en la metodología. <b>No es un certificado oficial del SII</b> ni una certificación tributaria o de
+      estados financieros, y no reemplaza la revisión de un profesional habilitado. Una materia sin datos aparece como
+      «no evaluable», nunca como conformidad.</p>
       <div class="opinion-expert" style="border-top: 1px solid ${MARCA.linea}; padding-top: 16px; margin: 16px 0;">
         <h3>Opinión Profesional Tributaria</h3>
         <p>${esc(op?.clasificacion?.nota || op?.opinion_profesional?.conclusion || 'No disponible')}</p>
         ${op?.opinion_profesional?.recomendacion ? `<p><b>Recomendación:</b> ${esc(op.opinion_profesional.recomendacion)}</p>` : ''}
-        ${op?.opinion_profesional?.hechos ? `<p><b>Hechos relevantes:</b> ${esc(op.opinion_profesional.hechos)}</p>` : ''}
-        ${op?.opinion_profesional?.riesgos ? `<p><b>Riesgos identificados:</b> ${esc(op.opinion_profesional.riesgos)}</p>` : ''}
+        ${(op?.opinion_profesional?.hechos || []).length ? `<p><b>Hechos relevantes:</b></p>${listaBloque(op.opinion_profesional.hechos, '')}` : ''}
+        ${(op?.opinion_profesional?.riesgos || []).length ? `<p><b>Riesgos identificados:</b></p>${listaBloque(op.opinion_profesional.riesgos, '')}` : ''}
       </div>
       <p>Se recomienda su uso como base de la conversación con el equipo contador, y su contraste con la documentación de respaldo
       antes de adoptar decisiones sobre regularizaciones o rediseño de procesos.</p>

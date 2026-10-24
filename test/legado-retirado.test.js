@@ -131,15 +131,25 @@ test('R3: las 4 vistas portadas existen y conservan los contratos de la API', ()
 
 /* ------------------------------ R4 ------------------------------ */
 
-test('R4: un solo catálogo de reportes en el menú (Centro + Cierre)', () => {
+test('R4: un solo catálogo de reportes en el menú (Informes) y el cierre como proceso', () => {
   const src = fs.readFileSync(path.join(FRONT, 'sistema', 'app.js'), 'utf8')
-  const desde = src.indexOf("seccion: 'Informes y control'")
-  assert.ok(desde > 0, 'existe la sección Informes y control')
-  const bloque = src.slice(desde, src.indexOf(']', desde))
-  const keys = [...bloque.matchAll(/key: '([^']+)'/g)].map((m) => m[1])
-  assert.deepStrictEqual(keys, ['reportes', 'cierre'], 'solo Centro de Reportes y Cierre de Período')
+  // F2 (navegación de dos niveles): el área se llama «Informes» y el cierre de
+  // período dejó de convivir con el catálogo porque NO es un reporte: es un
+  // proceso contable y vive en Contabilidad. La regla que este test protege
+  // sigue siendo la misma: el menú no repite los reportes que tienen tarjeta
+  // en el Centro, y hay UN solo catálogo.
+  const secciones = (nombre) => {
+    const desde = src.indexOf(`seccion: '${nombre}'`)
+    assert.ok(desde > 0, `existe la sección ${nombre}`)
+    const bloque = src.slice(desde, src.indexOf(']', desde))
+    return [...bloque.matchAll(/key: '([^']+)'/g)].map((m) => m[1])
+  }
+  assert.deepStrictEqual(secciones('Informes'), ['reportes', 'cclientes', 'cproveedores', 'informe-rango', 'exportacion-masiva'], 'el catálogo abre el área; lo demás son documentos del despacho')
+  assert.ok(secciones('Contabilidad').includes('cierre'), 'el cierre es un proceso contable, no un reporte')
+  assert.ok(!secciones('Informes').includes('cierre'), 'el cierre no se mezcla con el catálogo de reportes')
   for (const repetido of ['situacion', 'clasificado', 'niif', 'balance8', 'comprobacion', 'resultados']) {
-    assert.ok(!keys.includes(repetido), `${repetido} ya no se repite en el menú (vive en el Centro)`)
+    assert.ok(!secciones('Informes').includes(repetido), `${repetido} no se repite en el menú (vive en el Centro)`)
+    assert.ok(!secciones('Contabilidad').includes(repetido), `${repetido} no se repite en Contabilidad`)
   }
   // Las tarjetas del Centro siguen existiendo: el anchor no se rompió.
   const conta = fs.readFileSync(path.join(FRONT, 'sistema', 'views-conta.js'), 'utf8')

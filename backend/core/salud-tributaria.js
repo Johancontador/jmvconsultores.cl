@@ -1283,13 +1283,21 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
   // observaciones» sin explicar por qué, y la nota se calculaba pero nunca
   // se mostraba en ningún capítulo.
   const alertaCritica = altas > 0
-  const notaAlertaCritica = 'El índice es favorable, pero existen alertas de severidad alta que impiden una lectura de conformidad plena.'
+  // La nota se adjunta SIEMPRE que haya alerta alta, pero su texto NO puede
+  // afirmar que el índice es favorable cuando el índice dice «Crítica»: en F3
+  // la portada mostraba «34/100 · Crítica» seguido de «El índice es favorable»
+  // (dos lecturas opuestas en la misma pantalla). El texto se elige según la
+  // clasificación real.
+  const notaAlertaConIndiceBueno = 'El índice es favorable, pero existen alertas de severidad alta que impiden una lectura de conformidad plena.'
+  const notaAlertaCritica = 'Existen alertas de severidad alta que impiden una lectura de conformidad plena: revísalas antes de declarar o emitir documentos.'
+  const indiceBueno = clasificacion.clave === 'SOLIDA' || clasificacion.clave === 'FAVORABLE'
+  const notaAlerta = indiceBueno ? notaAlertaConIndiceBueno : notaAlertaCritica
   const clasificacionEfectiva = !indiceEvaluable
     ? SIN_EVALUABLE
     : alertaCritica && clasificacion.clave === 'SOLIDA'
-      ? { ...CLASIFICACIONES[1], nota: notaAlertaCritica }
+      ? { ...CLASIFICACIONES[1], nota: notaAlertaConIndiceBueno }
       : alertaCritica
-        ? { ...clasificacion, nota: notaAlertaCritica }
+        ? { ...clasificacion, nota: notaAlerta }
         : clasificacion
 
   let nivel = 'AL_DIA'

@@ -338,9 +338,20 @@ test('T4: lo que no existe vive en «Próximamente», fuera de los reportes real
 
   assert.match(html, /rep-proximos/, 'hay un bloque separado para lo no disponible')
   assert.match(html, /Próximamente/)
-  assert.match(html, /NO existen todavía/, 'declara que no están implementados')
-  assert.strictEqual((html.match(/No disponible todavía/g) || []).length, 6, 'las 6 promesas quedan juntas y rotuladas')
   assert.ok(!/En preparación/.test(html), 'ya no hay tarjetas «en preparación» mezcladas con reportes reales')
+  // F2.6: el listado decía «No disponible todavía» también para F29 y
+  // antigüedad de saldos, que SÍ están implementados (Salud y Cobranza). Ahora
+  // cada línea no implementada dice qué existe y qué falta, y lo implementado
+  // es una tarjeta real.
+  const bloque = html.slice(html.indexOf('rep-proximos'))
+  for (const ausente of ['Flujo de efectivo', 'Cambios en patrimonio', 'PPM', 'Centros de costo']) {
+    assert.ok(bloque.includes(ausente), `${ausente} se declara no implementado`)
+  }
+  assert.match(bloque, /No implementado/, 'rotula lo ausente como no implementado')
+  assert.ok(!bloque.includes('F29'), 'F29 no puede estar en «Próximamente»: está implementado en Salud Tributaria')
+  assert.ok(!bloque.includes('Antigüedad de saldos'), 'la antigüedad de saldos existe en Cobranza')
+  assert.match(html, /href="#salud"/, 'F29 se abre desde el reporte real de Salud Tributaria')
+  assert.match(html, /href="#cobranza"/, 'la antigüedad de saldos se abre en Cobranza')
   assert.match(html, /href="#cierre"/, 'el cierre tiene su tarjeta en el centro')
   assert.match(html, /href="#comprobacion"/, 'los reportes reales siguen navegables')
 })

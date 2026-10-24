@@ -13,7 +13,10 @@ VIEWS.tesoreria = {
 
     let resumen = null
     try {
-      resumen = (await apiGet(`/api/contable/empresas/${eid}/tesoreria/resumen`)).resumen
+      // El resumen se pide POR PERÍODO: el servidor lo calculaba con el mes del
+      // calendario y el KPI decía «Ingresos del mes $0» con un cobro del 30/09
+      // visible en la misma pantalla (F3).
+      resumen = (await apiGet(`/api/contable/empresas/${eid}/tesoreria/resumen?periodo=${periodoGlobal()}`)).resumen
     } catch (err) {
       cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">Error</b><p class="muted">${esc(err.message)}</p></div>`
       return
@@ -66,8 +69,8 @@ async function renderBancos(cont, { eid, resumen, puedeOperar, deuda = null }) {
    <div class="kpi-grid">
      <div class="kpi up"><small>Total bancos</small><strong>${fmtCorto(resumen.total_bancos)}</strong><span class="sub">${bancos.length} cuenta(s) bancaria(s)</span></div>
      <div class="kpi"><small>Caja</small><strong>${resumen.caja === null ? '—' : fmtCorto(resumen.caja)}</strong><span class="sub">saldo contable (alias CAJA)</span></div>
-     <div class="kpi ${resumen.mes_actual.ingresos >= resumen.mes_actual.egresos ? 'up' : 'warn'}"><small>Ingresos del mes</small><strong>${fmtCorto(resumen.mes_actual.ingresos)}</strong><span class="sub">${resumen.mes_actual.movimientos} movimiento(s)</span></div>
-     <div class="kpi warn"><small>Egresos del mes</small><strong>${fmtCorto(resumen.mes_actual.egresos)}</strong><span class="sub">pagos + transferencias</span></div>
+     <div class="kpi ${resumen.mes_actual.ingresos >= resumen.mes_actual.egresos ? 'up' : 'warn'}"><small>Ingresos del período</small><strong>${fmtCorto(resumen.mes_actual.ingresos)}</strong><span class="sub">${resumen.mes_actual.movimientos} movimiento(s)</span></div>
+     <div class="kpi warn"><small>Egresos del período</small><strong>${fmtCorto(resumen.mes_actual.egresos)}</strong><span class="sub">pagos + transferencias</span></div>
    </div>
 
    <div class="card mt">

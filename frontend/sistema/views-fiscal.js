@@ -339,10 +339,10 @@ async function pintarLibro(periodo, tab) {
     porPagina: 100,
     vacio: `Sin documentos de ${tab === 'compra' ? 'compras' : 'ventas'} en ${perDisplay(periodo)}.`,
     filaHTML: (d, hl) => `<tr>
-      <td class="sub">${hl((d.fecha_docto || '').slice(0, 10))}</td>
+      <td class="sub fecha">${hl((d.fecha_docto || '').slice(0, 10))}</td>
       <td class="sub">${hl(NOMBRES_TIPO_DOC[d.tipo_doc] || `Tipo ${d.tipo_doc}`)}</td>
       <td class="mono">${hl(d.folio)}</td>
-      <td class="mono sub">${hl(formatRut(d.rut_contraparte))}</td>
+      <td class="mono sub rut">${hl(formatRut(d.rut_contraparte))}</td>
       <td>${hl((d.razon_social || '').slice(0, 42))}</td>
       <td class="num">${d.monto_exento ? fmtM(d.monto_exento) : '—'}</td>
       <td class="num">${fmtM(d.monto_neto)}</td>
@@ -1327,7 +1327,9 @@ VIEWS.integraciones = {
               y llena los libros automáticamente. No requiere intervención salvo renovar la clave.
            </p>
          </div>
-         <span class="chip contabilizado">Conectado</span>
+         ${empresa?.clave_sii_configurada
+           ? '<span class="chip contabilizado">Conectado</span>'
+           : '<span class="chip pendiente" title="La conexión se activa cuando la empresa tiene clave SII configurada">Sin clave SII</span>'}
        </div>
        <div class="kpi-grid mt">
          <div class="kpi"><small>Empresa</small><strong style="font-size:var(--fs-md);font-family:var(--font-sans)">${esc(S.empresa.nombre)}</strong></div>

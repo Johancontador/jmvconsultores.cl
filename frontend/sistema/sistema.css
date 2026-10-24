@@ -26,6 +26,13 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
   padding: 0 var(--space-2) var(--space-2);
 }
 .sys-logo img { width: 30px; height: 30px; }
+/* Marca según tema (F3): el wordmark de logo-light.svg es blanco y solo se
+   lee sobre fondo oscuro; logo-ink.svg es la variante para fondos claros.
+   Sin esto el sidebar y el login embebido mostraban la marca invisible en el
+   tema por defecto (claro). */
+.logo-para-oscuro { display: none; }
+html[data-theme='dark'] .logo-para-claro { display: none; }
+html[data-theme='dark'] .logo-para-oscuro { display: inline-block; }
 .sys-logo div {
   font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); line-height: 1.15;
 }
@@ -90,6 +97,9 @@ body { font-family: var(--font-sans); font-size: var(--fs-base); }
    semibold y borde marcado — es la decisión principal del shell. */
 .sys-side > select#sys-empresa {
   width: 100%; height: 38px; padding: 0 var(--space-3);
+  /* El nombre de la empresa se cortaba a mitad de letra contra la flecha
+     nativa: con ellipsis el recorte se lee como recorte. */
+  text-overflow: ellipsis;
   font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-semibold);
   color: var(--fg-primary); border-color: var(--border-default);
   border-radius: var(--radius-md);
@@ -600,6 +610,10 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 .rep-card b { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .rep-card span { font-size: var(--fs-xs); color: var(--fg-muted); }
+/* Descripción de una función que NO existe todavía. Antes iba dentro de
+   `.chip` (white-space: nowrap): las frases largas desbordaban la tarjeta y se
+   pisaban con la vecina en el Centro de Reportes (F3). */
+.rep-card .rep-desc { white-space: normal; line-height: 1.45; }
 .rep-card:hover { border-color: var(--accent); background: var(--accent-soft); }
 .rep-card:hover b { color: var(--accent); }
 .rep-card-off { cursor: default; opacity: 0.6; }
@@ -764,8 +778,13 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 }
 
 .sys .centro-continuar { padding: var(--space-3) var(--space-5); }
-.sys .centro-card-seguir {
-  display: flex; gap: var(--space-3); align-items: center;
+/* Doble clase a propósito: `.sys .centro-card` (más abajo en la hoja) fija
+   `flex-direction: column` y, con la misma especificidad, ganaba por orden: la
+   tarjeta «Continuar donde quedó» se apilaba en columna (icono centrado arriba,
+   texto y acción debajo) en vez de ser una fila. */
+.sys .centro-card.centro-card-seguir {
+  display: flex; flex-direction: row; flex-wrap: wrap;
+  gap: var(--space-3); align-items: center;
   text-decoration: none; color: var(--fg);
 }
 
@@ -954,6 +973,11 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
    ya está a la vista y un botón que no abre nada solo confunde. */
 .sys-dock .dock-menu { display: none; }
 @media (max-width: 960px) { .sys-dock .dock-menu { display: flex; } }
+/* Con el panel de secciones abierto (≤960 px) el dock quedaba ENCIMA del
+   panel (z-index 130 vs 120) y tapaba las últimas entradas del menú, que no se
+   podían pulsar. Mientras el panel está abierto el dock no aporta nada: se
+   oculta y el menú completo queda accesible. */
+@media (max-width: 960px) { body.menu-movil .sys-dock { display: none; } }
 
 /* El dock flota sobre el contenido: se reserva su alto para no tapar nada. */
 .sys-main { padding-bottom: calc(var(--space-16) + 96px); }
@@ -1047,6 +1071,12 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .sys .doc-acciones .btn + .btn { margin-left: 4px; }
 .sys .doc-tipo-cel { max-width: 170px; }
 .sys .doc-contra-cel { max-width: 210px; }
+/* El RUT se partía en el guion y el dígito verificador quedaba solo en una
+   segunda línea (visto en Libros de Compras y Ventas, F3): es un identificador,
+   no un texto que envuelva. */
+.sys .doc-rut-cel, .tbl .rut { white-space: nowrap; }
+/* La fecha ISO se partía en el guion («2026-08-» / «07»), igual que el RUT. */
+.tbl .fecha { white-space: nowrap; }
 .sys .doc-rut-cel { max-width: 120px; }
 .sys .doc-cuenta-cel { max-width: 150px; }
 /* A 1280 px la rejilla no cabe entera: la tabla hace scroll DENTRO de

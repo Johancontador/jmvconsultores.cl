@@ -37,7 +37,25 @@ VIEWS.salud = {
       inf = r.informe
       graficos = g.graficos || {}
     } catch (err) {
-      cont.innerHTML = `<div class="card" style="border-color:var(--danger)"><b style="color:var(--danger)">No se pudo cargar el diagnóstico</b><p class="muted">${esc(err.message)}</p></div>`
+      // Un fallo de carga NO es un hallazgo tributario ni un puntaje negativo:
+      // se declara qué ocurrió con la taxonomía compartida (shared/estados-salud),
+      // se dice que el resto del sistema sigue disponible y se ofrece reintentar.
+      // Antes todo terminaba en «No se pudo cargar el diagnóstico» + el mensaje
+      // crudo del backend, sin distinguir caída del proveedor de defecto propio.
+      const EST = window.EstadosSalud
+      const estado = EST ? EST.clasificarFallo({ detalle: err.message }) : null
+      const titulo = estado ? estado.etiqueta : 'No se pudo cargar el diagnóstico'
+      const detalle = EST
+        ? EST.mensaje(estado.clave, { fuente: 'el diagnóstico de Salud Tributaria', periodo, detalle: err.message })
+        : String(err.message || '')
+      cont.innerHTML = `
+        <div class="card" style="border-color:var(--warning)">
+          <b>${esc(titulo)}</b>
+          <p class="muted">${esc(detalle)}</p>
+          <p class="hint">Los demás módulos (bandeja, libros, contabilidad y tesorería) siguen disponibles: este aviso afecta solo a esta pantalla.</p>
+          <div class="sl-acciones"><button class="btn btn-secondary" id="sl-reintentar">Reintentar</button></div>
+        </div>`
+      document.getElementById('sl-reintentar')?.addEventListener('click', () => renderRoute())
       return
     }
 
@@ -61,6 +79,26 @@ VIEWS.salud = {
     const altas = (op.hallazgos || []).filter((h) => h.severidad === 'alta').length
     const noEval = 'No evaluable con los antecedentes disponibles'
 
+    // CERO ≠ DESCONOCIDO (handoff §4.5). Un $0 solo es un dato cuando la fuente
+    // fue consultada; sin consulta el estado es «pendiente» y se dice así. Antes
+    // `(op.exposicion?.total || 0) > 0 ? … : noEval` mostraba «No evaluable»
+    // incluso con una exposición real de $0, y los créditos siempre aparecían
+    // como no evaluables aunque la Renta se hubiera consultado.
+    const EST = window.EstadosSalud
+    // Fallback mínimo si el módulo compartido no cargó (p. ej. un harness de
+    // pruebas que no incluye shared/estados-salud.js): misma regla, sin textos.
+    const resolverValor = (valor, consultado) => (EST
+      ? EST.valorDeclarado(valor, { consultado })
+      : consultado && valor != null
+        ? { estado: 'verificado', valor: Number(valor) }
+        : { estado: consultado ? 'no_concluyente' : 'pendiente', valor: null })
+    const exposicion = resolverValor(op.exposicion?.total, (op.cobertura_diagnostico || 0) > 0)
+    const creditos = resolverValor(remanenteRenta, (inf.renta?.estado || 'no_consultado') === 'disponible')
+    // Texto del KPI: el valor confirmado (incluido 0) se muestra; la ausencia de
+    // datos se declara como tal, nunca como un cero.
+    const kpiValor = (v) => (v.estado === 'verificado' ? fmtCorto(v.valor) : v.estado === 'pendiente' ? 'Sin consultar' : noEval)
+    const kpiSub = (v, cero, datos) => (v.estado === 'verificado' ? (v.valor === 0 ? cero : datos) : v.estado === 'pendiente' ? 'Fuente no consultada' : 'Antecedentes insuficientes')
+
     const pct = (n, d) => (d ? `${Math.round((n / d) * 1000) / 10}%` : noEval)
     const tarjetas = [
       {
@@ -70,10 +108,15 @@ VIEWS.salud = {
         t: 'Promedio ponderado de cinco dimensiones evaluables (cumplimiento 25%, consistencia 25%, riesgos 20%, calidad de datos 15%, controles 15%).',
       },
       {
-        k: 'Cumplimiento oportuno',
+        // Nombre explícito: mide la VENTANA de 12 meses que analiza la vista.
+        // El índice usa la dimensión «Cumplimiento de obligaciones», que se
+        // calcula sobre el rango oficial consultado en el SII (hasta 5 años).
+        // Son dos períodos distintos: antes compartían nombre y daban cifras
+        // diferentes sin explicar por qué.
+        k: 'Cumplimiento en la ventana (12 meses)',
         v: pct(cumplidos, revisados),
-        s: `${cumplidos} de ${revisados} período(s) con declaración vigente`,
-        t: 'Obligaciones presentadas dentro de plazo ÷ obligaciones exigibles. Sin consulta oficial no se afirma cumplimiento.',
+        s: `${cumplidos} de ${revisados} período(s) de la ventana con declaración vigente`,
+        t: 'Obligaciones presentadas dentro de plazo ÷ obligaciones exigibles EN LA VENTANA ANALIZADA. La dimensión «Cumplimiento de obligaciones» del índice usa el rango consultado en el SII, por eso puede diferir.',
       },
       {
         k: 'Tasa de declaraciones observadas',
@@ -89,15 +132,15 @@ VIEWS.salud = {
       },
       {
         k: 'Exposición tributaria',
-        v: (op.exposicion?.total || 0) > 0 ? fmtCorto(op.exposicion.total) : noEval,
-        s: 'Suma sin duplicidad de conceptos',
-        t: 'Contingencias estimadas y diferencias por investigar, sin sumar multas ni créditos que no son pérdida real.',
+        v: kpiValor(exposicion),
+        s: kpiSub(exposicion, 'Sin contingencias cuantificadas', 'Suma sin duplicidad de conceptos'),
+        t: 'Contingencias estimadas y diferencias por investigar, sin sumar multas ni créditos que no son pérdida real. Un $0 indica que la ventana fue revisada y no hay exposición cuantificada.',
       },
       {
         k: 'Créditos y remanentes',
-        v: remanenteRenta > 0 ? fmtCorto(remanenteRenta) : noEval,
-        s: 'Remanente devuelto en renta (F22)',
-        t: 'Créditos y remanentes respaldados y vigentes que requieren seguimiento.',
+        v: kpiValor(creditos),
+        s: kpiSub(creditos, 'Renta consultada: sin remanente devuelto', 'Remanente devuelto en renta (F22)'),
+        t: 'Créditos y remanentes respaldados y vigentes que requieren seguimiento. Solo se informa si la Renta (F22) fue consultada.',
       },
       {
         k: 'Riesgos críticos abiertos',
@@ -112,11 +155,9 @@ VIEWS.salud = {
         t: 'Alertas cerradas con evidencia ÷ alertas que correspondía resolver × 100.',
       },
     ]
-    // KPIs mejorados con contexto SII y comparaciones
-    const kpiContextoSII = (tipo, label, valor, subtipo) => {
-      const ctx = { ventas: 'Ventas declaradas en F29 vs. estimadas RCV', iva: 'IVA determinado vs. estimado', ppm: 'PPM declarado vs. estimado' }[tipo]
-      return `${ctx || ''} ${label}: ${valor}`.trim()
-    }
+    // Comparación F29 declarado vs RCV estimado (única fuente de ese contraste:
+    // antes además se concatenaba el valor de cada KPI como texto suelto dentro
+    // de la tarjeta, sin etiqueta ni clase, duplicando lo ya visible).
     const kpiComparacionF29 = (m) => {
       if (!m.comparacion) return ''
       const { diferencia_ventas, diferencia_iva, diferencia_ppm, diferencia_total } = m.comparacion
@@ -134,21 +175,10 @@ VIEWS.salud = {
       const totalPagar = indicadores.total_a_pagar ?? null
       return totalPagar != null ? `<div class="kpi-f29-declared">Total F29 declarado: ${fmtCorto(totalPagar)}</div>` : ''
     }
-    const kpiUltimaActualizacion = () => `
-      <div class="kpi-ultima-actualizacion">
-        <small>Última actualización SII:</small> ${new Date().toLocaleDateString('es-CL')}
-      </div>
-    `
-    const kpiModuloSeleccion = (indice) => `
-      <style>
-        .sl-kpi-selection-anim { animation: kpiPulse 2s ease-in-out infinite; }
-        @keyframes kpiPulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-      </style>
-      <span class="sl-kpi-selection-badge" title="Módulo ${indice}">${indice}</span>
-    `
+    // Se eliminaron dos adornos sin significado: «Última actualización SII»
+    // (construida con new Date(), afirmaría una actualización que el sistema no
+    // conoce) y los badges «Módulo 0…7» con animación infinita (ni eran
+    // módulos ni aportaban información).
 
 
     const chipSev = (s) => ({ alta: 'error', media: 'propuesto', baja: 'pendiente' }[s] || 'neutral')
@@ -197,13 +227,7 @@ VIEWS.salud = {
           ` : '<p class="hint">Primer informe de la serie: todavía no hay un informe anterior con el cual comparar.</p>'}
         </div>
       </div>
-      <!-- Expert tax opinion badge -->
-      <div class="sl-opinion-expert" style="margin: var(--space-3) 0; padding: var(--space-3); background: var(--bg-elevated); border-radius: var(--radius-lg); border-left: 4px solid var(--accent);">
-        <h4 style="margin: 0 0 var(--space-2); display: flex; align-items: center; gap: var(--space-2);"><span class="chip contabilizado" style="font-size: var(--fs-xs)">📋</span> Opinión Tributaria Profesional</h4>
-        <p class="muted" style="font-size: var(--fs-sm); line-height: 1.5; margin: 0">${esc(opinionProf.conclusion || 'Opinión tributaria en proceso de generación')}</p>
-        ${opinionProf.recomendacion ? `<p class="muted" style="font-size: var(--fs-xs); margin: var(--space-1) 0 0">Recomendación: ${esc(opinionProf.recomendacion)}</p>` : ''}
-        ${opinionProf.hechos && opinionProf.hechos.length > 0 ? `<p class="muted" style="font-size: var(--fs-xs); margin: var(--space-1) 0 0">Hechos clave: ${listaHtml(opinionProf.hechos.slice(0, 3), '')}</p>` : ''}
-      </div>`
+    `
 
     const panelCumplimiento = `
       <div class="card">
@@ -479,26 +503,6 @@ VIEWS.salud = {
           </tr>`).join('')}</tbody>
         </table></div>` : '<div class="empty">Sin acciones pendientes: mantener el control mensual.</div>'}
         <p class="hint">Cada acción se cierra con la evidencia señalada; el siguiente informe verifica el resultado.</p>
-      </div>
-      <!-- Plan de acción con opinión experta tributaria -->
-      <div class="card mt">
-        <h3>Plan de acción tributario</h3>
-        <p class="muted" style="font-size: var(--fs-sm); margin: var(--space-2) 0 0">Basado en la opinión tributaria profesional y los hallazgos del informe, se recomienda:</p>
-        ${(op.plan_accion || []).length ? `
-          <div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>#</th><th>Acción</th><th>Razón tributaria</th><th>Evidencia</th><th>Responsable</th><th>Plazo</th><th class="num">Impacto estimado</th></tr></thead>
-            <tbody>${op.plan_accion.map((a, i) => `<tr>
-              <td>${a.prioridad ?? i + 1}</td>
-              <td>${esc(a.accion || '—')}</td>
-              <td class="sub">${esc(a.motivo || '—')}</td>
-              <td class="sub">${esc(a.evidencia || '—')}</td>
-              <td>${esc(a.responsable || '—')}</td>
-              <td>${esc(a.plazo || '—')}</td>
-              <td class="num mono">${a.impacto_estimado ? fmt(a.impacto_estimado) : sub}</td>
-            </tr>`).join('')}</tbody>
-          </table></div>` : '<div class="empty">No hay acciones pendientes: el informe actual está al día.</div>'}
-        <p class="muted" style="font-size: var(--fs-xs); margin: var(--space-3) 0 0">«Mantener el control mensual de declaraciones y conciliación para evitar sanciones del SII.»</p>
-        <p class="muted" style="font-size: var(--fs-xs); margin: var(--space-2) 0 0; color: var(--fg-muted)">— Opinión tributaria profesional generada automáticamente a partir de los antecedentes SII reunidos.</p>
       </div>`
 
     const met = inf.metodologia || {}
@@ -631,15 +635,6 @@ VIEWS.salud = {
             </div>
           </div>
           ${bienvenida}
-          <div class="sl-indice">
-            <div class="sl-indice-num" style="color:${color}">${op.indice_evaluable === false ? '—' : esc(op.score)}<small>/100</small></div>
-            <div class="sl-indice-meta">
-              <div><b>Cobertura</b> ${op.cobertura_diagnostico}%</div>
-              <div><b>Confianza</b> ${esc(op.nivel_confianza || '—')}</div>
-              <div><b>Alertas altas</b> ${altas}</div>
-              <div><b>Acciones</b> ${(op.plan_accion || []).length}</div>
-            </div>
-          </div>
         </div>
         <div class="sl-acciones">
             ${puede ? '<button class="btn btn-primary" id="sl-reunion">Reunir antecedentes</button>' : ''}
@@ -656,13 +651,7 @@ VIEWS.salud = {
             <div class="sl-kpi-k">${esc(t.k)}</div>
             <div class="sl-kpi-v">${esc(t.v)}</div>
             <div class="sl-kpi-s">${esc(t.s)}</div>
-            ${kpiContextoSII(t.k, '', t.v, t.s)}
           </div>`).join('')}
-      </div>
-
-      <div class="sl-kpi-animaciones">
-        ${tarjetas.map((t, i) => `
-          <div class="sl-kpi-anim sl-kpi-selection-anim" data-index="${i}">${kpiModuloSeleccion(i)}</div>`).join('')}
       </div>
 
       <div class="sl-kpi-contexto-sii">
@@ -723,7 +712,8 @@ VIEWS.salud = {
       }
     })
 
-    // Agregar estilo para la portada y animaciones
+    // Estilos propios de la portada. (Se eliminaron los de la fila de badges
+    // animados: ya no existe ese bloque y la animación infinita sobraba.)
     const estilo = `
       <style>
         .sl-portada { position: relative; }
@@ -731,12 +721,6 @@ VIEWS.salud = {
         .sl-portada-robot { width: 64px; height: 64px; margin: 0 auto var(--space-2); }
         .sl-portada-titulo { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -0.01em; margin: 0; color: var(--fg-primary); }
         .sl-portada-subtitulo { color: var(--fg-muted); font-size: var(--fs-sm); margin: 4px 0 0; }
-        .sl-kpi-animaciones { position: absolute; top: var(--space-2); right: var(--space-2); display: flex; gap: var(--space-2); }
-        .sl-kpi-selection-badge {
-          background: var(--accent-soft); color: var(--accent);
-          padding: 2px 8px; border-radius: var(--radius-full);
-          font-size: var(--fs-xs); font-weight: var(--fw-semibold);
-        }
         .sl-kpi-f29-comparison {
           background: var(--bg-surface);
           border: 1px solid var(--border-subtle);
@@ -763,10 +747,6 @@ VIEWS.salud = {
           color: var(--fg-muted);
           display: block;
           margin-bottom: var(--space-1);
-        }
-        @keyframes kpiPulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
         }
       </style>`
     cont.insertAdjacentHTML('afterbegin', estilo)

@@ -391,7 +391,14 @@ function listarCartola(db, { empresaId, bancoCuentaId, soloPendientes = false, l
 // Resumen para el dashboard de tesorería
 // ============================================================
 
-function resumen(db, empresaId) {
+/**
+ * Resumen del módulo. `periodo` (AAAAMM) es el período del HEADER: los KPI de
+ * ingresos/egresos son del período seleccionado, no del mes del calendario del
+ * servidor. Antes el KPI decía «Ingresos del mes $0» mientras la tabla mostraba
+ * el cobro del 30/09 bajo un header en Septiembre (F3: dos verdades en la
+ * misma pantalla). Sin período explícito se mantiene el mes en curso.
+ */
+function resumen(db, empresaId, { periodo = null } = {}) {
   const bancos = listarBancos(db, empresaId)
   const totalBancos = bancos.reduce((s, b) => s + b.saldo, 0)
   const caja = (() => {
@@ -403,7 +410,10 @@ function resumen(db, empresaId) {
     `).get(empresaId, cta.id)
     return s.debe - s.haber
   })()
-  const mesActual = new Date().toISOString().slice(0, 7) // 'YYYY-MM' (UTC)
+  const p = String(periodo || '')
+  const mesActual = /^\d{4}(0[1-9]|1[0-2])$/.test(p)
+    ? `${p.slice(0, 4)}-${p.slice(4, 6)}`
+    : new Date().toISOString().slice(0, 7) // 'YYYY-MM' (UTC)
   const delMes = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN monto > 0 THEN monto ELSE 0 END), 0) AS ingresos,
@@ -416,6 +426,9 @@ function resumen(db, empresaId) {
     bancos,
     total_bancos: totalBancos,
     caja,
+    // `mes_actual` conserva el nombre por compatibilidad con los consumidores
+    // existentes; `periodo` declara a qué mes corresponden estos totales.
+    periodo: mesActual.replace('-', ''),
     mes_actual: { ingresos: delMes.ingresos, egresos: delMes.egresos, movimientos: delMes.n },
   }
 }

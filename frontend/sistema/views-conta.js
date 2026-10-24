@@ -6,7 +6,10 @@
 /* ============================ CONTABILIDAD ============================ */
 
 VIEWS.asientos = {
-  titulo: 'Contabilidad',
+  // El H1 decía «Contabilidad», el mismo rótulo del ÁREA del menú: al abrir
+  // Asientos el encabezado parecía el de la sección y no el de la pantalla
+  // (breadcrumb y menú decían «Asientos — Diario, Mayor y Plan»).
+  titulo: 'Asientos contables',
   async render(cont) {
     const tab = window._ctaTab || 'diario'
     cont.innerHTML = `
@@ -788,10 +791,17 @@ VIEWS.reportes = {
       { titulo: 'Tributarios', items: [
         { hash: '#analitica', label: 'IVA — dashboard tributario', desc: 'Débito, crédito, determinado anual y por mes' },
         { hash: '#libros', label: 'RCV — libros de compra y venta', desc: 'Documento a documento desde el SII' },
+        // El F29 SÍ está implementado: se lee del Formulario Compacto del SII y
+        // se concilia contra el RCV en Salud Tributaria. Antes esta tarjeta no
+        // existía y el mismo F29 aparecía en «Próximamente», así que el usuario
+        // que lo buscaba en Reportes concluía que no existía.
+        { hash: '#salud', label: 'F29 — declarado y conciliación', desc: 'Casillas declaradas del F29 leídas del SII y su conciliación contra el RCV (Salud Tributaria → IVA y conciliación)' },
       ] },
       { titulo: 'Clientes y proveedores', items: [
         { hash: '#cclientes', label: 'Cuenta corriente — clientes', desc: 'Cargos, abonos y saldo corrido por cliente' },
         { hash: '#cproveedores', label: 'Cuenta corriente — proveedores', desc: 'Cargos, abonos y saldo corrido por proveedor' },
+        // Antigüedad de saldos: existe como mora por documento en Cobranza.
+        { hash: '#cobranza', label: 'Antigüedad de saldos (mora)', desc: 'Días de mora por documento abierto y semáforo por cliente' },
       ] },
       { titulo: 'Tesorería', items: [
         { hash: '#tesoreria', tabVar: '_tesoTab', tabVal: 'movimientos', label: 'Libro banco', desc: 'Saldo corrido con folio por movimiento' },
@@ -801,13 +811,15 @@ VIEWS.reportes = {
         { hash: '#analitica', label: 'Comparativos anuales', desc: 'Ventas, compras e IVA vs año anterior' },
       ] },
     ]
+    // Lo que el sistema NO tiene como reporte. Cada línea dice qué SÍ existe y
+    // qué falta, en vez de un «No disponible todavía» idéntico para materias
+    // muy distintas (había tarjetas aquí que sí estaban implementadas: F29 y
+    // antigüedad de saldos).
     const proximos = [
-      { label: 'Flujo de efectivo', desc: 'No disponible todavía' },
-      { label: 'Cambios en patrimonio', desc: 'No disponible todavía' },
-      { label: 'F29', desc: 'No disponible todavía' },
-      { label: 'PPM', desc: 'No disponible todavía' },
-      { label: 'Antigüedad de saldos', desc: 'No disponible todavía' },
-      { label: 'Centros de costo', desc: 'No disponible todavía' },
+      { label: 'Flujo de efectivo', desc: 'No implementado. Los movimientos de caja existen en Tesorería, pero no hay estado de flujo proyectado.' },
+      { label: 'Cambios en patrimonio', desc: 'No implementado. El patrimonio se ve en la Situación Financiera, sin estado de cambios.' },
+      { label: 'PPM', desc: 'El devengo de PPM se propone en Contabilización (ingresos × tasa) y aparece en Salud Tributaria; falta el reporte mensual de PPM.' },
+      { label: 'Centros de costo', desc: 'Los centros existen en el plan y se asignan en los asientos; falta el reporte por centro de costo.' },
     ]
     // Favoritos y recientes (§10 mandato): en localStorage, sin backend — son
     // accesos, no módulos nuevos. Cada entrada guarda anchor+tab.
@@ -868,14 +880,14 @@ VIEWS.reportes = {
          <div class="rep-grid">
            ${g.items.map((it) => it.hash
              ? `<a class="rep-card" href="${it.hash}" data-firma="${esc(firma(it))}"${it.tabVar ? ` data-tabvar="${it.tabVar}" data-tabval="${it.tabVal}"` : ''}><b>${esc(it.label)}</b><span>${esc(it.desc)}</span><button type="button" class="rep-fav" title="Favorito" aria-label="Alternar favorito" data-firma="${esc(firma(it))}" style="background:none;border:none;cursor:pointer;color:${esFav(it) ? 'var(--accent)' : 'var(--fg-muted)'};font-weight:700;padding:0 4px">${esFav(it) ? '★' : '☆'}</button></a>`
-             : `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
+             : `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="rep-desc">${esc(it.desc)}</span></div>`).join('')}
          </div>
        </div>`).join('')}
        <div class="card mb rep-grupo rep-proximos" data-grupo="próximamente">
          <h3>Próximamente <span class="chip neutral">no disponible</span></h3>
          <p class="hint" style="margin-top:-6px">Estas funciones NO existen todavía en el sistema. Se listan separadas de los reportes reales para que la navegación no prometa lo que no se calcula; no son enlaces.</p>
          <div class="rep-grid">
-           ${proximos.map((it) => `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="chip neutral">${esc(it.desc)}</span></div>`).join('')}
+           ${proximos.map((it) => `<div class="rep-card rep-card-off"><b>${esc(it.label)}</b><span class="rep-desc">${esc(it.desc)}</span></div>`).join('')}
          </div>
        </div>
      </div>

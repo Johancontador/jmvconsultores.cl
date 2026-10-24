@@ -25,17 +25,22 @@ const { CATALOGO_CAPACIDADES } = require('./permisos')
  * el usuario tiene ALGUNA capacidad de sus secciones en la empresa activa; una
  * sección es ENTRABLE si la capacidad específica está.
  *
- * Mapeo (MENU real 2026-10 → Centro):
- *   Documentos y libros + Facturación + Contabilidad → Contabilidad e IVA
- *   Informes y control          → Inteligencia de Negocios
- *   Gestión comercial           → Gestión Comercial
- *   Tesorería y cobranza        → Finanzas (fuentes reales: bancos, cartola,
- *                                  conciliación bancaria — módulo implementado)
+ * Mapeo (MENU de dos niveles, 2026-10 → Centro):
+ *   Documentos + Contabilidad   → Contabilidad e IVA
+ *   Informes                    → Inteligencia de Negocios
+ *   Impuestos y Salud           → Salud Tributaria
+ *   Informes + Tesorería        → Gestión Comercial (cuentas corrientes/cobranza)
+ *   Tesorería                   → Finanzas (bancos, cartola, conciliación)
  *   Portal de cliente           → Portal (superficie del dueño; read-only)
- *   Inicio + Administración     → Administración (área RESTRINGIDA: solo con
- *                                  capacidades de moderación/consulta admin)
+ *   Administración              → Administración (área RESTRINGIDA: solo con
+ *                                  capacidades de moderación/consulta admin,
+ *                                  más CRM y portafolio del despacho)
  *   Alertas y Calculadora de IVA quedan como accesos rápidos del shell, no
  *   como apps del Centro (alcance mínimo).
+ *
+ * Los GRUPOS son las áreas reales del menú: si se renombra un área hay que
+ * actualizar este archivo y el test de coherencia (centro-apps.test.js) lo
+ * detecta de inmediato.
  */
 const CATALOGO_APPS = [
   {
@@ -45,8 +50,8 @@ const CATALOGO_APPS = [
     icono: 'libro',
     orden: 1,
     secciones: [
-      { grupo: 'Documentos y libros', ruta: 'documentos', capacidad: 'documentos:ver' },
-      { grupo: 'Facturación', ruta: 'dte', capacidad: 'dte:ver' },
+      { grupo: 'Documentos', ruta: 'documentos', capacidad: 'documentos:ver' },
+      { grupo: 'Documentos', ruta: 'dte', capacidad: 'dte:ver' },
       { grupo: 'Contabilidad', ruta: 'asientos', capacidad: 'asientos:ver' },
     ],
   },
@@ -57,7 +62,7 @@ const CATALOGO_APPS = [
     icono: 'grafico',
     orden: 2,
     secciones: [
-      { grupo: 'Informes y control', ruta: 'reportes', capacidad: 'reportes:ver' },
+      { grupo: 'Informes', ruta: 'reportes', capacidad: 'reportes:ver' },
     ],
   },
   // CRM COMERCIAL (rediseño 2026-10-15): módulo completo del despacho con el
@@ -72,7 +77,7 @@ const CATALOGO_APPS = [
     orden: 3,
     roles: ['contador'], // + super admin (is_admin) — igual que guardCrm
     secciones: [
-      { grupo: 'Gestión comercial', ruta: 'crm', capacidad: 'crm:ver' },
+      { grupo: 'Administración', ruta: 'crm', capacidad: 'crm:ver' },
     ],
   },
   {
@@ -82,8 +87,8 @@ const CATALOGO_APPS = [
     icono: 'usuarios',
     orden: 4,
     secciones: [
-      { grupo: 'Gestión comercial', ruta: 'cclientes', capacidad: 'reportes:ver' },
-      { grupo: 'Tesorería y cobranza', ruta: 'cobranza', capacidad: 'tesoreria:ver' },
+      { grupo: 'Informes', ruta: 'cclientes', capacidad: 'reportes:ver' },
+      { grupo: 'Tesorería', ruta: 'cobranza', capacidad: 'tesoreria:ver' },
     ],
   },
   {
@@ -93,7 +98,7 @@ const CATALOGO_APPS = [
     icono: 'banco',
     orden: 5,
     secciones: [
-      { grupo: 'Tesorería y cobranza', ruta: 'tesoreria', capacidad: 'tesoreria:ver' },
+      { grupo: 'Tesorería', ruta: 'tesoreria', capacidad: 'tesoreria:ver' },
     ],
   },
   {
@@ -114,7 +119,7 @@ const CATALOGO_APPS = [
     icono: 'escudo',
     orden: 8,
     secciones: [
-      { grupo: 'Inicio', ruta: 'salud', capacidad: 'salud:ver' },
+      { grupo: 'Impuestos y Salud', ruta: 'salud', capacidad: 'salud:ver' },
     ],
   },
   {

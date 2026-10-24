@@ -98,7 +98,14 @@ async function renderActivos(cont, { eid, resumen, puedeOperar }) {
        <div><span class="frm-label">Código</span><input id="a-codigo" class="form-input" placeholder="AF-001"></div>
        <div style="flex:2"><span class="frm-label">Descripción</span><input id="a-desc" class="form-input" placeholder="Camioneta reparto"></div>
        <div><span class="frm-label">Cuenta del activo</span>
-         <select id="a-cuenta" class="form-input">${cuentasActivo.map((c) => `<option value="${c.id}">${esc(c.codigo)} ${esc(c.nombre)}</option>`).join('')}</select>
+         <!-- Sin preselección: el primer imputable del plan es CAJA y un alta
+              registrada con ese valor por defecto contabilizaba la camioneta
+              contra caja (F3). El usuario elige la cuenta del activo.
+              Para un activo fijo lo habitual es una cuenta 1.2.x. -->
+         <select id="a-cuenta" class="form-input">
+           <option value="" selected>Selecciona la cuenta del activo…</option>
+           ${cuentasActivo.map((c) => `<option value="${c.id}">${esc(c.codigo)} ${esc(c.nombre)}</option>`).join('')}
+         </select>
        </div>
      </div>
      <div class="frm-row mt">
@@ -124,6 +131,9 @@ async function renderActivos(cont, { eid, resumen, puedeOperar }) {
     })
     document.getElementById('a-crear').addEventListener('click', async () => {
       try {
+        if (!document.getElementById('a-cuenta').value) {
+          return showToast('Elige la cuenta del activo (normalmente una cuenta 1.2.x)', 'error')
+        }
         const conAlta = document.getElementById('a-alta').checked
         await apiPost(`/api/contable/empresas/${eid}/activos`, {
           codigo: document.getElementById('a-codigo').value.trim(),

@@ -223,6 +223,7 @@ function crearSandboxVistas() {
   const vistas = fs.readdirSync(path.join(FRONT, 'sistema')).filter((f) => f.startsWith('views-') && f.endsWith('.js')).sort()
   const bundle = [
     lee(path.join(FRONT, 'shared', 'format.js')),
+    lee(path.join(FRONT, 'shared', 'estados-salud.js')), // taxonomía de Salud (F1)
     lee(path.join(FRONT, 'shared', 'uitoolkit.js')),
     lee(path.join(FRONT, 'sistema', 'ui.js')),
     lee(path.join(FRONT, 'sistema', 'app.js')),
@@ -377,7 +378,10 @@ test('T10: navegación — secciones plegables con estado accesible y buscador p
   // pisan el pliegue.
   assert.match(app, /`jmv\.nav\.cerradas\.\$\{S\.user\?\.id \|\| 'anon'\}`/, 'pliegue persistido por usuario')
   assert.match(app, /function conectarSeccionesNav/, 'conexión del toggle')
-  assert.match(app, /plegarSeccion\(grupo, grupo\.dataset\.cerrado === '1'\)/, 'clic alterna el pliegue')
+  // El clic sigue alternando el pliegue; desde F2 además lo abre en ACORDEÓN
+  // (nivel 1 = área, nivel 2 = sus funciones): abrir un área cierra las demás.
+  assert.match(app, /const abrir = grupo\.dataset\.cerrado === '1'\s*\n\s*plegarSeccion\(grupo, abrir\)/, 'clic alterna el pliegue')
+  assert.match(app, /if \(abrir\) \{[\s\S]*?otro !== grupo[\s\S]*?plegarSeccion\(otro, false\)/, 'abrir un área cierra las demás')
   assert.match(app, /function abrirSeccionDeRuta/, 'la ruta activa abre su sección')
   assert.match(app, /abrirSeccionDeRuta\(route\.key\)/, 'renderRoute abre la sección activa')
 

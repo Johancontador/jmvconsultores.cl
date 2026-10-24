@@ -1030,8 +1030,11 @@ window.VIEWS['portal-reportes'] = {
                   <td class="mono" style="font-size:var(--fs-sm)">${esc(`${cfg.metrica || '?'} ${cfg.desde || ''}…${cfg.hasta || ''}`)}</td>
                   <td>${esc(x.actualizado_en || x.creado_en || '')}</td>
                   <td>
-                    <button class="btn btn-secondary" data-abrir="${x.id}" data-cfg='${x.config_json}'>Abrir</button>
-                    <button class="btn btn-danger" data-borrar="${x.id}">Eliminar</button>
+                    <button class="btn btn-secondary btn-sm" data-abrir="${x.id}" data-cfg='${x.config_json}'>Abrir</button>
+                    <!-- Acción destructiva SECUNDARIA: en rojo sólido por fila era lo
+                         más llamativo de la tabla (F3); el diálogo de confirmación
+                         conserva su botón destructivo. -->
+                    <button class="btn btn-secondary btn-sm" data-borrar="${x.id}">Eliminar</button>
                   </td>
                 </tr>`
               }).join('')}
@@ -1350,7 +1353,7 @@ window.VIEWS['portal-cotizaciones'] = {
                     </select>
                   </td>
                   <td class="hint">${esc(c.fecha_cierre || '')}</td>
-                  <td><button class="btn btn-danger" data-del="${c.id}">Eliminar</button></td>
+                  <td><button class="btn btn-secondary btn-sm" data-del="${c.id}">Eliminar</button></td>
                 </tr>`).join('')}</tbody>
             </table>
           </div>`

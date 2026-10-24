@@ -93,7 +93,14 @@ router.post('/empresas/:empresaId/tesoreria/cartola-formatos', requirePermiso('b
 
 router.get('/empresas/:empresaId/tesoreria/resumen', requirePermiso('tesoreria:ver'), (req, res) => {
   try {
-    res.json({ ok: true, resumen: teso.resumen(db, req.empresaId) })
+    // El período del header decide los KPI de ingresos/egresos del módulo. Un
+    // valor con formato inválido se rechaza en vez de caer al mes en curso:
+    // mostrar otro mes como si fuera el pedido sería una cifra engañosa.
+    const periodo = req.query.periodo ? String(req.query.periodo) : null
+    if (periodo && !/^\d{4}(0[1-9]|1[0-2])$/.test(periodo)) {
+      return res.status(400).json({ ok: false, error: 'Período inválido (YYYYMM)' })
+    }
+    res.json({ ok: true, resumen: teso.resumen(db, req.empresaId, { periodo }) })
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message })
   }

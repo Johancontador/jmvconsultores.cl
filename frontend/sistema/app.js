@@ -205,6 +205,18 @@ function setEmpresa(id) {
 
 /* ---------- login embebido (mismo template que la landing) ---------- */
 
+/**
+ * Marca JMV según el TEMA. `logo-ink.svg` está dibujado para fondos claros y
+ * `logo-light.svg` (wordmark blanco) para fondos oscuros. El sidebar y el login
+ * embebido usaban SIEMPRE la variante clara sobre fondo claro: en el tema por
+ * defecto el wordmark quedaba blanco sobre blanco y solo se veían los puntos.
+ * Se emiten las dos y el CSS muestra la que corresponde a `data-theme`.
+ */
+function logoMarcaHTML() {
+  return '<img class="logo-para-claro" src="/assets/logo-ink.svg" alt="JMV">'
+    + '<img class="logo-para-oscuro" src="/assets/logo-light.svg" alt="">'
+}
+
 function renderLogin(mensaje = '') {
   // MISMA FAMILIA VISUAL que la landing y /login.html (shell unificado):
   // logo JMV + «Ingresar» + retorno claro a la página principal. La lógica
@@ -212,7 +224,7 @@ function renderLogin(mensaje = '') {
   $app().innerHTML = `
    <div class="sys-login">
      <div class="login-card">
-       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <div class="logo">${logoMarcaHTML()}<b>Sistema Contable</b></div>
        <h2>Ingresar</h2>
        <p class="sub">Con tus credenciales de JMV Consultores</p>
        <div class="login-err" id="login-err" hidden></div>
@@ -273,7 +285,7 @@ function renderCambioForzado(username) {
   $app().innerHTML = `
    <div class="sys-login">
      <div class="login-card">
-       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <div class="logo">${logoMarcaHTML()}<b>Sistema Contable</b></div>
        <h2>Bienvenido, ${esc(username)}</h2>
        <p class="sub">Por seguridad, cambia la clave provisional que te entregó tu contador antes de continuar.</p>
        <div class="login-err" id="cf-err" hidden></div>
@@ -326,7 +338,7 @@ function renderOnboardingEmpresa() {
   $app().innerHTML = `
    <div class="sys-login">
      <div class="login-card">
-       <div class="logo"><img src="/assets/logo-light.svg" alt="JMV"><b>Sistema Contable</b></div>
+       <div class="logo">${logoMarcaHTML()}<b>Sistema Contable</b></div>
        <h2>Tu empresa</h2>
        <p class="sub">Ingresa el RUT de tu empresa y tu clave tributaria del SII. El sistema valida la credencial contra el SII y arma tu empresa sola: razón social, régimen, plan de cuentas y prueba de 90 días. Este vínculo es único y no puede cambiarse después.</p>
        <div class="login-err" id="ob-err" hidden></div>
@@ -542,14 +554,13 @@ function pintarResultados(drop, q, grupos) {
  */
 const ORDEN_FLUJO = {
   Inicio: 0,
-  'Documentos y libros': 1,
-  Facturación: 2,
-  Contabilidad: 3,
-  'Tesorería y cobranza': 4,
-  'Informes y control': 5,
-  'Gestión comercial': 6,
-  'Portal de cliente': 7,
-  Administración: 8,
+  Documentos: 1,
+  Contabilidad: 2,
+  'Impuestos y Salud': 3,
+  Tesorería: 4,
+  Informes: 5,
+  'Portal de cliente': 6,
+  Administración: 7,
 }
 
 function menuVisible() {
@@ -586,61 +597,58 @@ const MENU = [
     // el lanzador de todos los módulos. Antes arrancaba por el Centro, que
     // es una pantalla de navegación: se quedaba el «día a día» escondido.
     seccion: 'Inicio', items: [
-      { key: 'inicio', label: 'Panel del período', permiso: null },
-      // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV,
-      // índice de salud, riesgos y plan de acción. Lo no integrado (F22,
-      // juradas) se declara. `pill: 'salud'` pinta el score en el menú (y
-      // «!» cuando requiere revisión).
-      { key: 'salud', label: 'Salud Tributaria — Diagnóstico Ejecutivo', permiso: 'salud:ver', pill: 'salud' },
+      { key: 'inicio', label: 'Hoy — Panel del período', permiso: null },
       { key: 'alertas', label: 'Alertas — Reclamadas y Pendientes', permiso: 'documentos:ver', pill: 'alertas' },
-      { key: 'centro', label: 'Centro de Aplicaciones', permiso: null },
+      // El catálogo completo, ahora como «Todos los módulos» (anchor histórico).
+      { key: 'centro', label: 'Todos los módulos', permiso: null },
     ]
   },
   {
-    seccion: 'Gestión comercial', items: [
-      // CRM = herramienta del DESPACHO, no del cliente: `crm:ver` solo existe
-      // en los roles contador/super_admin (igual que guardCrm en su API). Con
-      // `empresas:ver` —que el dueño sí tiene— el menú ofrecía un módulo que
-      // devolvía 403 en cada consulta.
-      { key: 'crm', label: 'CRM Comercial', permiso: 'crm:ver' },
-      { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
-      { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
-    ]
-  },
-  {
-    // Bandeja y libros son el trabajo diario del RCV: viven juntos y antes que
-    // la contabilidad, que consume lo que aquí se clasifica.
-    seccion: 'Documentos y libros', items: [
+    // ÁREA 2 — DOCUMENTOS: lo que entra y lo que se emite. La bandeja y los
+    // libros son el trabajo diario del RCV; los DTE son la salida.
+    seccion: 'Documentos', items: [
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
       { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
-      { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
-      { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
-    ]
-  },
-  {
-    seccion: 'Facturación', items: [
       { key: 'dte-emision', label: 'Emitir Factura o Nota', permiso: 'dte:emitir' },
       { key: 'dte', label: 'Bandeja de DTEs Emitidos', permiso: 'dte:ver' },
       { key: 'dte-config', label: 'Configuración del Emisor', permiso: 'dte:ver' },
     ]
   },
   {
+    // ÁREA 3 — CONTABILIDAD: cómo queda registrado lo que entró. El cierre es
+    // un proceso contable, no un reporte: se quedó con su sección.
     seccion: 'Contabilidad', items: [
       { key: 'automatizacion', label: 'Contabilización y Pendientes', permiso: 'propuestas:ver' },
       { key: 'propuestas', label: 'Propuestas y Conciliación', permiso: 'propuestas:ver' },
       { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
       { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
-      { key: 'externos', label: 'Receptor Externo (Geo Daniela)', permiso: 'asientos:ver' },
       { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
+      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
     ]
   },
   {
-    // Flujo de dinero: banco y cobranza se consultan juntos (quién debe y
-    // con qué se cobra), por eso comparten sección.
-    seccion: 'Tesorería y cobranza', items: [
+    // ÁREA 4 — IMPUESTOS Y SALUD: la situación tributaria. Salud Tributaria
+    // conserva su identidad y su pill de score; a su lado viven el IVA, la
+    // calculadora y el F29 del mes del despacho.
+    seccion: 'Impuestos y Salud', items: [
+      // Antecedentes + opinión: ficha SII, régimen, ingresos, cobertura RCV,
+      // índice de salud, riesgos y plan de acción. Lo no integrado (F22,
+      // juradas) se declara. `pill: 'salud'` pinta el score en el menú (y
+      // «!» cuando requiere revisión).
+      { key: 'salud', label: 'Salud Tributaria — Diagnóstico Ejecutivo', permiso: 'salud:ver', pill: 'salud' },
+      { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
+      { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
+      { key: 'proceso-masivo', label: 'Proceso masivo (F29 del mes)', permiso: 'crm:ver' },
+    ]
+  },
+  {
+    // ÁREA 5 — TESORERÍA: el dinero que entra y sale. Banco, cobranza y la
+    // cartola externa (Geo Daniela) comparten la misma pregunta.
+    seccion: 'Tesorería', items: [
       { key: 'tesoreria', label: 'Bancos, Libro Banco y Conciliación', permiso: 'tesoreria:ver' },
       { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
+      { key: 'externos', label: 'Cartola externa (Geo Daniela)', permiso: 'asientos:ver' },
     ]
   },
   {
@@ -649,20 +657,14 @@ const MENU = [
     // anchors (#situacion, #balance8, #niif…) siguen vivos y el Centro los
     // abre preseleccionando el período. El cierre no es un reporte: es un
     // proceso, por eso conserva su entrada propia.
-    seccion: 'Informes y control', items: [
+    // ÁREA 6 — INFORMES: qué se entrega. El Centro de Reportes es el catálogo
+    // único; las cuentas corrientes y las herramientas multi-empresa del
+    // despacho viven aquí porque producen un documento.
+    seccion: 'Informes', items: [
       { key: 'reportes', label: 'Centro de Reportes', permiso: 'reportes:ver' },
-      { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
-    ]
-  },
-  {
-    // Herramientas CROSS-PORTAFOLIO del despacho (portadas desde las pantallas
-    // heredadas informe/proceso/exportacion-masiva). Mismo público que el CRM:
-    // `crm:ver` solo lo tienen contador y super_admin, así que el dueño de una
-    // empresa no ve herramientas que operan sobre la cartera completa.
-    seccion: 'Lote del despacho', items: [
-      { key: 'portafolio', label: 'Clientes del portafolio', permiso: 'crm:ver' },
+      { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
+      { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'informe-rango', label: 'Informe por rango', permiso: 'crm:ver' },
-      { key: 'proceso-masivo', label: 'Proceso masivo (F29 del mes)', permiso: 'crm:ver' },
       { key: 'exportacion-masiva', label: 'Reporte masivo (ZIP)', permiso: 'crm:ver' },
     ]
   },
@@ -689,6 +691,11 @@ const MENU = [
       { key: 'auditoria', label: 'Auditoría', permiso: 'auditoria:ver' },
       { key: 'integraciones', label: 'Integraciones', permiso: 'empresas:ver' },
       { key: 'suscripcion', label: 'Suscripción y Pagos', permiso: 'empresas:ver' },
+      // Herramientas del DESPACHO sobre la cartera: ni el dueño de una empresa
+      // ni un rol operativo las necesitan. `crm:ver` solo lo tienen contador y
+      // super admin (mismo gate que guardCrm en su API).
+      { key: 'crm', label: 'CRM Comercial', permiso: 'crm:ver' },
+      { key: 'portafolio', label: 'Clientes del portafolio', permiso: 'crm:ver' },
     ]
   },
 ]
@@ -705,6 +712,29 @@ function resolverRouteKey(key) {
 }
 
 const TODOS_LOS_ITEMS = MENU.flatMap((m) => m.items)
+
+/* Vistas con anchor propio que NO tienen entrada en el menú: son los reportes
+ * que se abren desde el Centro de Reportes (#reportes) y que el usuario puede
+ * alcanzar por URL directa o por enlace interno.
+ *
+ * Antes el router resolvía la ruta SOLO contra TODOS_LOS_ITEMS y caía a
+ * `TODOS_LOS_ITEMS[0]` (Inicio) cuando la vista no estaba en el menú: el
+ * título decía «Panel del período», el breadcrumb apuntaba a otra sección y
+ * `route.permiso` era null, así que el gate de UI no se aplicaba (el backend
+ * sí devolvía 403/401, pero la pantalla quedaba sin identidad ni bloqueo).
+ * Cada entrada declara su capacidad REAL (la misma que exige su endpoint, ver
+ * backend/routes/reportes.js y routes/niif.js: `reportes:ver`) para que el
+ * router marque la ruta activa, el breadcrumb y el gate de UI con su identidad
+ * verdadera. La autoridad de acceso sigue siendo el backend: esto es UX.
+ */
+const RUTAS_FUERA_DE_MENU = {
+  balance8: { key: 'balance8', label: 'Balance de 8 Columnas', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+  clasificado: { key: 'clasificado', label: 'Balance Clasificado', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+  comprobacion: { key: 'comprobacion', label: 'Balance de Comprobación', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+  situacion: { key: 'situacion', label: 'Situación Financiera', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+  resultados: { key: 'resultados', label: 'Estado de Resultados', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+  niif: { key: 'niif', label: 'NIIF — Estados por Rubros', permiso: 'reportes:ver', seccion: 'Informes', origen: 'reportes' },
+}
 
 /* ---------- secciones plegables del menú ----------
  * El menú mide 44 ítems en 9 secciones: desplegado ocupa 2576 px de alto en
@@ -833,7 +863,7 @@ function renderShell() {
      <aside class="sys-side" id="sys-side">
        <div class="sys-side-top">
          <div class="sys-logo">
-           <img src="/assets/logo-light.svg" alt="JMV">
+           ${logoMarcaHTML()}
            <div>Sistema Contable<small>JMV Consultores</small></div>
          </div>
          <button type="button" class="sys-menu-cerrar" id="sys-menu-cerrar" aria-label="Cerrar el menú de secciones">Cerrar</button>
@@ -975,8 +1005,10 @@ async function conectarSelectorPeriodo() {
 
 function breadcrumbHTML(route) {
   const sec = MENU.find((m) => m.items.some((i) => i.key === route.key))
-  if (!sec) return `<span class="bc-actual">${esc(route.label)}</span>`
-  return `<a href="#inicio">Inicio</a><span class="bc-sep">/</span><span>${esc(sec.seccion)}</span><span class="bc-sep">/</span><span class="bc-actual">${esc(route.label)}</span>`
+  // Las vistas fuera de menú declaran su sección en la propia ruta.
+  const seccion = sec ? sec.seccion : route.seccion
+  if (!seccion) return `<span class="bc-actual">${esc(route.label)}</span>`
+  return `<a href="#inicio">Inicio</a><span class="bc-sep">/</span><span>${esc(seccion)}</span><span class="bc-sep">/</span><span class="bc-actual">${esc(route.label)}</span>`
 }
 
 /* ---------- menú de secciones en móvil ----------
@@ -1107,7 +1139,18 @@ function conectarSeccionesNav() {
     const btn = e.target.closest('.nav-seccion')
     const grupo = btn?.closest('.nav-grupo')
     if (!btn || !grupo) return
-    plegarSeccion(grupo, grupo.dataset.cerrado === '1')
+    const abrir = grupo.dataset.cerrado === '1'
+    plegarSeccion(grupo, abrir)
+    // NIVEL 1 → NIVEL 2: abrir un área cierra las demás (acordeón). Antes cada
+    // área se abría por separado y el lateral volvía a ser la lista completa de
+    // funciones —justo el problema que el handoff (§5) identificó—: con 43
+    // ítems abiertos el menú mide ~2.600 px en un teléfono. El estado se
+    // persiste igual (una sola área abierta), así que al recargar se respeta.
+    if (abrir) {
+      document.querySelectorAll('#sys-nav .nav-grupo').forEach((otro) => {
+        if (otro !== grupo && otro.dataset.cerrado === '0') plegarSeccion(otro, false)
+      })
+    }
   })
 }
 
@@ -1278,7 +1321,12 @@ function renderRoute() {
   const key0 = (location.hash || '#inicio').slice(1).split('?')[0]
   const key = resolverRouteKey(key0)
   const view = VIEWS[key] || VIEWS.inicio
-  const route = TODOS_LOS_ITEMS.find((n) => n.key === key) || TODOS_LOS_ITEMS[0]
+  // Identidad de la ruta: ítem de menú → vista fuera de menú → Inicio (ruta
+  // desconocida). Sin el segundo término, los 6 reportes del Centro de Reportes
+  // se renderizaban con la identidad de Inicio (ver RUTAS_FUERA_DE_MENU).
+  const route = TODOS_LOS_ITEMS.find((n) => n.key === key)
+    || RUTAS_FUERA_DE_MENU[key]
+    || TODOS_LOS_ITEMS[0]
 
   // Recientes del Centro (por usuario): la última vista con entrada de menú.
   // No graba el propio Centro ni vistas extra (excluir efectos como filtros).
@@ -1291,8 +1339,17 @@ function renderRoute() {
     localStorage.setItem(clave, JSON.stringify(rec.slice(0, 8)))
   }
 
+  // Las vistas fuera de menú (#niif y las otras 5 de F0) NO marcan ningún ítem:
+  // el contrato de F0 es que no se señale como activo un ítem en el que el
+  // usuario no está (la identidad la da el breadcrumb «Inicio/Informes/…»).
   const activos = new Set([route.key])
-  document.querySelectorAll('#sys-nav a').forEach((a) => a.classList.toggle('active', activos.has(a.dataset.route)))
+  document.querySelectorAll('#sys-nav a').forEach((a) => {
+    const activo = activos.has(a.dataset.route)
+    a.classList.toggle('active', activo)
+    // aria-current: la marca visual (clase) no existe para lectores de pantalla.
+    if (activo) a.setAttribute('aria-current', 'page')
+    else a.removeAttribute('aria-current')
+  })
   // El dock marca la app activa; en la casa el «activo» es el inicio.
   document.querySelectorAll('#sys-dock a[data-dock]').forEach((a) => {
     const activo = activos.has(a.dataset.dock)
@@ -1324,7 +1381,7 @@ function renderRoute() {
   if (route.permiso && !tiene(route.permiso)) {
     document.getElementById('sys-view').innerHTML =
       `<div class="empty">Tu rol en ${esc(S.empresa.nombre)} no tiene permiso para esta sección.</div>
-       <div class="empty"><a class="btn btn-secondary" href="#centro">Volver al Centro de Aplicaciones</a></div>`
+       <div class="empty"><a class="btn btn-secondary" href="#centro">Volver a Todos los módulos</a></div>`
     return
   }
 
