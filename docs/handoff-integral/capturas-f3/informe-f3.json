@@ -1,0 +1,1345 @@
+{
+  "generado": "2026-10-24T18:08:53.153Z",
+  "base": "http://127.0.0.1:3599",
+  "db": "C:\\Users\\johan\\AppData\\Local\\Temp\\jmv-f3\\demo.db",
+  "periodo": "202609",
+  "pantallas": [
+    {
+      "key": "centro",
+      "url": "#centro?periodo=202609&empresa=1",
+      "titulo": "Todos los módulos",
+      "breadcrumb": "Inicio/Inicio/Todos los módulos",
+      "activo": "centro",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 781,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Inicio — Centro de Aplicaciones",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-centro.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "inicio",
+      "url": "#inicio?periodo=202609&empresa=1",
+      "titulo": "Inicio",
+      "breadcrumb": "Inicio/Inicio/Hoy — Panel del período",
+      "activo": "inicio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 3886,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Hoy — panel del período",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-inicio.png",
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-inicio-completo.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "documentos",
+      "url": "#documentos?estado=PENDIENTE&empresa=1&periodo=202609",
+      "titulo": "Bandeja de Documentos",
+      "breadcrumb": "Inicio/Documentos/Bandeja de Documentos",
+      "activo": "documentos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 4562,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 1211,
+          "ancho_caja": 1160,
+          "scroll": "auto"
+        }
+      ],
+      "nombre": "Bandeja de documentos",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-documentos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "libros",
+      "url": "#libros?periodo=202609&empresa=1",
+      "titulo": "Libros Compras y Ventas",
+      "breadcrumb": "Inicio/Documentos/Libros de Compras y Ventas",
+      "activo": "libros",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2294,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Libros de compras y ventas",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-libros.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "automatizacion",
+      "url": "#automatizacion?periodo=202609&empresa=1",
+      "titulo": "Automatización",
+      "breadcrumb": "Inicio/Contabilidad/Contabilización y Pendientes",
+      "activo": "automatizacion",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1010,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Contabilización y pendientes",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-automatizacion.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "propuestas",
+      "url": "#propuestas?periodo=202609&empresa=1",
+      "titulo": "Propuestas",
+      "breadcrumb": "Inicio/Contabilidad/Propuestas y Conciliación",
+      "activo": "propuestas",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1576,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Propuestas y conciliación",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-propuestas.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "asientos",
+      "url": "#asientos?periodo=202609&empresa=1",
+      "titulo": "Asientos contables",
+      "breadcrumb": "Inicio/Contabilidad/Asientos — Diario, Mayor y Plan",
+      "activo": "asientos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2472,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Asientos — diario y mayor",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-asientos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "memoria",
+      "url": "#memoria?periodo=202609&empresa=1",
+      "titulo": "Memoria de Contabilización",
+      "breadcrumb": "Inicio/Contabilidad/Memoria de Contabilización",
+      "activo": "memoria",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 17327,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Memoria de contabilización",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-memoria.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "activos",
+      "url": "#activos?periodo=202609&empresa=1",
+      "titulo": "Activos Fijos y Depreciación",
+      "breadcrumb": "Inicio/Contabilidad/Activos Fijos y Depreciación",
+      "activo": "activos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1548,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Activos fijos",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-activos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "cierre",
+      "url": "#cierre?periodo=202609&empresa=1",
+      "titulo": "Cierre de Período",
+      "breadcrumb": "Inicio/Contabilidad/Cierre de Período",
+      "activo": "cierre",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 754,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Cierre de período",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-cierre.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "salud",
+      "url": "#salud?periodo=202609&empresa=1",
+      "titulo": "Salud Tributaria",
+      "breadcrumb": "Inicio/Impuestos y Salud/Salud Tributaria — Diagnóstico Ejecutivo",
+      "activo": "salud",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 23576,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Salud tributaria",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-salud.png",
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-salud-completo.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "analitica",
+      "url": "#analitica?periodo=202609&empresa=1",
+      "titulo": "Dashboard Tributario",
+      "breadcrumb": "Inicio/Impuestos y Salud/Dashboard Tributario (IVA)",
+      "activo": "analitica",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 4313,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Dashboard tributario (IVA)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-analitica.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "calculadora-iva",
+      "url": "#calculadora-iva?periodo=202609&empresa=1",
+      "titulo": "Herramientas — Calculadora de IVA",
+      "breadcrumb": "Inicio/Impuestos y Salud/Calculadora de IVA",
+      "activo": "calculadora-iva",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 499,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Calculadora de IVA",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-calculadora-iva.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "tesoreria",
+      "url": "#tesoreria?periodo=202609&empresa=1",
+      "titulo": "Tesorería",
+      "breadcrumb": "Inicio/Tesorería/Bancos, Libro Banco y Conciliación",
+      "activo": "tesoreria",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1776,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Tesorería — banco y conciliación",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-tesoreria.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "cobranza",
+      "url": "#cobranza?periodo=202609&empresa=1",
+      "titulo": "Cobranza de Clientes",
+      "breadcrumb": "Inicio/Tesorería/Cobranza y Mora",
+      "activo": "cobranza",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1059,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Cobranza y mora",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-cobranza.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "reportes",
+      "url": "#reportes?periodo=202609&empresa=1",
+      "titulo": "Centro de Reportes",
+      "breadcrumb": "Inicio/Informes/Centro de Reportes",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2953,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Centro de reportes",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-reportes.png",
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-reportes-completo.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "comprobacion",
+      "url": "#comprobacion?periodo=202609&empresa=1",
+      "titulo": "Balance de Comprobación",
+      "breadcrumb": "Inicio/Informes/Balance de Comprobación",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1359,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Balance de comprobación (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-comprobacion.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "balance8",
+      "url": "#balance8?periodo=202609&empresa=1",
+      "titulo": "Balance de 8 Columnas",
+      "breadcrumb": "Inicio/Informes/Balance de 8 Columnas",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1560,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 1164,
+          "ancho_caja": 1118,
+          "scroll": "auto"
+        }
+      ],
+      "nombre": "Balance de 8 columnas (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-balance8.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "situacion",
+      "url": "#situacion?periodo=202609&empresa=1",
+      "titulo": "Situación Financiera",
+      "breadcrumb": "Inicio/Informes/Situación Financiera",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1218,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Situación financiera (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-situacion.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "resultados",
+      "url": "#resultados?periodo=202609&empresa=1",
+      "titulo": "Estado de Resultados",
+      "breadcrumb": "Inicio/Informes/Estado de Resultados",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 987,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Estado de resultados (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-resultados.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "clasificado",
+      "url": "#clasificado?periodo=202609&empresa=1",
+      "titulo": "Balance Clasificado",
+      "breadcrumb": "Inicio/Informes/Balance Clasificado",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1535,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Balance clasificado (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-clasificado.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "niif",
+      "url": "#niif?periodo=202609&empresa=1",
+      "titulo": "NIIF — Estados por Rubros",
+      "breadcrumb": "Inicio/Informes/NIIF — Estados por Rubros",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1561,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "NIIF por rubros (F0)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-niif.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "cclientes",
+      "url": "#cclientes?periodo=202609&empresa=1",
+      "titulo": "Cuenta Corriente — Clientes",
+      "breadcrumb": "Inicio/Informes/Clientes — Cuenta Corriente",
+      "activo": "cclientes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1047,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Cuenta corriente clientes",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-cclientes.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "cproveedores",
+      "url": "#cproveedores?periodo=202609&empresa=1",
+      "titulo": "Cuenta Corriente — Proveedores",
+      "breadcrumb": "Inicio/Informes/Proveedores — Cuenta Corriente",
+      "activo": "cproveedores",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 781,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Cuenta corriente proveedores",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-cproveedores.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portal-inicio",
+      "url": "#portal-inicio?periodo=202609&empresa=1",
+      "titulo": "Portal — Dashboard interactivo",
+      "breadcrumb": "Inicio/Portal de cliente/Dashboard interactivo",
+      "activo": "portal-inicio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 4532,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Portal — dashboard",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portal-inicio.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portal-ventas",
+      "url": "#portal-ventas?periodo=202609&empresa=1",
+      "titulo": "Portal — Ventas y movimientos",
+      "breadcrumb": "Inicio/Portal de cliente/Ventas y movimientos",
+      "activo": "portal-ventas",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 776,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Portal — ventas",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portal-ventas.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portal-cartera",
+      "url": "#portal-cartera?periodo=202609&empresa=1",
+      "titulo": "Portal — Cartera de clientes",
+      "breadcrumb": "Inicio/Portal de cliente/Cartera de clientes",
+      "activo": "portal-cartera",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1992,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Portal — cartera",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portal-cartera.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portal-cotizaciones",
+      "url": "#portal-cotizaciones?periodo=202609&empresa=1",
+      "titulo": "Portal — Cotizaciones y embudo",
+      "breadcrumb": "Inicio/Portal de cliente/Cotizaciones y embudo",
+      "activo": "portal-cotizaciones",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1901,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Portal — cotizaciones",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portal-cotizaciones.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portal-costos",
+      "url": "#portal-costos?periodo=202609&empresa=1",
+      "titulo": "Portal — Hoja de costos",
+      "breadcrumb": "Inicio/Portal de cliente/Hoja de costos",
+      "activo": "portal-costos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1076,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Portal — hoja de costos",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portal-costos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "crm",
+      "url": "#crm?periodo=202609&empresa=1",
+      "titulo": "CRM Comercial",
+      "breadcrumb": "Inicio/Administración/CRM Comercial",
+      "activo": "crm",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1555,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "CRM comercial",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-crm.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "portafolio",
+      "url": "#portafolio?periodo=202609&empresa=1",
+      "titulo": "Clientes del portafolio",
+      "breadcrumb": "Inicio/Administración/Clientes del portafolio",
+      "activo": "portafolio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 405,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Clientes del portafolio",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-portafolio.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "admin",
+      "url": "#admin?periodo=202609&empresa=1",
+      "titulo": "Administración",
+      "breadcrumb": "Inicio/Administración/Administración",
+      "activo": "admin",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 347,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Administración",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-admin.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "auditoria",
+      "url": "#auditoria?periodo=202609&empresa=1",
+      "titulo": "Auditoría",
+      "breadcrumb": "Inicio/Administración/Auditoría",
+      "activo": "auditoria",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 12748,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Auditoría",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-auditoria.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "integraciones",
+      "url": "#integraciones?periodo=202609&empresa=1",
+      "titulo": "Integraciones",
+      "breadcrumb": "Inicio/Administración/Integraciones",
+      "activo": "integraciones",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 679,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Integraciones",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-integraciones.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "suscripcion",
+      "url": "#suscripcion?periodo=202609&empresa=1",
+      "titulo": "Suscripción y Pagos",
+      "breadcrumb": "Inicio/Administración/Suscripción y Pagos",
+      "activo": "suscripcion",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 451,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Suscripción y pagos",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-suscripcion.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "dte",
+      "url": "#dte?periodo=202609&empresa=1",
+      "titulo": "Facturación Electrónica",
+      "breadcrumb": "Inicio/Documentos/Bandeja de DTEs Emitidos",
+      "activo": "dte",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2050,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Bandeja de DTEs emitidos",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-dte.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "dte-config",
+      "url": "#dte-config?periodo=202609&empresa=1",
+      "titulo": "Configuración del Emisor",
+      "breadcrumb": "Inicio/Documentos/Configuración del Emisor",
+      "activo": "dte-config",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2855,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Configuración del emisor",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-dte-config.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "alertas",
+      "url": "#alertas?periodo=202609&empresa=1",
+      "titulo": "Alertas — Reclamadas y Pendientes",
+      "breadcrumb": "Inicio/Inicio/Alertas — Reclamadas y Pendientes",
+      "activo": "alertas",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1506,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Alertas",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-alertas.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "ruta-inexistente",
+      "url": "#ruta-inexistente?periodo=202609&empresa=1",
+      "titulo": "Inicio",
+      "breadcrumb": "Inicio/Inicio/Hoy — Panel del período",
+      "activo": "inicio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 3886,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "nombre": "Ruta desconocida (borde)",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\escritorio-1440-ruta-inexistente.png"
+      ],
+      "consola": []
+    }
+  ],
+  "responsive": [
+    {
+      "key": "centro",
+      "url": "#centro?periodo=202609&empresa=1",
+      "titulo": "Todos los módulos",
+      "breadcrumb": "Inicio/Inicio/Todos los módulos",
+      "activo": "centro",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1160,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-centro.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "inicio",
+      "url": "#inicio?periodo=202609&empresa=1",
+      "titulo": "Inicio",
+      "breadcrumb": "Inicio/Inicio/Hoy — Panel del período",
+      "activo": "inicio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 3685,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-inicio.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "documentos",
+      "url": "#documentos?estado=PENDIENTE&empresa=1&periodo=202609",
+      "titulo": "Bandeja de Documentos",
+      "breadcrumb": "Inicio/Documentos/Bandeja de Documentos",
+      "activo": "documentos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 4562,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 1215,
+          "ancho_caja": 720,
+          "scroll": "auto"
+        }
+      ],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-documentos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "salud",
+      "url": "#salud?periodo=202609&empresa=1",
+      "titulo": "Salud Tributaria",
+      "breadcrumb": "Inicio/Impuestos y Salud/Salud Tributaria — Diagnóstico Ejecutivo",
+      "activo": "salud",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 23576,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-salud.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "tesoreria",
+      "url": "#tesoreria?periodo=202609&empresa=1",
+      "titulo": "Tesorería",
+      "breadcrumb": "Inicio/Tesorería/Bancos, Libro Banco y Conciliación",
+      "activo": "tesoreria",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1822,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 757,
+          "ancho_caja": 678,
+          "scroll": "auto"
+        }
+      ],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-tesoreria.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "reportes",
+      "url": "#reportes?periodo=202609&empresa=1",
+      "titulo": "Centro de Reportes",
+      "breadcrumb": "Inicio/Informes/Centro de Reportes",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2953,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-reportes.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "asientos",
+      "url": "#asientos?periodo=202609&empresa=1",
+      "titulo": "Asientos contables",
+      "breadcrumb": "Inicio/Contabilidad/Asientos — Diario, Mayor y Plan",
+      "activo": "asientos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2472,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "768x1024",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\tablet-768-asientos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "centro",
+      "url": "#centro?periodo=202609&empresa=1",
+      "titulo": "Todos los módulos",
+      "breadcrumb": "Inicio/Inicio/Todos los módulos",
+      "activo": "centro",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1193,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-centro.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "inicio",
+      "url": "#inicio?periodo=202609&empresa=1",
+      "titulo": "Inicio",
+      "breadcrumb": "Inicio/Inicio/Hoy — Panel del período",
+      "activo": "inicio",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 3886,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-inicio.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "documentos",
+      "url": "#documentos?estado=PENDIENTE&empresa=1&periodo=202609",
+      "titulo": "Bandeja de Documentos",
+      "breadcrumb": "Inicio/Documentos/Bandeja de Documentos",
+      "activo": "documentos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 4562,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 1215,
+          "ancho_caja": 366,
+          "scroll": "auto"
+        }
+      ],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-documentos.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "salud",
+      "url": "#salud?periodo=202609&empresa=1",
+      "titulo": "Salud Tributaria",
+      "breadcrumb": "Inicio/Impuestos y Salud/Salud Tributaria — Diagnóstico Ejecutivo",
+      "activo": "salud",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 23576,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-salud.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "tesoreria",
+      "url": "#tesoreria?periodo=202609&empresa=1",
+      "titulo": "Tesorería",
+      "breadcrumb": "Inicio/Tesorería/Bancos, Libro Banco y Conciliación",
+      "activo": "tesoreria",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 1822,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 701,
+          "ancho_caja": 340,
+          "scroll": "auto"
+        }
+      ],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-tesoreria.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "reportes",
+      "url": "#reportes?periodo=202609&empresa=1",
+      "titulo": "Centro de Reportes",
+      "breadcrumb": "Inicio/Informes/Centro de Reportes",
+      "activo": "reportes",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2953,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-reportes.png"
+      ],
+      "consola": []
+    },
+    {
+      "key": "asientos",
+      "url": "#asientos?periodo=202609&empresa=1",
+      "titulo": "Asientos contables",
+      "breadcrumb": "Inicio/Contabilidad/Asientos — Diario, Mayor y Plan",
+      "activo": "asientos",
+      "kicker": "Comercial Aurora SpA · 76.543.210-3",
+      "periodo": "202609",
+      "vacio": false,
+      "largo_texto": 2610,
+      "error_visible": false,
+      "overflow": [],
+      "textos_recortados": [],
+      "tablas_con_scroll": [
+        {
+          "ancho_tabla": 346,
+          "ancho_caja": 332,
+          "scroll": "auto"
+        },
+        {
+          "ancho_tabla": 358,
+          "ancho_caja": 332,
+          "scroll": "auto"
+        },
+        {
+          "ancho_tabla": 372,
+          "ancho_caja": 332,
+          "scroll": "auto"
+        }
+      ],
+      "viewport": "390x844",
+      "captura": [
+        "docs\\handoff-integral\\capturas-f3\\movil-390-asientos.png"
+      ],
+      "consola": []
+    }
+  ],
+  "recorridos": [
+    {
+      "paso": "login con usuario de prueba",
+      "resultado": {
+        "url": "/sistema/#centro?empresa=1&periodo=202610",
+        "usuario": "demo · super admin"
+      }
+    },
+    {
+      "paso": "menú por áreas (nivel 1) y funciones (nivel 2)",
+      "grupos": [
+        {
+          "seccion": "Inicio",
+          "cerrado": "0",
+          "items": [
+            "inicio",
+            "alertas",
+            "centro"
+          ]
+        },
+        {
+          "seccion": "Documentos",
+          "cerrado": "1",
+          "items": [
+            "documentos",
+            "libros",
+            "onboarding",
+            "dte-emision",
+            "dte",
+            "dte-config"
+          ]
+        },
+        {
+          "seccion": "Contabilidad",
+          "cerrado": "1",
+          "items": [
+            "automatizacion",
+            "propuestas",
+            "asientos",
+            "memoria",
+            "activos",
+            "cierre"
+          ]
+        },
+        {
+          "seccion": "Impuestos y Salud",
+          "cerrado": "1",
+          "items": [
+            "salud",
+            "analitica",
+            "calculadora-iva",
+            "proceso-masivo"
+          ]
+        },
+        {
+          "seccion": "Tesorería",
+          "cerrado": "1",
+          "items": [
+            "tesoreria",
+            "cobranza",
+            "externos"
+          ]
+        },
+        {
+          "seccion": "Informes",
+          "cerrado": "1",
+          "items": [
+            "reportes",
+            "cclientes",
+            "cproveedores",
+            "informe-rango",
+            "exportacion-masiva"
+          ]
+        },
+        {
+          "seccion": "Portal de cliente",
+          "cerrado": "1",
+          "items": [
+            "portal-inicio",
+            "portal-ventas",
+            "portal-cartera",
+            "portal-productos",
+            "portal-credito",
+            "portal-costos",
+            "portal-comercial",
+            "portal-cotizaciones",
+            "portal-cobranza",
+            "portal-reportes"
+          ]
+        },
+        {
+          "seccion": "Administración",
+          "cerrado": "1",
+          "items": [
+            "admin",
+            "auditoria",
+            "integraciones",
+            "suscripcion",
+            "crm",
+            "portafolio"
+          ]
+        }
+      ]
+    },
+    {
+      "paso": "abrir un área cierra las demás",
+      "estado": [
+        {
+          "seccion": "Inicio",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Documentos",
+          "cerrado": "0"
+        },
+        {
+          "seccion": "Contabilidad",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Impuestos y Salud",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Tesorería",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Informes",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Portal de cliente",
+          "cerrado": "1"
+        },
+        {
+          "seccion": "Administración",
+          "cerrado": "1"
+        }
+      ]
+    },
+    {
+      "paso": "anchor directo con filtros en la URL (#documentos?estado=PENDIENTE)",
+      "resultado": {
+        "key": "documentos-filtrado",
+        "url": "#documentos?estado=PENDIENTE&empresa=1&periodo=202609",
+        "titulo": "Bandeja de Documentos",
+        "breadcrumb": "Inicio/Documentos/Bandeja de Documentos",
+        "activo": "documentos",
+        "kicker": "Comercial Aurora SpA · 76.543.210-3",
+        "periodo": "202609",
+        "vacio": false,
+        "largo_texto": 4562,
+        "error_visible": false,
+        "overflow": [],
+        "textos_recortados": [],
+        "tablas_con_scroll": [
+          {
+            "ancho_tabla": 1211,
+            "ancho_caja": 1160,
+            "scroll": "auto"
+          }
+        ],
+        "captura": [
+          "docs\\handoff-integral\\capturas-f3\\escritorio-1440-documentos-filtrado.png"
+        ]
+      }
+    },
+    {
+      "paso": "informe imprimible de Salud Tributaria",
+      "resultado": {
+        "titulo": "Informe Ejecutivo de Salud Tributaria — Comercial Aurora SpA",
+        "h1": "Informe Ejecutivo de Salud Tributaria",
+        "secciones": [
+          "— Índice",
+          "01 Resumen ejecutivo",
+          "02 Cumplimiento tributario y obligaciones",
+          "03 Análisis del IVA y conciliaciones",
+          "04 Matriz de riesgos tributarios",
+          "05 Tendencias y comportamiento tributario",
+          "06 Impacto financiero y proyecciones",
+          "07 Plan de acción y regularización",
+          "08 Metodología, alcance y anexos"
+        ],
+        "texto": "JMV CONSULTORES\nTAX HEALTH INTELLIGENCE\nInforme Ejecutivo de Salud Tributaria\n\nJMV Tax Health Intelligence · diagnóstico, riesgos, exposición y plan de acción\n\nContribuyente: Comercial Aurora SpA\nRUT: 76543210-3\nPeríodo evaluado: 202510 a 202609\nEmitido: 24 de octubre de 2026\nInforme: JMV-TH-1-202609-20261024180938\nVersión: 2.0\n34\nÍndice de Salud Tributaria\nCrítica\nClasificación según la escala JMV\nCobertura 35% · Confianza BAJA\nÍNDICE DE SALUD TRIBUTARIA\n34/100\nCrítica\nOBLIGACIONES REVISADAS\n0/0\nperíodos con declaración vigente\nALERTAS CRÍTICAS\n1\nseveridad alta sin resolver\nEXPOSICIÓN CUANTIF",
+        "enlaces_rotos": 0,
+        "variables_css": 0
+      }
+    },
+    {
+      "paso": "ruta restringida por rol (#crm con rol tesorería)",
+      "resultado": {
+        "key": "crm-como-tesoreria",
+        "url": "#crm?empresa=1&periodo=202610",
+        "titulo": "CRM Comercial",
+        "breadcrumb": "Inicio/Administración/CRM Comercial",
+        "activo": null,
+        "kicker": "Comercial Aurora SpA · 76.543.210-3",
+        "periodo": "202610",
+        "vacio": false,
+        "largo_texto": 100,
+        "error_visible": true,
+        "overflow": [],
+        "textos_recortados": [],
+        "tablas_con_scroll": [],
+        "captura": [
+          "docs\\handoff-integral\\capturas-f3\\escritorio-1440-ruta-restringida-crm-tesoreria.png"
+        ]
+      }
+    },
+    {
+      "paso": "menú desplegable en móvil (390 px)",
+      "resultado": {
+        "abierto": true,
+        "aria": "true",
+        "ancho": 335
+      }
+    }
+  ],
+  "errores_consola": []
+}
