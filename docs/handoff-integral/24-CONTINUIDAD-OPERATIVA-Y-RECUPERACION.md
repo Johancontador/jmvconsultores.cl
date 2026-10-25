@@ -165,8 +165,10 @@ Salida esperada:
 
 ```
 [RESTORE] OK
+[RESTORE] publicado: sí
 [RESTORE] destino aislado: /tmp/restore-test/iva_mensual_restaurada.db
 [RESTORE] integridad SQLite: ok
+[RESTORE] integridad referencial: ok
 [RESTORE] tablas críticas: {"users":…,"empresas":…,"clientes":…,"auditoria":…,"asientos":…,
                            "asiento_lineas":…,"documentos":…,"periodos_contables":…,
                            "bancos_cuentas":…,"suscripciones":…}
@@ -187,8 +189,20 @@ Salida esperada:
 
 > A6 y A7 no están automatizados en `restore-db.js`. No hay tabla de versión de
 > esquema, así que la compatibilidad se comprueba arrancando (las migraciones son
-> idempotentes). Se recomienda agregar `PRAGMA foreign_key_check` y un chequeo de
-> `user_version` al reporte.
+> idempotentes). **`PRAGMA foreign_key_check` ya se ejecuta** (audit 2026-10-25): una
+> base con FK rota no se publica. Sigue pendiente un chequeo de `user_version`.
+>
+> El destino debe estar **vacío**: si existe, el restore se niega y exige
+> `--sobrescribir`; además aborta si la ruta coincide con `DB_PATH`. La copia se
+> valida en un temporal `0600` y solo se publica con `rename` si todo pasa.
+>
+> **Límites conocidos (audit 2026-10-25, pendientes):** el restore publica si
+> `integrity_check` y `foreign_key_check` pasan; **no** exige tamaño mínimo ni que
+> las tablas críticas existan, así que un archivo de 0 bytes o una base sin tablas
+> sale con `ok:true` y `publicado:true`. El criterio A4 se revisa a mano en el
+> reporte. La guarda de destino ocupado se evalúa al inicio (*check-then-act*): un
+> archivo creado después de esa comprobación sería reemplazado. Usar un directorio
+> recién creado.
 
 ---
 
@@ -374,7 +388,7 @@ Lo único afirmado es lo que el código y los tests con respuestas simuladas dem
 | R-5 | `.env` (claves) fuera del backup y sin custodia documentada | Alto | Gestor de secretos + procedimiento de recuperación escrito y probado |
 | R-6 | Emisión DTE sin validación de certificado vencido ni de identidad contra la ficha | Alto | R2/R3 de §6.2 |
 | R-7 | Restore de producción nunca probado | Medio | Ejercicio trimestral en host aislado con el backup real (fuera de horario) |
-| R-8 | `restore-db.js` no verifica `foreign_key_check` ni la versión de esquema | Bajo | Agregar al reporte |
+| R-8 | `restore-db.js` no verifica la versión de esquema (`user_version`) | Bajo | Agregar al reporte (el `foreign_key_check` ya está: audit 2026-10-25) |
 | R-9 | Copia restaurada persiste si falla la verificación final | Bajo | Borrar el destino o marcarlo `.rechazado` en el mismo paso |
 
 Nada de lo anterior se implementó: son recomendaciones de esta fase.

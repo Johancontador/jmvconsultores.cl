@@ -16,6 +16,13 @@
  *   - HTTP 5xx, timeout o error de red → problema temporal: `reintentable: true`
  *     (la documentación pide no repetir antes de 5 s y no abrir más de 2 conexiones).
  *
+ * PRIORIDAD 2 (emergencia)
+ *   La API **exige** `retry` (segundos entre reintentos, mínimo 30) y `expire`
+ *   (cuánto sigue reintentando, máximo 10.800) cuando `priority=2`. Enviarla sin
+ *   esos parámetros devuelve 400, así que aquí se completan con valores por
+ *   defecto (60 s / 3600 s) y se validan ANTES de tocar la red: una alerta de
+ *   emergencia que la API rechaza por contrato es peor que un error local claro.
+ *
  * REGLAS DE SEGURIDAD DE ESTE MÓDULO
  *  1. El token y la user key NUNCA se incluyen en el resultado, ni en los mensajes
  *     de error, ni en los `detalle`. Todo texto que sale de aquí pasa por `redactar`.
@@ -32,6 +39,11 @@ const MAX_MENSAJE = 1024
 const MAX_TITULO = 250
 /** Las claves de Pushover son exactamente 30 caracteres alfanuméricos. */
 const PATRON_CLAVE = /^[A-Za-z0-9]{30}$/
+/** Prioridad 2: `retry` ≥ 30 s y `expire` ≤ 10.800 s (contrato oficial). */
+const RETRY_MINIMO = 30
+const EXPIRE_MAXIMO = 10800
+const RETRY_POR_DEFECTO = 60
+const EXPIRE_POR_DEFECTO = 3600
 
 function esClaveValida(valor) {
   return PATRON_CLAVE.test(String(valor == null ? '' : valor).trim())
@@ -103,13 +115,38 @@ function crearNotificador(opciones = {}) {
    * @returns {Promise<{ok:boolean, estado:string, status?:number, id?:string|null,
    *                    detalle?:string, errores?:string[], reintentable:boolean}>}
    */
-  async function enviar({ titulo, mensaje, prioridad = 1, sonido } = {}) {
+  async function enviar({ titulo, mensaje, prioridad = 1, sonido, retry, expire } = {}) {
     if (!conf.configurado) {
       return { ok: false, estado: 'no_configurado', detalle: resumen.motivo || 'canal no configurado', reintentable: false }
     }
     if (!mensaje || !String(mensaje).trim()) {
       return { ok: false, estado: 'entrada_invalida', detalle: 'el mensaje no puede estar vacío', reintentable: false }
     }
+
+    // Prioridad 2 sin retry/expire es un 400 garantizado: se resuelve aquí.
+    let retryFinal = null
+    let expireFinal = null
+    if (prioridad === 2) {
+      retryFinal = retry == null ? RETRY_POR_DEFECTO : retry
+      expireFinal = expire == null ? EXPIRE_POR_DEFECTO : expire
+      if (!Number.isInteger(retryFinal) || retryFinal < RETRY_MINIMO) {
+        return {
+          ok: false,
+          estado: 'entrada_invalida',
+          detalle: `prioridad 2 exige retry ≥ ${RETRY_MINIMO} s (recibido ${retryFinal})`,
+          reintentable: false,
+        }
+      }
+      if (!Number.isInteger(expireFinal) || expireFinal < retryFinal || expireFinal > EXPIRE_MAXIMO) {
+        return {
+          ok: false,
+          estado: 'entrada_invalida',
+          detalle: `prioridad 2 exige expire entre retry (${retryFinal} s) y ${EXPIRE_MAXIMO} s (recibido ${expireFinal})`,
+          reintentable: false,
+        }
+      }
+    }
+
     if (typeof fetchImpl !== 'function') {
       return { ok: false, estado: 'sin_fetch', detalle: 'no hay implementación de fetch disponible', reintentable: true }
     }
@@ -120,6 +157,10 @@ function crearNotificador(opciones = {}) {
     cuerpo.set('message', recortar(mensaje, MAX_MENSAJE))
     if (titulo) cuerpo.set('title', recortar(titulo, MAX_TITULO))
     if (Number.isInteger(prioridad) && prioridad >= -2 && prioridad <= 2) cuerpo.set('priority', String(prioridad))
+    if (retryFinal != null) {
+      cuerpo.set('retry', String(retryFinal))
+      cuerpo.set('expire', String(expireFinal))
+    }
     if (sonido) cuerpo.set('sound', String(sonido))
 
     let res
@@ -196,6 +237,10 @@ module.exports = {
   MAX_MENSAJE,
   MAX_TITULO,
   PATRON_CLAVE,
+  RETRY_MINIMO,
+  EXPIRE_MAXIMO,
+  RETRY_POR_DEFECTO,
+  EXPIRE_POR_DEFECTO,
   esClaveValida,
   leerConfig,
   inspeccionar,

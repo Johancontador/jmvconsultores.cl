@@ -755,9 +755,64 @@ registra, pero nadie recibe aviso** (A6).
 | # | Qué falta | Por qué no se puede resolver desde aquí |
 |---|---|---|
 | A3 | Autorización de borrado | Destructivo e irreversible en la práctica (§11.6.7). No fue autorizada. |
-| A5 | Proveedor, endpoint, bucket y credenciales dedicadas | **Decidido: Cloudflare R2.** Implementación local lista en `34-A5-A6-R2-PUSHOVER.md`; falta crear bucket y token (el código no sube nada sin `--ejecutar`). La copia incluye también `data/archivo-heredado/`. |
-| A6 | Canal de aviso | **Decidido: Pushover.** Implementación local lista en `34-A5-A6-R2-PUSHOVER.md`; falta `pushover.env` (`600`, fuera del repo). El wrapper de §13.3 sigue en modo «solo log». |
+| A5 | Proveedor, endpoint, bucket y credenciales dedicadas | **Decidido: Cloudflare R2.** Implementación local corregida tras dos pasadas de audit (`34-A5-A6-R2-PUSHOVER.md`); falta crear bucket y token. El plan tiene **7 pasos** (copia, heredado, verificación de hashes, auditoría de restaurabilidad, inventario, purga y comprobación posterior), la purga va **anclada a la raíz** (`/iva_mensual_*`, así que `heredado/` no se borra) y el tope debe cubrir los 21 objetos/semana que maduran o la cola crece para siempre. La purga **no usa `--max-delete`** (con más elegibles que el tope, rclone borra N y no termina): se decide sobre un inventario y se ejecuta con lista explícita; si el inventario supera el tope no se borra nada. Cada `--ejecutar` toma un lock y todo comando lleva timeout. El código no sube nada sin `--ejecutar`. |
+| A6 | Canal de aviso | **Decidido: Pushover.** Implementación local corregida tras el audit; falta `pushover.env` (`600`, fuera del repo). La alerta de emergencia (`--prioridad 2`) envía `retry`/`expire` como exige el contrato; sin ellos la API devolvía 400. El wrapper de §13.3 sigue en modo «solo log». |
 | A7 | Ventana con reinicio del contenedor | Cambia `Dockerfile`/`compose` y exige recrear: no hay forma de hacerlo sin corte. |
+
+### 13.6 Correcciones del audit A5/A6 (2026-10-25, **solo local**)
+
+El trabajo de §13 se auditó antes de conectar servicios externos. Seis defectos
+reales quedaron corregidos sobre la base `a6e7619`; el commit de cierre y su
+despliegue se registran en §15. Nada de esto se ejecutó contra R2 ni Pushover.
+
+| # | Defecto encontrado | Corrección implementada |
+|---|---|---|
+| 1 | La purga con `--max-delete 10` semanal no converge: maduran 21 objetos/semana (3 por copia) y la cola crecía ~11/semana | Tope por defecto 63, mínimo calculado (`3 × cadencia`), rechazo de configuraciones que no convergen y simulación en pruebas. En la segunda pasada se cambió **cómo se aplica**: inventario + lista explícita (ver 13.7) |
+| 2 | `--prioridad 2` de Pushover se enviaba sin `retry`/`expire` → 400 garantizado | Valores por defecto 60 s/3600 s, validación local y parámetros en el cuerpo |
+| 3 | El restore sobrescribía un archivo existente sin aviso y sin distinguir la BD activa | Rechazo por defecto, `--sobrescribir` explícito, aborto si coincide con `DB_PATH`, escritura en temporal y `rename` atómico |
+| 4 | El criterio del drill citaba `foreign_key_check`, que el código no ejecutaba | `PRAGMA foreign_key_check` junto a `integrity_check`; una base con FK rota **no se publica** |
+| 5 | `rclone check` solo miraba `*.db.enc`: un manifiesto ausente en el remoto no se detectaba | Verificación de los tres objetos + auditoría `lsjson` que marca sellos no restaurables, huérfanos y faltantes |
+| 6 | El patrón `iva_mensual_*` alcanzaba `heredado/` (rclone lo aplica a cualquier profundidad) | Patrón anclado a la raíz `/iva_mensual_*`; prueba con `rclone ls` real sobre un árbol raíz + subdirectorio |
+
+**Preflight obligatorio antes de cualquier operación remota destructiva** (esto no
+lo puede hacer el programa por ti):
+
+```bash
+# 1) el remoto dedicado existe y ve el bucket (no escribe)
+rclone lsd jmv-r2:
+rclone lsf jmv-r2:jmv-backups --max-depth 1 | head
+# 2) el token NO ve otros buckets de la cuenta (debe fallar)
+rclone lsf jmv-r2:otro-bucket 2>&1 | head -2
+# 3) permisos del archivo de credenciales
+stat -c '%U:%G %a %n' ~/.config/rclone/rclone.conf   # esperado 600 del usuario del cron
+# 4) versionado activo + regla de ciclo de vida para versiones no vigentes
+```
+
+El **versionado** del bucket (recomendado en `34`) conserva las versiones
+anteriores de cada objeto y R2 las **sigue cobrando**: sin una regla de ciclo de
+vida que las expire, el almacenamiento crece de forma acumulativa y la estimación
+de 6,69 GB deja de valer a partir de ~4 meses. El detalle y los límites están en
+`34` §A5.
+
+### 13.7 Segunda pasada del audit A5 (2026-10-25, **solo local**)
+
+La auditoría independiente del árbol previo al cierre encontró que el diseño de purga
+elegido en 13.6 era él mismo destructivo. Corregido antes del despliegue (§15), sin
+conexión a R2:
+
+| # | Defecto | Corrección |
+|---|---|---|
+| F-01 | `rclone delete --max-delete` con más elegibles que el tope **borra N y no termina** (medido: 30/6 vivo a los 240 s; 84/63 cortado a los 90 s); el CLI lo lanzaba sin timeout y sin lock | Inventario previo, rechazo sin borrar cuando se supera el tope, lista explícita, timeout por comando y lock por corrida |
+| F-02 | La purga partía copias (sello con solo `.sha256` o `.db.enc` sin manifest) | Solo se borran sellos **completos**; un sello parcial o un objeto de subdirectorio aborta; comprobación posterior del remoto con `PURGA INCOHERENTE` si queda un sello partido o desaparece algo fuera de la lista |
+| F-03 | El cron recomendado usaba `--solo retencion-remota`, que omitía verificación y auditoría: borrado sin barrera | `--solo retencion-remota` arrastra verificación, auditoría, inventario y comprobación posterior; sin inventario en la misma corrida no hay `delete` |
+
+Pruebas: `test/r2-plan.test.js` A5/21–A5/29 (casos 30/6 y 84/63, sello partido,
+subdirectorio, fallo de listado, timeout, purga parcial y reejecución con lock).
+
+**Nota (restauración):** el audit también señaló dos límites del restore que **siguen
+abiertos**: publica una base de 0 bytes o sin tablas críticas con `ok:true` (no exige
+conteos) y la guarda de destino ocupado es *check-then-act*. Un drill debe revisar los
+conteos a mano y usar un directorio recién creado; ver `34` §«Límites de la restauración».
 
 ---
 

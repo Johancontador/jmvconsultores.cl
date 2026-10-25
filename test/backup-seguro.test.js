@@ -146,3 +146,181 @@ test('restaurar: sha256 manipulado → rechazo; clave incorrecta → rechazo; si
     claveBackup: null, descifrarSii: null,
   }), /BACKUP_ENCRYPTION_KEY no fue provista/)
 })
+
+// ---------- guardas destructivas y publicación atómica ----------
+
+const Database = require('better-sqlite3')
+
+/** Base con las 10 tablas críticas; opcionalmente con una FK rota (huérfana). */
+function crearBaseCritica({ violacionFK = false } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bk-fk-'))
+  const ruta = path.join(dir, 'origen.db')
+  const d = new Database(ruta)
+  d.pragma('foreign_keys = OFF')
+  d.exec(`
+    CREATE TABLE users(id INTEGER PRIMARY KEY);
+    CREATE TABLE empresas(id INTEGER PRIMARY KEY, clave_sii TEXT);
+    CREATE TABLE clientes(id INTEGER PRIMARY KEY, clave_sii TEXT);
+    CREATE TABLE auditoria(id INTEGER PRIMARY KEY);
+    CREATE TABLE asientos(id INTEGER PRIMARY KEY);
+    CREATE TABLE asiento_lineas(id INTEGER PRIMARY KEY);
+    CREATE TABLE documentos(id INTEGER PRIMARY KEY);
+    CREATE TABLE periodos_contables(id INTEGER PRIMARY KEY);
+    CREATE TABLE bancos_cuentas(id INTEGER PRIMARY KEY, empresa_id INTEGER REFERENCES empresas(id));
+    CREATE TABLE suscripciones(id INTEGER PRIMARY KEY);
+    INSERT INTO users(id) VALUES (1);
+    INSERT INTO empresas(id) VALUES (1);
+    INSERT INTO clientes(id) VALUES (1);
+  `)
+  if (violacionFK) d.exec('INSERT INTO bancos_cuentas(id, empresa_id) VALUES (1, 999)')
+  d.close()
+  return { dir, ruta, contenido: fs.readFileSync(ruta) }
+}
+
+test('restaurar: destino ocupado se rechaza por defecto y el archivo queda intacto', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'ocupado')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+  fs.writeFileSync(destino, 'SENTINELA: dato que no debe perderse')
+
+  assert.throws(
+    () => restaurar({ rutaBackup: base + '.db.enc', dirDestino: destinoDir, claveBackup: process.env.BACKUP_ENCRYPTION_KEY, descifrarSii: null }),
+    /ya existe/
+  )
+  assert.strictEqual(fs.readFileSync(destino, 'utf8'), 'SENTINELA: dato que no debe perderse')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [], 'sin temporales huérfanos')
+})
+
+test('restaurar: `sobrescribir` explícito reemplaza y publica con integridad referencial', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'reemplazo')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+  fs.writeFileSync(destino, 'anterior')
+
+  const r = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+    sobrescribir: true,
+  })
+  assert.strictEqual(r.ok, true, JSON.stringify(r))
+  assert.strictEqual(r.publicado, true)
+  assert.strictEqual(r.integrity, 'ok')
+  assert.strictEqual(r.foreignKey.ok, true)
+  assert.strictEqual(r.foreignKey.violaciones, 0)
+  assert.strictEqual(r.tablas.users, 1)
+  assert.strictEqual(fs.readFileSync(destino).subarray(0, 15).toString(), 'SQLite format 3')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [])
+})
+
+test('restaurar: nunca escribe sobre la BD activa, ni con `sobrescribir`', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  assert.throws(
+    () => restaurar({
+      rutaBackup: base + '.db.enc',
+      dirDestino: dir,
+      nombreDestino: 'iva_mensual.db',
+      dbPathActivo: path.join(dir, 'iva_mensual.db'),
+      claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+      descifrarSii: null,
+      sobrescribir: true,
+    }),
+    /base de datos ACTIVA/
+  )
+  assert.strictEqual(fs.existsSync(path.join(dir, 'iva_mensual.db')), false, 'no se creó nada en la ruta de la BD activa')
+})
+
+test('restaurar: una FK rota no se publica (integrity ok no basta)', () => {
+  const { contenido } = crearBaseCritica({ violacionFK: true })
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'fk')
+
+  const r = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+  })
+  assert.strictEqual(r.ok, false)
+  assert.strictEqual(r.publicado, false)
+  assert.strictEqual(r.integrity, 'ok', 'la estructura puede estar sana y las FK no')
+  assert.ok(r.foreignKey.violaciones >= 1)
+  assert.ok(!r.foreignKey.ok)
+  assert.strictEqual(fs.existsSync(path.join(destinoDir, 'iva_mensual_restaurada.db')), false, 'no se publica una base inválida')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [], 'el temporal se borra')
+})
+
+test('restaurar: corrupción y hash manipulado dejan el destino intacto', () => {
+  // 1) Contenido que no es SQLite: falla al abrir y no publica
+  const { dir, base } = crearBackupTemporal(Buffer.from('esto no es una base sqlite'))
+  const destinoDir = path.join(dir, 'corrupto')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+  fs.writeFileSync(destino, 'SENTINELA')
+
+  assert.throws(
+    () => restaurar({
+      rutaBackup: base + '.db.enc',
+      dirDestino: destinoDir,
+      claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+      descifrarSii: null,
+      sobrescribir: true,
+    }),
+    /not a database/i
+  )
+  assert.strictEqual(fs.readFileSync(destino, 'utf8'), 'SENTINELA')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [])
+
+  // 2) Hash manipulado: rechazo antes de escribir
+  const sano = crearBaseCritica()
+  const otro = crearBackupTemporal(sano.contenido)
+  const destino2 = path.join(otro.dir, 'hash')
+  fs.mkdirSync(destino2)
+  fs.writeFileSync(path.join(destino2, 'iva_mensual_restaurada.db'), 'SENTINELA')
+  fs.writeFileSync(otro.base + '.db.enc', Buffer.concat([fs.readFileSync(otro.base + '.db.enc'), Buffer.from('x')]))
+  assert.throws(
+    () => restaurar({
+      rutaBackup: otro.base + '.db.enc',
+      dirDestino: destino2,
+      claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+      descifrarSii: null,
+      sobrescribir: true,
+    }),
+    /Integridad.*FALLIDA/
+  )
+  assert.strictEqual(fs.readFileSync(path.join(destino2, 'iva_mensual_restaurada.db'), 'utf8'), 'SENTINELA')
+})
+
+test('restore-db.js: destino ocupado → exit 1; con --sobrescribir → exit 0 y publica', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'cli')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+  fs.writeFileSync(destino, 'SENTINELA')
+
+  const entorno = { ...process.env, BACKUP_ENCRYPTION_KEY: process.env.BACKUP_ENCRYPTION_KEY, DB_PATH: path.join(dir, 'bd-activa.db') }
+  const correr = (extra) =>
+    require('node:child_process').spawnSync(
+      process.execPath,
+      ['scripts/restore-db.js', '--backup', base + '.db.enc', '--dest', destinoDir, ...extra],
+      { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', env: entorno }
+    )
+
+  const rechazado = correr([])
+  assert.strictEqual(rechazado.status, 1, rechazado.stderr)
+  assert.match(rechazado.stderr, /ya existe/)
+  assert.strictEqual(fs.readFileSync(destino, 'utf8'), 'SENTINELA')
+
+  const aceptado = correr(['--sobrescribir'])
+  assert.strictEqual(aceptado.status, 0, aceptado.stderr)
+  assert.match(aceptado.stdout, /publicado: sí/)
+  assert.match(aceptado.stdout, /integridad referencial: ok/)
+  assert.strictEqual(fs.readFileSync(destino).subarray(0, 15).toString(), 'SQLite format 3')
+})

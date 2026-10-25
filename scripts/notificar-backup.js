@@ -6,7 +6,12 @@
  *   node scripts/notificar-backup.js --secretos /home/johan/ops-verificacion/pushover.env
  *   node scripts/notificar-backup.js --dir ./data/backups --json
  *   node scripts/notificar-backup.js --avisar-ok        # heartbeat diario opcional
+ *   node scripts/notificar-backup.js --prioridad 2 --retry 60 --expire 3600
  *   node scripts/notificar-backup.js --sin-alerta       # solo verifica (equivale a verificar-backup.js)
+ *
+ * PRIORIDAD 2: Pushover exige `retry` (≥30 s) y `expire` (≤10.800 s). El CLI los
+ * pasa cuando se indican y el módulo los completa/valida antes de la red; sin
+ * ellos, la API devolvería 400 y la alerta de emergencia se perdería.
  *
  * El parámetro se llama `--secretos` y NO `--env-file` porque Node 24 intercepta
  * `--env-file` como opción propia incluso después del nombre del script: el
@@ -42,7 +47,8 @@ const RUTA_SECRETOS_POR_DEFECTO = process.env.PUSHOVER_ENV_FILE || '/home/johan/
 
 const USO =
   'Uso: node scripts/notificar-backup.js [--dir <carpeta>] [--max-horas N] [--sin-hash] ' +
-  '[--secretos <ruta>] [--sin-alerta] [--avisar-ok] [--prioridad N] [--timeout-ms N] [--json]'
+  '[--secretos <ruta>] [--sin-alerta] [--avisar-ok] [--prioridad N] [--retry N] [--expire N] ' +
+  '[--timeout-ms N] [--json]'
 
 function morir(mensaje) {
   console.error(`ERROR: ${mensaje}`)
@@ -59,6 +65,8 @@ function parsearArgumentos(argv) {
     sinAlerta: false,
     avisarOk: false,
     prioridad: 1,
+    retry: null,
+    expire: null,
     timeoutMs: 8000,
     envFile: RUTA_SECRETOS_POR_DEFECTO,
   }
@@ -71,6 +79,8 @@ function parsearArgumentos(argv) {
     else if (a === '--sin-alerta') o.sinAlerta = true
     else if (a === '--avisar-ok') o.avisarOk = true
     else if (a === '--prioridad') o.prioridad = Number(argv[++i])
+    else if (a === '--retry') o.retry = Number(argv[++i])
+    else if (a === '--expire') o.expire = Number(argv[++i])
     else if (a === '--timeout-ms') o.timeoutMs = Number(argv[++i])
     else if (a === '--json') o.json = true
     else return morir(`argumento desconocido: ${a}`)
@@ -78,6 +88,10 @@ function parsearArgumentos(argv) {
   if (!o.dir) morir('--dir necesita una ruta')
   if (!Number.isFinite(o.maxHoras) || o.maxHoras <= 0) morir('--max-horas debe ser un número mayor que 0')
   if (!Number.isInteger(o.prioridad) || o.prioridad < -2 || o.prioridad > 2) morir('--prioridad debe ser un entero entre -2 y 2')
+  if (o.retry != null && (!Number.isInteger(o.retry) || o.retry < 30)) morir('--retry debe ser un entero de al menos 30 segundos (requisito de prioridad 2)')
+  if (o.expire != null && (!Number.isInteger(o.expire) || o.expire > 10800 || o.expire < (o.retry == null ? 30 : o.retry))) {
+    morir('--expire debe ser un entero entre retry y 10800 segundos (requisito de prioridad 2)')
+  }
   if (!Number.isFinite(o.timeoutMs) || o.timeoutMs <= 0) morir('--timeout-ms debe ser un número mayor que 0')
   return o
 }
@@ -169,6 +183,8 @@ async function main() {
       titulo: informe.ok ? 'JMV: respaldo correcto' : 'JMV: respaldo con problemas',
       mensaje: mensajeDeAlerta(informe, process.env.HOSTNAME || os.hostname()),
       prioridad: o.prioridad,
+      retry: o.retry == null ? undefined : o.retry,
+      expire: o.expire == null ? undefined : o.expire,
     })
   }
 

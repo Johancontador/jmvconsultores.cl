@@ -1,6 +1,7 @@
 # 28 · Paquete de diagnóstico de solo lectura del VPS (F7)
 
-> **Fecha:** 2026-10-24 · **Rama:** `master` · **Commit local:** `85f93e9` + cambios F0–F5 sin commitear
+> **Fecha:** 2026-10-24 (rev. 2026-10-25) · **Rama:** `master` · **Commit base local:** `a6e7619`
+> + correcciones del audit A5/A6 en el árbol de trabajo, **sin commitear**
 > **Naturaleza:** instrucciones para un **administrador autorizado**. Nada de este
 > documento se ejecutó: no hay acceso al VPS desde esta estación (sin SSH, sin
 > Docker local, sin lectura del `.env` de producción).
@@ -59,6 +60,14 @@ definitiva es comparar el **hash del archivo dentro del contenedor** con:
 > **Corrección (2026-10-25):** esta tabla comparaba antes contra `85f93e9` y
 > `package.json 6165374a…`, que **no** es lo que corre en producción. `85f93e9` es
 > ancestro de `548f1d6` y solo difiere en `package.json`; se conserva como referencia.
+>
+> **Nota (audit A5/A6, 2026-10-25):** la columna local corresponde al commit
+> `a6e7619`. Las correcciones posteriores del audit tocaron `r2-plan`,
+> `pushover`, `backup-restaurar`, `restore-db`, `respaldo-r2`,
+> `notificar-backup` y sus pruebas — **ninguno** de los cinco archivos de esta
+> tabla — así que sus hashes no cambian. Si se despliega el árbol con las
+> correcciones, el commit será distinto pero estos cinco hashes seguirán siendo
+> los válidos; regenerar la tabla solo si se modifican estos archivos.
 
 ```bash
 docker exec iva-mensual sha256sum \
@@ -69,7 +78,7 @@ docker exec iva-mensual sha256sum \
   /app/package.json
 ```
 
-| Archivo | Desplegado — `548f1d6` | Local — `HEAD` |
+| Archivo | Desplegado — `548f1d6` | Local — `a6e7619` (y árbol corregido) |
 |---|---|---|
 | `backend/index.js` | `b189c1815501a8baf2c70a93986819529553bdfa45926b970873e06d7397fb00` | `2034593f542952e3df9739267bed9e279c67b0ca05064203f4b8203f99bcec94` |
 | `backend/core/boveda.js` | `ca1f43b8de900962232f58432e45075f1e9d611b5f0b01d2d5ed4ea456c9d3b7` | `51aa67422721b50fea77096a954ebe164b1f5d674eb2751cb64ee4d7fde52a0f` |
@@ -276,7 +285,7 @@ for(const f of filas){const o={empresa_id:f.empresa_id};try{const d=lib.loadPfxF
 | Operación | Por qué está excluida | Cuándo sí (con autorización) |
 |---|---|---|
 | `scripts/backup-db.js` | Crea una copia nueva y aplica retención (borra antiguas) | `29` §C, con autorización explícita |
-| `scripts/restore-db.js` | Escribe una BD restaurada en un destino | `29` §C, en directorio temporal, nunca sobre producción |
+| `scripts/restore-db.js` | Escribe una BD restaurada y **publica** en el destino | `29` §C, en directorio temporal, nunca sobre producción. Desde el audit: rechaza un destino ocupado (exige `--sobrescribir`) y cualquier destino que coincida con `DB_PATH`; valida en un temporal con `integrity_check` + `foreign_key_check` y solo entonces hace `rename` |
 | `npm run seed:v` | Reescribe `frontend/**/*.html` en el árbol | No aplica al VPS |
 | `git push` / `ops/deploy.sh` | Despliega (recrea el contenedor) | `29` §A |
 | `scripts/rotar-master-key.js` | Re-cifra secretos (irreversible sin clave vieja) | `29` §B, con backup y ventana |
@@ -296,7 +305,7 @@ FECHA: ____  EJECUTÓ: ____  HOST: ____
   deploy-state.json: (commit / imagen / fecha): ____
 
 [1] Versión backend (5 hashes)
-  coinciden con 85f93e9: __/5   coinciden con working tree: __/5
+  coinciden con 548f1d6: __/5   coinciden con a6e7619: __/5
   veredicto: IDENTIFICADO / DESCONOCIDO
 
 [2] Clave maestra
@@ -339,7 +348,7 @@ FECHA: ____  EJECUTÓ: ____  HOST: ____
 | **Backup reciente** | stamp ≤ objetivo acordado (§6.1) | `FALLIDO` |
 | **Backup íntegro** | `sha256sum -c` OK + `sha_coincide` (§6.2–6.3) | `FALLIDO` |
 | **Backup descifrable** | `descifra:true` y `sha_original_coincide:true` (§6.3) | `FALLIDO` |
-| **Backup recuperable** | restauración aislada con `integrity_check ok` y conteos (§9, autorizado) | `NO VERIFICADO` |
+| **Backup recuperable** | restauración aislada con `integrity_check ok`, `foreign_key_check` sin violaciones y conteos (§9, autorizado) | `NO VERIFICADO` |
 | **Recuperación documentada** | docs `24` + `26` + procedimiento firmado | Parcial hasta que exista el acta |
 | **Versión backend identificada** | 5/5 hashes en la misma columna (§3) | `NO VERIFICADO` |
 | **Versión frontend identificada** | 9/28 assets distintos de F3 → build anterior (ya demostrado en F6) | — |

@@ -102,7 +102,11 @@ cat data/backups/iva_mensual_<stamp>.manifest.json       # metadatos (sin secret
 node scripts/restore-db.js --backup data/backups/iva_mensual_<stamp>.db.enc --dest /tmp/restore-$(date +%s)
 ```
 
-El script ejecuta y reporta: SHA-256 del archivo vs manifest → descifrado → SHA-256 del original → escritura en destino AISLADO → `PRAGMA integrity_check` → conteos de tablas críticas (`users, empresas, clientes, auditoria, asientos, asiento_lineas, documentos, periodos_contables, bancos_cuentas, suscripciones`) → descifrado de TODAS las claves SII `v1:` con `SECRETOS_MASTER_KEY`. Sale 0 si todo ok.
+El script ejecuta y reporta: SHA-256 del archivo vs manifest → descifrado → SHA-256 del original → escritura en un TEMPORAL `0600` del destino → `PRAGMA integrity_check` **y** `PRAGMA foreign_key_check` → conteos de tablas críticas (`users, empresas, clientes, auditoria, asientos, asiento_lineas, documentos, periodos_contables, bancos_cuentas, suscripciones`) → descifrado de TODAS las claves SII `v1:` con `SECRETOS_MASTER_KEY` → publicación por `rename` solo si todo pasó. Sale 0 si todo ok.
+
+Guardas (audit 2026-10-25): se niega a escribir si el destino ya existe (hay que pasar `--sobrescribir` de forma explícita) y aborta si la ruta coincide con `DB_PATH` (la BD en uso). Si algo falla, el destino queda intacto y el temporal se borra: nunca se publica una base con `integrity_check` o `foreign_key_check` no satisfactorios.
+
+**Límites (audit 2026-10-25, pendientes):** la publicación no exige tamaño mínimo ni que las tablas críticas existan —un archivo de 0 bytes o una base sin ninguna tabla crítica pasa con `publicado: sí`—, así que un drill debe revisar los conteos del reporte, no solo el código de salida. La guarda de destino ocupado se comprueba al inicio (*check-then-act*): un archivo creado justo después sería reemplazado; usar un directorio recién creado.
 
 Arrancar la app desde la copia restaurada (nunca sobre la BD real):
 

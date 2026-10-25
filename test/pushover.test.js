@@ -309,3 +309,111 @@ test('A6/13: CLI — `--sin-alerta` conserva la verificación y no intenta red',
     }
   )
 })
+
+/* -------------------- prioridad 2: retry/expire del contrato -------------------- */
+
+test('A6/14: prioridad 2 envía retry y expire (valores por defecto del contrato)', async () => {
+  const fetchImpl = fetchFalso()
+  const n = crearNotificador({ env: SECRETOS, fetchImpl })
+
+  const r = await n.enviar({ mensaje: 'emergencia', prioridad: 2 })
+  assert.strictEqual(r.ok, true)
+  const cuerpo = cuerpoDe(fetchImpl.llamadas[0])
+  assert.strictEqual(cuerpo.get('priority'), '2')
+  assert.strictEqual(cuerpo.get('retry'), '60')
+  assert.strictEqual(cuerpo.get('expire'), '3600')
+  assert.ok(!JSON.stringify(r).includes(TOKEN))
+})
+
+test('A6/15: prioridad 2 valida retry/expire ANTES de tocar la red', async () => {
+  const casos = [
+    { etiqueta: 'retry por debajo del mínimo', args: { prioridad: 2, retry: 29 }, patron: /retry ≥ 30/ },
+    { etiqueta: 'retry no entero', args: { prioridad: 2, retry: 45.5 }, patron: /retry ≥ 30/ },
+    { etiqueta: 'expire por encima del máximo', args: { prioridad: 2, expire: 10801 }, patron: /expire entre/ },
+    { etiqueta: 'expire menor que retry', args: { prioridad: 2, retry: 600, expire: 100 }, patron: /expire entre/ },
+  ]
+  for (const caso of casos) {
+    const fetchImpl = fetchFalso()
+    const r = await crearNotificador({ env: SECRETOS, fetchImpl }).enviar({ mensaje: 'x', ...caso.args })
+    assert.strictEqual(r.ok, false, caso.etiqueta)
+    assert.strictEqual(r.estado, 'entrada_invalida', caso.etiqueta)
+    assert.strictEqual(r.reintentable, false, caso.etiqueta)
+    assert.match(r.detalle, caso.patron, caso.etiqueta)
+    assert.strictEqual(fetchImpl.llamadas.length, 0, `${caso.etiqueta}: no debe llamarse a la API`)
+  }
+
+  // Valores válidos en los bordes del contrato
+  const fetchImpl = fetchFalso()
+  const r = await crearNotificador({ env: SECRETOS, fetchImpl }).enviar({ mensaje: 'x', prioridad: 2, retry: 30, expire: 10800 })
+  assert.strictEqual(r.ok, true)
+  const cuerpo = cuerpoDe(fetchImpl.llamadas[0])
+  assert.strictEqual(cuerpo.get('retry'), '30')
+  assert.strictEqual(cuerpo.get('expire'), '10800')
+})
+
+test('A6/16: prioridad 1 (y menores) no envían retry/expire', async () => {
+  const fetchImpl = fetchFalso()
+  const n = crearNotificador({ env: SECRETOS, fetchImpl })
+  await n.enviar({ mensaje: 'x', prioridad: 1, retry: 30, expire: 600 })
+  const cuerpo = cuerpoDe(fetchImpl.llamadas[0])
+  assert.strictEqual(cuerpo.has('retry'), false)
+  assert.strictEqual(cuerpo.has('expire'), false)
+})
+
+test('A6/17: un 400 de Pushover por prioridad 2 se reporta como rechazo definitivo', async () => {
+  const body = JSON.stringify({ status: 0, errors: ['priority 2 requires retry and expire parameters'] })
+  const r = await crearNotificador({ env: SECRETOS, fetchImpl: fetchFalso({ status: 400, body }) }).enviar({
+    mensaje: 'x',
+    prioridad: 2,
+  })
+  assert.strictEqual(r.ok, false)
+  assert.strictEqual(r.estado, 'rechazada')
+  assert.strictEqual(r.status, 400)
+  assert.strictEqual(r.reintentable, false)
+})
+
+test('A6/18: CLI — `--avisar-ok` con respaldo sano envía el parte diario (exit 0)', async () => {
+  const dir = dirTemporal()
+  sembrarBackup(dir)
+  await conServidorPushover(
+    () => ({ status: 200, body: '{"status":1,"request":"req-heartbeat"}' }),
+    async ({ endpoint, peticiones }) => {
+      const r = await ejecutarCLI(['--dir', dir, '--secretos', archivoSecretos(''), '--avisar-ok'], {
+        PUSHOVER_ENDPOINT: endpoint,
+        ...SECRETOS,
+      })
+      assert.strictEqual(r.codigo, 0, r.stderr)
+      assert.strictEqual(peticiones.length, 1, 'el heartbeat sí genera un mensaje')
+      assert.match(peticiones[0].cuerpo.get('title'), /correcto/)
+      assert.strictEqual(peticiones[0].cuerpo.get('priority'), '1')
+      assert.ok(!r.stdout.includes(TOKEN) && !r.stderr.includes(TOKEN))
+    }
+  )
+})
+
+test('A6/19: CLI — `--prioridad 2 --retry --expire` llega al canal con el contrato completo', async () => {
+  const dir = dirTemporal()
+  await conServidorPushover(
+    () => ({ status: 200, body: '{"status":1,"request":"req-emergencia"}' }),
+    async ({ endpoint, peticiones }) => {
+      const r = await ejecutarCLI(
+        ['--dir', dir, '--secretos', archivoSecretos(''), '--prioridad', '2', '--retry', '30', '--expire', '600'],
+        { PUSHOVER_ENDPOINT: endpoint, ...SECRETOS }
+      )
+      assert.strictEqual(r.codigo, 1, 'el respaldo sigue ausente: exit 1')
+      assert.strictEqual(peticiones.length, 1)
+      assert.strictEqual(peticiones[0].cuerpo.get('priority'), '2')
+      assert.strictEqual(peticiones[0].cuerpo.get('retry'), '30')
+      assert.strictEqual(peticiones[0].cuerpo.get('expire'), '600')
+    }
+  )
+})
+
+test('A6/20: CLI — retry/expire fuera de contrato → exit 2 sin tocar la red', async () => {
+  const dir = dirTemporal()
+  for (const args of [['--retry', '10'], ['--expire', '20000'], ['--retry', '600', '--expire', '100']]) {
+    const r = await ejecutarCLI(['--dir', dir, ...args], { PUSHOVER_APP_TOKEN: '', PUSHOVER_USER_KEY: '' })
+    assert.strictEqual(r.codigo, 2, `${args.join(' ')}: esperaba exit 2`)
+    assert.match(r.stderr, /--retry|--expire/)
+  }
+})
