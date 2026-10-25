@@ -52,8 +52,13 @@ identificado** por registro; se resuelve con §3 (hashes).
 El frontend ya se demostró anterior a F3 (F6). Para el backend, la prueba
 definitiva es comparar el **hash del archivo dentro del contenedor** con:
 
-- la versión del commit `85f93e9` (línea base desplegada según los documentos), y
-- el working tree local (F0–F5, **no desplegado**).
+- el commit **`548f1d6`**, que es el realmente desplegado (verificado el 2026-10-25:
+  `deploy-state.json`, HEAD del repo bare y 5/5 hashes), y
+- el `HEAD` local (F0–F8 **+ A5/A6**, **no desplegado**).
+
+> **Corrección (2026-10-25):** esta tabla comparaba antes contra `85f93e9` y
+> `package.json 6165374a…`, que **no** es lo que corre en producción. `85f93e9` es
+> ancestro de `548f1d6` y solo difiere en `package.json`; se conserva como referencia.
 
 ```bash
 docker exec iva-mensual sha256sum \
@@ -64,22 +69,26 @@ docker exec iva-mensual sha256sum \
   /app/package.json
 ```
 
-| Archivo | Si coincide con `85f93e9` | Si coincide con el working tree | Si no coincide con ninguno |
-|---|---|---|---|
-| `backend/index.js` | `b189c1815501a8baf2c70a93986819529553bdfa45926b970873e06d7397fb00` | `8f6e47e7969a640b2e09d6d95de88556094c4ef67a11c2d7873365f7a5198070` | build desconocido |
-| `backend/core/boveda.js` | `ca1f43b8de900962232f58432e45075f1e9d611b5f0b01d2d5ed4ea456c9d3b7` | `51aa67422721b50fea77096a954ebe164b1f5d674eb2751cb64ee4d7fde52a0f` | build desconocido |
-| `backend/core/dte-emisor.js` | `008290b011b6e1c95a0072615917cd46d8d5a68e58d0f386877350084535d334` | `36878fb54f61ed956af9429c45af03dc9a471a3078c5186c5966f3887ee964db` | build desconocido |
-| `backend/routes/dte.js` | `bc9ec3357192f476ef92a859e57f8f6e64827fc6b85847c05e09e03c23b29969` | `7cd7696a2ac7fa5ce25e0fa88aa90dfcd60ac3ce412f1e4893cab6c280392877` | build desconocido |
-| `package.json` | `6165374a558024b95ac2d9476849a43fd3ce844016566860036a28f180b8f974` | `48460b7afbc51e12e9cda24fba65f130e1dadd27d00b306ace28f4e9c75fa12d` | build desconocido |
+| Archivo | Desplegado — `548f1d6` | Local — `HEAD` |
+|---|---|---|
+| `backend/index.js` | `b189c1815501a8baf2c70a93986819529553bdfa45926b970873e06d7397fb00` | `2034593f542952e3df9739267bed9e279c67b0ca05064203f4b8203f99bcec94` |
+| `backend/core/boveda.js` | `ca1f43b8de900962232f58432e45075f1e9d611b5f0b01d2d5ed4ea456c9d3b7` | `51aa67422721b50fea77096a954ebe164b1f5d674eb2751cb64ee4d7fde52a0f` |
+| `backend/core/dte-emisor.js` | `008290b011b6e1c95a0072615917cd46d8d5a68e58d0f386877350084535d334` | `36878fb54f61ed956af9429c45af03dc9a471a3078c5186c5966f3887ee964db` |
+| `backend/routes/dte.js` | `bc9ec3357192f476ef92a859e57f8f6e64827fc6b85847c05e09e03c23b29969` | `7cd7696a2ac7fa5ce25e0fa88aa90dfcd60ac3ce412f1e4893cab6c280392877` |
+| `package.json` | `6d38a0222fb39945d4dae4c5b30b9aa0e5cc953925b758d03b54e9f2562c6d87` | `151b3dccaae122a56c849086671db32e10d5c2713edc154fcea0469b8d303e3e` |
 
 **Criterio de aceptación (versión):**
-- Backend **identificado** ⇔ los 5 hashes caen en la misma columna.
-- Si los 5 coinciden con `85f93e9` → el backend desplegado es la línea base y el
-  despliegue de F0–F5 es un avance de una sola dirección (aún con riesgos de §29).
-- Si alguno cae en la columna del working tree → **ya hay** cambios locales
-  desplegados (no debería ocurrir); revisar `deploy-hook.log`.
+- Backend **identificado** ⇔ los 5 hashes caen en la misma columna (basta el prefijo
+  de 16 hex para comparar la salida de `sha256sum`).
+- Los 5 en la columna `548f1d6` → el backend es exactamente ese commit y el
+  despliegue de F0–F8 es un avance de una sola dirección (con las condiciones de `33` §10).
+- Si alguno cae en la columna local → **ya hay** código nuevo desplegado sin registro;
+  revisar `deploy-hook.log`.
 - Columnas mixtas o ninguna → `NO VERIFICADO`: no programar el despliegue hasta
   explicarlo (`git log` del repo bare y log del hook).
+- Comprobación complementaria ya ejecutada (2026-10-25): **163/163** archivos
+  `.js/.css/.html` del contenedor coinciden con `548f1d6`, sin faltantes ni extra →
+  no hay ediciones manuales en el servidor.
 
 > Los hashes son de **contenido**, no secretos. Están calculados sobre el
 > repositorio, no sobre el VPS.

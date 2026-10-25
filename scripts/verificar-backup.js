@@ -21,7 +21,10 @@
  *              >> logs-backup.log 2>&1 || /usr/bin/curl -fsS -m 10 "$ALERTA_WEBHOOK" -d 'backup con problemas'
  */
 
-require('dotenv').config()
+// dotenv es OPCIONAL a propósito: el verificador también debe poder correr en el
+// HOST (cron, sin node_modules) apuntando a la carpeta de backups montada, sin
+// esperar a un despliegue de imagen. Dentro del contenedor sí carga el .env.
+try { require('dotenv').config() } catch { /* host sin dependencias: se usan las variables del entorno */ }
 const path = require('path')
 const { evaluar, resumenTexto } = require('../backend/core/backup-vigilancia')
 
