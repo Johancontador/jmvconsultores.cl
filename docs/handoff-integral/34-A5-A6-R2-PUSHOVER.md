@@ -1,6 +1,6 @@
 # 34 — Copia externa en R2 (A5) y alertas por Pushover (A6)
 
-**Estado: código incluido en el release del 2026-10-25 (ver `33` §15); A5/A6 siguen sin ejecutar en producción.**
+**Estado: código desplegado el 2026-10-25 (ver `33` §15); A5/A6 siguen sin ejecutar en producción.**
 No hay bucket, no hay credenciales, no hay cron nuevo, no se ha enviado ninguna notificación
 real. Base: commit `a6e7619`; las correcciones de ambas pasadas del audit se consolidaron en el
 commit de cierre y su despliegue (ver `33-MATRIZ-OPERACIONAL-VPS.md` §13.6, §13.7 y §15).

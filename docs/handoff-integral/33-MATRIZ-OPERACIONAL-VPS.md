@@ -922,3 +922,46 @@ docker compose up -d iva-mensual
 `docker exec iva-mensual id` devuelve `uid=10001`, `data` es `10001:10001` en `750`, la escritura
 WAL funciona, el verificador del host sigue leyendo, y un `/opt/geodaniela` comprometido
 (uid 1000) **ya no** puede abrir la BD contable. Hasta entonces R3 sigue abierto.
+
+---
+
+## 15. Release desplegado — F0–F8 + A5/A6 (2026-10-25)
+
+Despliegue autorizado por el propietario en esta pasada (ventana inmediata, asumiendo el
+rango 25–28 que el runbook de `29` desaconseja). Push a `vps` y a `github` del mismo commit.
+
+| Dato | Valor |
+|---|---|
+| Commit desplegado | `bc7a5a2` (14 archivos, +2.440/−191) |
+| Push → `vps` | 19:27:53 UTC; hook: «código nuevo → rebuild desacoplado» |
+| Imagen | `sha256:838291452587` |
+| Contenedor | `healthy` desde 19:32:13 UTC; `restart_count=0` |
+| `deploy-state.json` | commit `bc7a5a2`, `escritura_ok:true`, 19:32:26 UTC |
+| Rollback | `548f1d6` (`rollback-target.txt`) + imagen `9e1faaa08633` |
+| Frontend servido | `app.js?v=c1d44190`, `sistema.css?v=7bae9444` (200, refs locales) |
+| Salud | `{"ok":true,"db":"ok","version":"1.0.0"}` (interno y público) |
+| `X-Powered-By` | ausente; HSTS/CSP/XFO/nosniff presentes |
+| Backup | `[BACKUP-CHECK] OK` (16,5 h, cifrada, total 28) |
+| BD | `integrity_check ok`; users 11 · empresas 10 · documentos 15.620 · asientos 263 |
+| Puerta previa | G1–G7 cerradas; backup 03:00 verificado y restaurado en aislado (15/15 claves) |
+| Pruebas | suite 756/756 antes del push |
+
+El reinicio reanudó **4 ingestas históricas** pendientes; quedaron `completado` (no hay
+`historico_rcv` pendientes). No se modificaron datos contables (mismos conteos del backup).
+
+### 15.1 Hallazgo posterior (preexistente, no bloqueante)
+
+`[JOBS] reanudación falló (no fatalo): Auditoría: usuarioId es obligatorio`.
+`onboarding.reanudarHistoricosPendientes` audita el resumen con `usuarioId:null` y
+`registrarAccion` exige usuario; ni `onboarding.js` ni `auditoria.js` cambiaron desde
+`548f1d6`, así que el defecto ya estaba en producción. La reanudación de las ingestas sí
+ocurrió; solo se pierde la entrada de auditoría del resumen. Corrección propuesta: firmar con
+el usuario del sistema (como `sync-diaria`) y añadir prueba.
+
+### 15.2 Límites de esta verificación
+
+- No se hizo login autenticado ni operación con datos reales desde este programa: el humo fue
+  público (`/`, `/login.html`, `/sistema/`, assets, cabeceras) y de contenedor (salud, BD,
+  backup, logs). La validación visual F3 cubre el mismo contenido (68 capturas).
+- A5/A6 siguen **sin ejecutar** contra R2/Pushover (no hay bucket, credenciales ni cron).
+- F-04/F-05 del restore siguen abiertos y documentados en `34` §«Límites de la restauración».
