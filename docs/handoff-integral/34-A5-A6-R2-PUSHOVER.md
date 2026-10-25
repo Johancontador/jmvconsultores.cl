@@ -155,13 +155,16 @@ ocupado. Orden efectivo:
 El reporte incluye `publicado`, `integrity`, `foreignKey` y `claves`. Códigos: `0` restaurada y
 publicada; `1` error o copia no válida.
 
-**Límites de la restauración (audit 2026-10-25, pendientes de corregir):** `restaurar` publica
-si `integrity_check` y `foreign_key_check` pasan. **No exige tamaño mínimo ni que las tablas
-críticas existan**: un archivo de 0 bytes, o una base válida sin ninguna tabla crítica, se
-publica con `ok:true, publicado:true`. Por eso un drill no puede fiarse del código de salida:
-hay que revisar los conteos del reporte (criterio A4 de `24` §3.3). Además, la guarda de destino
-ocupado es *check-then-act*: se comprueba al inicio, así que un archivo creado después de esa
-comprobación sería reemplazado. En un drill, usar un directorio recién creado.
+**Límites de la restauración (audit 2026-10-25) — F-04/F-05 CORREGIDOS el mismo día:**
+`restaurar` ya NO publica un archivo de 0 bytes (F-04: rechazo explícito «El backup está
+vacío») ni una base válida a la que le falte una tabla crítica (los conteos del reporte
+siguen disponibles, y `criticas.faltantes` lista lo ausente). Además la guarda de destino
+ocupado ya no es check-then-act (F-05): la publicación SIN `sobrescribir` usa un **enlace
+duro** que falla con EEXIST si el destino apareció entre la guarda inicial y la publicación —
+el destino nunca es reemplazado sin permiso explícito (`--sobrescribir` conserva el rename
+directo). Pruebas: `restaurar F-04*` y `restaurar F-05*` en `test/backup-seguro.test.js`.
+La regla del drill (directorio recién creado) sigue siendo buena praxis, pero el caveat
+de confianza en el código de salida queda cerrado: `exit 1` ⇔ no publicado.
 
 ### Pasos manuales (los hace el propietario; no los ejecuta este programa)
 
@@ -266,8 +269,10 @@ docker exec iva-mensual rm -rf /tmp/drill-r2 /tmp/drill-r2-restore && rm -rf /tm
 ```
 
 Criterio: `integrity_check ok`, **`foreign_key_check` sin violaciones**, `publicado: sí`,
-conteos ≥ los del último estado conocido y claves SII que descifran. **Revisar los conteos a
-mano:** el restore no exige que las tablas críticas existan (ver «Límites de la restauración»).
+conteos ≥ los del último estado conocido y claves SII que descifran. Los conteos las
+reporta el CLI; desde 2026-10-25 (F-04) el restore **exige que TODAS las tablas críticas
+existan** — una base sin tablas críticas ya no se publica (`ok:false`, exit 1), así que el
+código de salida vuelve a ser fiable para el drill.
 El destino debe estar vacío: si existe, el restore se niega (no hace falta `--sobrescribir` en un
 drill). **A5 no está cerrado** hasta que este drill se ejecute desde el remoto (no desde el disco
 local), con la fecha anotada.

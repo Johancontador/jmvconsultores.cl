@@ -955,8 +955,11 @@ El reinicio reanudó **4 ingestas históricas** pendientes; quedaron `completado
 `onboarding.reanudarHistoricosPendientes` audita el resumen con `usuarioId:null` y
 `registrarAccion` exige usuario; ni `onboarding.js` ni `auditoria.js` cambiaron desde
 `548f1d6`, así que el defecto ya estaba en producción. La reanudación de las ingestas sí
-ocurrió; solo se pierde la entrada de auditoría del resumen. Corrección propuesta: firmar con
-el usuario del sistema (como `sync-diaria`) y añadir prueba.
+ocurrió; solo se pierde la entrada de auditoría del resumen. **CORREGIDO (2026-10-25):**
+`jobs.reanudados_arranque` ahora firma con el usuario del sistema
+(`licencias.usuarioSistema`, como `sync-diaria`), el error de un run reanudado cae al
+mismo actor si el usuario del job ya no existe, y hay prueba de regresión en
+`test/reanudacion-auditoria.regression.test.js` (registrar en `npm test`).
 
 ### 15.2 Límites de esta verificación
 
@@ -964,4 +967,7 @@ el usuario del sistema (como `sync-diaria`) y añadir prueba.
   público (`/`, `/login.html`, `/sistema/`, assets, cabeceras) y de contenedor (salud, BD,
   backup, logs). La validación visual F3 cubre el mismo contenido (68 capturas).
 - A5/A6 siguen **sin ejecutar** contra R2/Pushover (no hay bucket, credenciales ni cron).
-- F-04/F-05 del restore siguen abiertos y documentados en `34` §«Límites de la restauración».
+- F-04/F-05 del restore **CORREGIDOS (2026-10-25)**: rechazo de backups de 0 bytes y de
+  bases sin tablas críticas (F-04) y publicación nunca-reemplazo con enlace duro para un
+  destino que apareció durante la restauración (F-05). Detalle en `34` §Restauración
+  segura. Pruebas en `test/backup-seguro.test.js`.

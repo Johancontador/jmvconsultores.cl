@@ -23,7 +23,7 @@ process.env.BACKUP_ENCRYPTION_KEY = 'b'.repeat(64) // clave de test para backups
 
 const db = require('../backend/db')
 const cifrador = require('../backend/core/backup-cifrado')
-const { restaurar } = require('../backend/core/backup-restaurar')
+const { restaurar, TABLAS_CRITICAS } = require('../backend/core/backup-restaurar')
 const boveda = require('../backend/core/boveda')
 
 test.after(() => {
@@ -150,6 +150,134 @@ test('restaurar: sha256 manipulado → rechazo; clave incorrecta → rechazo; si
 // ---------- guardas destructivas y publicación atómica ----------
 
 const Database = require('better-sqlite3')
+
+// ---------- F-04 / F-05 (audit 2026-10-25) ----------
+
+/** Base SQLite válida pero SIN tablas críticas (fue el hueco de F-04). */
+function crearBaseSinCriticas() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bk-sincrit-'))
+  const ruta = path.join(dir, 'origen.db')
+  const d = new Database(ruta)
+  d.exec(`CREATE TABLE otra_cosa(id INTEGER PRIMARY KEY); INSERT INTO otra_cosa(id) VALUES (1)`)
+  d.close()
+  return fs.readFileSync(ruta)
+}
+
+test('restaurar F-04: backup de 0 bytes se rechaza antes de escribir nada', () => {
+  const { dir, base } = crearBackupTemporal(Buffer.alloc(0))
+  const destinoDir = path.join(dir, 'vacio')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+  fs.writeFileSync(destino, 'SENTINELA')
+
+  assert.throws(
+    () => restaurar({
+      rutaBackup: base + '.db.enc',
+      dirDestino: destinoDir,
+      claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+      descifrarSii: null,
+      sobrescribir: true,
+    }),
+    /0 bytes/
+  )
+  assert.strictEqual(fs.readFileSync(destino, 'utf8'), 'SENTINELA', 'el destino queda intacto')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [], 'sin temporales huérfanos')
+})
+
+test('restaurar F-04: base válida sin tablas críticas NO se publica', () => {
+  const { dir, base } = crearBackupTemporal(crearBaseSinCriticas())
+  const destinoDir = path.join(dir, 'sincriticas')
+
+  const r = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+  })
+  assert.strictEqual(r.ok, false, JSON.stringify(r))
+  assert.strictEqual(r.integrity, 'ok', 'la ESTRUCTURA puede estar sana y aun así faltar la base del sistema')
+  assert.strictEqual(r.publicado, false)
+  assert.ok(r.criticas.faltantes.length >= TABLAS_CRITICAS.length - 3, 'reporta las faltantes')
+  assert.strictEqual(fs.existsSync(path.join(destinoDir, 'iva_mensual_restaurada.db')), false, 'no se publica una base sin tablas críticas')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [], 'el temporal se borra')
+})
+
+test('restaurar F-04: TODAS las tablas críticas existentes → sí publica (control)', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'control-f04')
+
+  const r = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+  })
+  assert.strictEqual(r.ok, true, JSON.stringify(r))
+  assert.strictEqual(r.publicado, true)
+  assert.deepStrictEqual(r.criticas.faltantes, [])
+})
+
+test('restaurar F-05: el destino que apareció durante la restauración NO se reemplaza', () => {
+  const { contenido } = crearBaseCritica()
+  const { dir, base } = crearBackupTemporal(contenido)
+  const destinoDir = path.join(dir, 'carrera')
+  fs.mkdirSync(destinoDir)
+  const destino = path.join(destinoDir, 'iva_mensual_restaurada.db')
+
+  // Simula la carrera: otro proceso crea el destino DESPUÉS de la guarda
+  // inicial, justo antes de la publicación (lo interceptamos en linkSync).
+  const linkSyncReal = fs.linkSync
+  let plantado = false
+  fs.linkSync = function (origen, destinoLink) {
+    if (!plantado) {
+      plantado = true
+      fs.writeFileSync(destinoLink, 'SENTINELA-OTRO-PROCESO')
+    }
+    return linkSyncReal.call(fs, origen, destinoLink)
+  }
+
+  let r
+  try {
+    r = restaurar({
+      rutaBackup: base + '.db.enc',
+      dirDestino: destinoDir,
+      claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+      descifrarSii: null,
+    })
+  } finally {
+    fs.linkSync = linkSyncReal
+  }
+
+  assert.ok(false === r.publicado, JSON.stringify(r))
+  assert.match(r.motivo || '', /no se reemplaza/)
+  assert.strictEqual(r.ok, true, 'la COPIA es válida: solo la publicación se negó')
+  assert.strictEqual(fs.readFileSync(destino, 'utf8'), 'SENTINELA-OTRO-PROCESO', 'el dato del otro proceso se preserva')
+  assert.deepStrictEqual(fs.readdirSync(destinoDir).filter((f) => f.startsWith('.')), [], 'sin temporales huérfanos')
+
+  // El reemplazo EXPLÍCITO sigue siendo legal (control del comportamiento
+  // anterior a F-05 conservado para `sobrescribir:true`)
+  const r2 = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+    sobrescribir: true,
+  })
+  assert.strictEqual(r2.publicado, true)
+  assert.strictEqual(fs.readFileSync(destino).subarray(0, 15).toString(), 'SQLite format 3')
+
+  // El reemplazo normal después de una corrida limpia NO confunde a F-05
+  const r3 = restaurar({
+    rutaBackup: base + '.db.enc',
+    dirDestino: destinoDir,
+    claveBackup: process.env.BACKUP_ENCRYPTION_KEY,
+    descifrarSii: null,
+    sobrescribir: true,
+  })
+  assert.strictEqual(r3.publicado, true)
+  fs.rmSync(destinoDir, { recursive: true, force: true })
+})
 
 /** Base con las 10 tablas críticas; opcionalmente con una FK rota (huérfana). */
 function crearBaseCritica({ violacionFK = false } = {}) {

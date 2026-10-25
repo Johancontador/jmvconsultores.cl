@@ -33,6 +33,7 @@ const { claveSiiDescifrada } = require('./empresas')
 const documentosCore = require('./documentos')
 const { registrarAccion } = require('./auditoria')
 const jobsP = require('./jobs-persistentes')
+const licencias = require('./licencias')
 
 const CLAVES_CHECKLIST = [
   'razon_social_sii',
@@ -484,6 +485,13 @@ function listarIngestasDeUsuario(usuarioId) {
  */
 async function reanudarHistoricosPendientes() {
   const dbInstancia = require('../db')
+  // Auditoría del arranque: NO hay usuario humano — firma el admin semilla
+  // (mismo criterio que sync-diaria: `licencias.usuarioSistema`). Antes se
+  // enviaba usuarioId:null a `jobs.reanudados_arranque` y `registrarAccion`
+  // lanzaba «usuarioId es obligatorio» AL FINAL, tras relanzar los jobs: la
+  // reanudación quedaba sin registro y el .catch del arranque la reportaba
+  // como fallida.
+  const actor = licencias.usuarioSistema(dbInstancia)
   const pendientes = jobsP.listar(dbInstancia, { tipo: 'historico_rcv', limit: 100 })
     .filter((j) => j.estado === 'pendiente' && j.empresa_id)
   let reanudados = 0
@@ -515,7 +523,9 @@ async function reanudarHistoricosPendientes() {
         t.estado = 'error'
         t.error = err.message
         registrarAccion(dbInstancia, {
-          empresaId: job.empresa_id, usuarioId: job.usuario_id,
+          // Fallback al actor del sistema si el usuario del job ya no existe
+          // (un throw aquí sería una unhandledRejection dentro del catch).
+          empresaId: job.empresa_id, usuarioId: job.usuario_id || actor,
           accion: 'onboarding.historico_error', entidad: 'documentos', entidadId: `${job.periodo_desde}-${job.periodo_hasta}`,
           despues: { error: err.message, reanudado: true },
         })
@@ -526,7 +536,7 @@ async function reanudarHistoricosPendientes() {
   if (reanudados > 0) {
     console.log(`[JOBS] ${reanudados} ingesta(s) histórica(s) reanudada(s) tras reinicio.`)
     registrarAccion(dbInstancia, {
-      empresaId: null, usuarioId: null,
+      empresaId: null, usuarioId: actor, // el actor auditable es el sistema, no null
       accion: 'jobs.reanudados_arranque', entidad: 'jobs_persistentes', entidadId: 'historic_rcv',
       despues: { reanudados },
     })

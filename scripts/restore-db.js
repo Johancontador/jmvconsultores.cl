@@ -57,6 +57,10 @@ try {
   console.log(`[RESTORE] integridad SQLite: ${reporte.integrity}`)
   console.log(`[RESTORE] integridad referencial: ${reporte.foreignKey.ok ? 'ok' : `FALLIDA (${reporte.foreignKey.violaciones} violaciones)`}`)
   console.log('[RESTORE] tablas críticas: ' + JSON.stringify(reporte.tablas))
+  if (reporte.criticas && reporte.criticas.faltantes.length > 0) {
+    console.log(`[RESTORE] F-04: faltan tablas críticas (${reporte.criticas.faltantes.join(', ')}): NO publicado`)
+  }
+  if (reporte.motivo) console.log('[RESTORE] ' + reporte.motivo)
   console.log('[RESTORE] claves SII: ' + JSON.stringify(reporte.claves))
   process.exit(reporte.ok ? 0 : 1)
 } catch (err) {

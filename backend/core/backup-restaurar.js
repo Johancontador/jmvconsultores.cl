@@ -15,6 +15,11 @@
  *     con permiso 0600, que se borra al salir.
  *  4. Una base inválida (`integrity_check` o `foreign_key_check` no satisfactorios)
  *     no se publica jamás.
+ *  5. F-04: ni vacía ni sin tablas críticas — un backup de 0 bytes, o una base
+ *     válida a la que le falte una tabla crítica, NO se publica.
+ *  6. F-05: la publicación SIN `sobrescribir` es nunca-reemplazo incluso si el
+ *     destino apareció durante la restauración (enlace duro que falla con
+ *     EEXIST): no hay ventana check-then-act en el rename.
  *
  * NUNCA imprime secretos (solo conteos y estados).
  * Módulo puro: recibe rutas/clave/fn de descifrado como parámetros.
@@ -100,6 +105,12 @@ function restaurar(p) {
     if (manifest.cifrado) throw new Error('El manifest dice cifrado pero el archivo no lo está')
   }
 
+  // F-04: un archivo de 0 bytes no es un backup. Se rechaza ANTES de escribir
+  // nada en el destino (un SQLite vacío hasta puede pasar integrity_check).
+  if (!plano || plano.length === 0) {
+    throw new Error('El backup está vacío (0 bytes): nada que restaurar')
+  }
+
   // 3) Escritura en un TEMPORAL del mismo directorio: el destino no se toca
   //    hasta que la copia supere todas las validaciones (rename atómico).
   fs.mkdirSync(dirDestino, { recursive: true })
@@ -144,6 +155,11 @@ function restaurar(p) {
       tablas[tabla] = existe ? db.prepare(`SELECT COUNT(*) AS n FROM ${tabla}`).get().n : 'inexistente'
     }
 
+    // 5b) F-04: TODAS las tablas críticas deben existir. En producción las
+    //     migraciones del arranque las garantizan; si faltara una, la base
+    //     restaurada dejaría el sistema quebrado — no se publica.
+    const criticasFaltantes = TABLAS_CRITICAS.filter((t) => tablas[t] === 'inexistente')
+
     // 6) Claves SII v1: deben descifrar con la clave maestra vigente
     if (typeof p.descifrarSii === 'function') {
       try {
@@ -164,7 +180,7 @@ function restaurar(p) {
     db.close()
     db = null
 
-    const ok = integrity === 'ok' && foreignKey.ok && !claves.error
+    const ok = integrity === 'ok' && foreignKey.ok && !claves.error && criticasFaltantes.length === 0
     const reporte = {
       ok,
       publicado: false,
@@ -173,17 +189,44 @@ function restaurar(p) {
       integrity,
       foreignKey,
       tablas,
+      criticas: { faltantes: criticasFaltantes },
       claves,
     }
     if (!ok) return reporte
 
     // 7) Publicación atómica: solo aquí el destino cambia.
-    fs.renameSync(temp, destino)
+    if (p.sobrescribir === true) {
+      // Reemplazo EXPLÍCITO pedido por el operador: rename directo.
+      fs.renameSync(temp, destino)
+      try {
+        fs.chmodSync(destino, 0o600)
+      } catch {
+        // idem
+      }
+      return { ...reporte, publicado: true }
+    }
+    // F-05: sin `sobrescribir`, el destino NO se reemplaza ni siquiera si
+    // apareció entre la guarda inicial (paso 0) y aquí. El enlace duro es
+    // nunca-reemplazo: si el archivo destino ya existe, falla con EEXIST y el
+    // destino queda intacto (el temporal se limpia en el finally).
+    try {
+      fs.linkSync(temp, destino)
+    } catch (e) {
+      if (e && e.code === 'EEXIST') {
+        return {
+          ...reporte,
+          publicado: false,
+          motivo: 'El destino apareció durante la restauración: no se reemplaza (usa --sobrescribir para reemplazarlo a propósito)',
+        }
+      }
+      throw e
+    }
     try {
       fs.chmodSync(destino, 0o600)
     } catch {
       // idem
     }
+    fs.unlinkSync(temp) // quedó como enlace duro: el contenido real vive también en destino
     return { ...reporte, publicado: true }
   } finally {
     if (db) {
