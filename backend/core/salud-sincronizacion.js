@@ -325,7 +325,12 @@ async function ejecutar(jobId, opciones) {
       score: inf.opinion.score,
       nivel: inf.opinion.nivel,
       hallazgos: (inf.opinion.hallazgos || []).length,
+      // ST-03: tres indicadores distintos. `cobertura` es el peso del índice
+      // con evidencia; la cobertura de FUENTES (todas las consultas, incluidas
+      // TGR, F22, DJ y BHE) y la confianza se informan aparte.
       cobertura: inf.opinion.cobertura_diagnostico,
+      cobertura_fuentes: inf.opinion.cobertura_fuentes?.pct ?? null,
+      confianza: inf.opinion.nivel_confianza || null,
       snapshot_id: snapshotId,
     }
     return { detalle: `Índice ${inf.opinion.score}/100 · ${(inf.opinion.hallazgos || []).length} hallazgo(s)` }

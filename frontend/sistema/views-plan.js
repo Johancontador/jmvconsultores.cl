@@ -42,6 +42,7 @@ function _filasLectura(f) {
     ${_dl('RUT', f.rut)}
     ${_dl('Régimen', _etiqueta(ETIQUETA_REGIMEN, f.regimen))}
     ${f.regimen_desde_ac ? _dl('Rige desde ejercicio comercial (AC)', f.regimen_desde_ac) : ''}
+    ${_dl('Inicio de vigencia del régimen', f.fecha_vigencia ? esc(f.fecha_vigencia) : '<em class="muted">pendiente</em>')}
     ${_dl('Tipo de contribuyente', _etiqueta(ETIQUETA_TIPO_CONTRIBUYENTE, f.tipo_contribuyente))}
     ${_dl('Actividades económicas', activs.length ? esc(activs.join(' · ')) : '<em class="muted">pendiente de declaración</em>')}
     ${_dl('Inicio de actividades', f.fecha_inicio_actividades ? esc(f.fecha_inicio_actividades) : '<em class="muted">pendiente</em>')}
@@ -77,6 +78,9 @@ function _formulario(f) {
         </label>
         <label class="muted">Rige desde ejercicio comercial (AAAA)
           <input class="form-input" id="plan-regimen-ac" value="${esEditar && f.regimen_desde_ac ? esc(f.regimen_desde_ac) : ''}" placeholder="2025">
+        </label>
+        <label class="muted">Inicio de vigencia del régimen (día exacto)
+          <input class="form-input" id="plan-fecha-vigencia" value="${esEditar && f.fecha_vigencia ? esc(f.fecha_vigencia) : ''}" placeholder="2025-01-01">
         </label>
         <label class="muted">Tipo de contribuyente
           <select class="form-input" id="plan-tipo">
@@ -115,6 +119,7 @@ function _cargarPayload() {
     regimen: document.getElementById('plan-regimen').value,
     tipo_contribuyente: document.getElementById('plan-tipo').value,
     regimen_desde_ac: document.getElementById('plan-regimen-ac').value.trim() || null,
+    fecha_vigencia: document.getElementById('plan-fecha-vigencia').value.trim() || null,
     fecha_inicio_actividades: document.getElementById('plan-inicio').value.trim() || null,
     sujeto_boletas_honorarios: document.getElementById('plan-bhe').checked,
     actividades_economicas: activs,

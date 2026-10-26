@@ -198,6 +198,48 @@ test('T0-B core: NO downgrade a PENDIENTE; sin cambios o valores idénticos → 
   assert.strictEqual(despues, antes, 'el rechazo no escribió historial')
 })
 
+// ---------- 2.b) fecha_vigencia: trazabilidad y validaciones ----------
+
+test('T0-B core: fecha_vigencia queda firmada en el historial y en la auditoría (antes y después)', () => {
+  const base = { empresaId: EMP, usuarioId: CONTADOR }
+  assert.strictEqual(fichaCore.obtener(db, EMP).fecha_vigencia, null, 'nace sin fecha de vigencia')
+
+  const r = fichaCore.actualizar(db, { ...base, cambios: { fecha_vigencia: '2025-03-01' } })
+  assert.strictEqual(r.ficha.fecha_vigencia, '2025-03-01')
+
+  // Historial append-only: valor anterior Y nuevo, no solo lo que muestra la UI.
+  const hist = fichaCore.listarHistorial(db, EMP, 1)[0]
+  assert.strictEqual(JSON.parse(hist.despues_json).fecha_vigencia, '2025-03-01')
+  assert.strictEqual(JSON.parse(hist.antes_json).fecha_vigencia, null)
+
+  // Bitácora central: misma evidencia.
+  const reg = auditoria.consultar(db, { empresaId: EMP, limit: 1 })[0]
+  assert.strictEqual(reg.accion, 'planificacion.ficha.actualizar')
+  assert.strictEqual(JSON.parse(reg.despues_json).fecha_vigencia, '2025-03-01')
+  assert.strictEqual(JSON.parse(reg.antes_json).fecha_vigencia, null)
+})
+
+test('T0-B core: fecha_vigencia valida calendario real y coherencia con el ejercicio', () => {
+  const base = { empresaId: EMP, usuarioId: CONTADOR }
+  // Formato
+  assert.throws(() => fichaCore.actualizar(db, { ...base, cambios: { fecha_vigencia: '2025/03/01' } }), /fecha real/)
+  // Calendario imposible (pasa el formato, no el calendario)
+  assert.throws(() => fichaCore.actualizar(db, { ...base, cambios: { fecha_vigencia: '2025-02-30' } }), /fecha real/)
+  assert.throws(() => fichaCore.actualizar(db, { ...base, cambios: { fecha_vigencia: '2025-13-01' } }), /fecha real/)
+  // Año distinto del ejercicio declarado (AC 2025)
+  assert.throws(() => fichaCore.actualizar(db, { ...base, cambios: { fecha_vigencia: '2024-03-01' } }), /ejercicio regimen_desde_ac/)
+  // Cambiar el ejercicio dejando una fecha incoherente también se rechaza
+  assert.throws(() => fichaCore.actualizar(db, { ...base, cambios: { regimen_desde_ac: '2024' } }), /ejercicio regimen_desde_ac/)
+})
+
+test('T0-B core: una ficha PENDIENTE no admite fecha_vigencia', () => {
+  const emp = empresaNueva('Plan Pendiente SpA')
+  fichaCore.incorporar(db, { empresaId: emp, usuarioId: CONTADOR, datos: {} })
+  assert.throws(() => fichaCore.actualizar(db, {
+    empresaId: emp, usuarioId: CONTADOR, cambios: { fecha_vigencia: '2025-01-01' },
+  }), /PENDIENTE no admite/)
+})
+
 test('T0-B core: actualizar SIN ficha → 404; empresa ajena sin ficha no comparte', () => {
   const ajena = empresaNueva('Plan Ajena SpA')
   assert.throws(() => fichaCore.actualizar(db, { empresaId: ajena, usuarioId: CONTADOR, cambios: { regimen: 'GENERAL_14A', regimen_desde_ac: '2026' } }),

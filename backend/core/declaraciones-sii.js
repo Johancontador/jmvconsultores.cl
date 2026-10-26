@@ -296,6 +296,74 @@ async function abrirBuscador(page) {
   await dormir(2000)
 }
 
+// Columnas de la grilla de búsqueda anual del F29, identificadas por su
+// ENCABEZADO (sin tildes ni mayúsculas), no por su posición.
+const COLUMNAS_BUSQUEDA_F29 = {
+  periodo: ['periodo'],
+  folio: ['folio'],
+  fecha: ['fecha'],
+  estado: ['estado'],
+  monto: ['monto'],
+}
+
+/** Texto comparable: minúsculas, sin tildes ni espacios sobrantes. */
+function plano(txt) {
+  return String(txt || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/**
+ * Parsea las filas YA RENDERIZADAS de la grilla «Buscar Formulario» del F29.
+ *
+ * Las columnas se ubican por su ENCABEZADO: antes se leía `c[5]` a ciegas y,
+ * si el SII cambiaba el orden (o agregaba una columna), el «Monto» se tomaba
+ * de otra celda y el informe comparaba magnitudes distintas. Si no hay
+ * encabezado reconocible devuelve `columnas: null` y ninguna fila: sin
+ * encabezado no se adivina por posición (una diferencia inventada es peor
+ * que ninguna diferencia).
+ *
+ * `monto_concepto` queda en `'no_identificado'`: la grilla informa un monto,
+ * no la casilla 091. La conciliación contra la estimación del RCV solo se hace
+ * con el Formulario Compacto, que sí trae la casilla declarada.
+ */
+function parsearTablaBusquedaF29(filasTexto) {
+  const filas = []
+  let columnas = null
+  for (const celdas of filasTexto || []) {
+    const c = celdas || []
+    if (!columnas) {
+      const idx = {}
+      for (const [clave, nombres] of Object.entries(COLUMNAS_BUSQUEDA_F29)) {
+        for (let i = 0; i < c.length; i++) {
+          const t = plano(c[i])
+          if (!t) continue
+          if (nombres.some((n) => t === n || t.startsWith(n))) { idx[clave] = i; break }
+        }
+      }
+      if (idx.periodo != null && idx.folio != null && idx.monto != null) {
+        columnas = idx
+        continue
+      }
+      // Una fila con período antes del encabezado: la tabla no se puede
+      // interpretar, se descarta entera.
+      if (/^\d{4}-\d{2}$/.test(String(c[0] || '').trim())) return { columnas: null, filas: [] }
+      continue
+    }
+    const periodo = String(c[columnas.periodo] || '').trim()
+    if (!/^\d{4}-\d{2}$/.test(periodo)) continue
+    const celda = (clave) => (columnas[clave] == null ? null : (String(c[columnas[clave]] || '').trim() || null))
+    filas.push({
+      periodo: periodo.replace('-', ''),
+      folio: celda('folio'),
+      fecha: celda('fecha'),
+      estado: celda('estado'),
+      monto: celda('monto'),
+      monto_columna: String(c[columnas.monto] || '').trim() || 'monto',
+      monto_concepto: 'no_identificado',
+    })
+  }
+  return { columnas, filas }
+}
+
 /**
  * Búsqueda ANUAL del F29: una sola consulta devuelve los 12 períodos del año
  * con folio, fecha de presentación, estado y monto declarado (verificado
@@ -338,20 +406,13 @@ async function buscarF29Anio(page, anio) {
   // La grilla del SII se pinta después del click y a veces tarda más de los 4 s
   // que se esperaban fijos: se leía una tabla vacía y la corrida «no encontraba»
   // períodos con declaración, en silencio. Se sondea hasta tener los 12 meses.
+  // Se devuelve el TEXTO de cada fila: la interpretación de columnas vive en
+  // `parsearTablaBusquedaF29` (pura y probada), no dentro de la página.
   const leerFilas = () => page.evaluate(() => {
     const salida = []
     for (const tr of document.querySelectorAll('tr')) {
-      const c = [...tr.querySelectorAll('td')].map((td) => (td.innerText || '').trim())
-      if (c.length < 6) continue
-      // Periodo (YYYY-MM) · Folio · Contribuyente · Fecha · Estado · Monto · Ver
-      if (!/^\d{4}-\d{2}$/.test(c[0])) continue
-      salida.push({
-        periodo: c[0].replace('-', ''),
-        folio: c[1] || null,
-        fecha: c[3] || null,
-        estado: c[4] || null,
-        monto: c[5] || null,
-      })
+      const c = [...tr.querySelectorAll('td,th')].map((td) => (td.innerText || '').trim())
+      if (c.length) salida.push(c)
     }
     return salida
   })
@@ -362,7 +423,7 @@ async function buscarF29Anio(page, anio) {
   let estables = 0
   while (Date.now() < limite) {
     await dormir(1000)
-    filas = await leerFilas()
+    filas = parsearTablaBusquedaF29(await leerFilas()).filas
     if (filas.length >= 12) return filas
     if (filas.length > 0 && filas.length === anterior) {
       // Estable sin llegar a 12: hay períodos sin declaración, se usa lo leído.
@@ -936,6 +997,8 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
           fecha: normalizarFecha(f.fecha),
           monto: normalizarMonto(f.monto),
           estado_sii: f.estado,
+          monto_concepto: f.monto_concepto || 'no_identificado',
+          monto_columna: f.monto_columna || null,
         })
         buscadas++
       }
@@ -951,6 +1014,11 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
         datos: {
           tooltip: d.tooltip || null,
           estado_sii: d.estado_sii || null,
+          // La grilla informa «Monto», no la casilla 091: el monto NO es
+          // conciliable con la estimación del RCV hasta leer el Formulario
+          // Compacto (que sí trae la casilla declarada).
+          monto_concepto: d.monto_concepto || 'no_identificado',
+          monto_columna: d.monto_columna || null,
           origen: 'sifmConsultaInternet (Consulta Integral F29)',
         },
       })
@@ -1058,6 +1126,7 @@ module.exports = {
   normalizarFecha,
   normalizarMonto,
   parsearTablaBhe,
+  parsearTablaBusquedaF29,
   parsearEstadoF29,
   montoDeTexto,
   ultimosPeriodos,

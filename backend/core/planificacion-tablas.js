@@ -25,6 +25,32 @@ const CAMPOS_TRIBUTARIOS = {
   ESTADO_FICHA: ['SIN_CONFIGURAR', 'CONFIGURADA'],
 }
 
+/**
+ * Reglas de `fecha_vigencia` (inicio de vigencia del régimen, día exacto).
+ *
+ * DETERMINISTAS a propósito: `date('now')` NO puede usarse en un CHECK (SQLite
+ * aborta toda escritura con "non-deterministic use of date() in a CHECK
+ * constraint"). Por eso el esquema valida solo lo que es estructural:
+ *  1) forma YYYY-MM-DD con mes/día en rango razonable;
+ *  2) coherencia con el ejercicio declarado: el año debe ser regimen_desde_ac
+ *     (si no hay ejercicio, no puede haber fecha ⇒ PENDIENTE ⇒ NULL).
+ * La validez de calendario completa (p.ej. 2025-02-30) y la comparación con
+ * "hoy" son de la capa de aplicación (plan-ficha.js).
+ *
+ * NO se exige que la fecha sea futura: el inicio de vigencia puede ser
+ * histórico (empresa con régimen que rige desde 2024-01-01).
+ */
+const CHECK_FECHA_VIGENCIA = `
+        CHECK (fecha_vigencia IS NULL OR (
+          length(fecha_vigencia) = 10
+          AND fecha_vigencia GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+          AND CAST(substr(fecha_vigencia, 6, 2) AS INTEGER) BETWEEN 1 AND 12
+          AND CAST(substr(fecha_vigencia, 9, 2) AS INTEGER) BETWEEN 1 AND 31
+        ))
+        CHECK (fecha_vigencia IS NULL OR (
+          regimen_desde_ac IS NOT NULL AND substr(fecha_vigencia, 1, 4) = regimen_desde_ac
+        ))`
+
 function planificacionTablas(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS plan_ficha_tributaria (
@@ -49,6 +75,9 @@ function planificacionTablas(db) {
       -- JSON array de { rut, participacion, gravado_finales }: obligatorio para
       -- Transparente; la validación de composición es de la capa de aplicación.
       propietarios_json TEXT NOT NULL DEFAULT '[]',
+      -- Inicio de vigencia del régimen (día exacto, YYYY-MM-DD); NULL si el
+      -- régimen es PENDIENTE. Puede ser histórico: NO se exige fecha futura.
+      fecha_vigencia TEXT${CHECK_FECHA_VIGENCIA},
       -- Opt-in explícito (0/1): activa la regla de retención BHE con calendario
       -- vigente. Es un dato declarado, no un valor fiscal asignado por omisión.
       sujeto_boletas_honorarios INTEGER NOT NULL DEFAULT 0 CHECK (sujeto_boletas_honorarios IN (0, 1)),
@@ -92,6 +121,16 @@ function planificacionTablas(db) {
     END;
 
   `)
+
+  // Migración idempotente para BD que YA tienen la tabla: CREATE TABLE IF NOT
+  // EXISTS no agrega columnas, así que un esquema anterior quedaría sin
+  // `fecha_vigencia` para siempre. Mismo patrón que migraciones.js (PRAGMA +
+  // ALTER TABLE). Los CHECK viajan con la columna, de modo que el esquema
+  // migrado y el recién creado quedan equivalentes.
+  const columnas = db.prepare(`PRAGMA table_info(plan_ficha_tributaria)`).all()
+  if (!columnas.some((c) => c.name === 'fecha_vigencia')) {
+    db.exec(`ALTER TABLE plan_ficha_tributaria ADD COLUMN fecha_vigencia TEXT${CHECK_FECHA_VIGENCIA}`)
+  }
 }
 
 /**

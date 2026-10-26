@@ -21,6 +21,16 @@ const { registrarAccion } = require('./auditoria')
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/
 const RE_AC = /^(19|20)\d{2}$/ // ejercicio comercial AAAA
 
+/** Fecha ISO REAL (rechaza 2025-02-30 o 2025-13-01): formato + ida y vuelta por Date. */
+function _fechaISO(valor) {
+  const s = String(valor).trim()
+  if (!RE_FECHA.test(s)) return null
+  const [a, m, d] = s.split('-').map(Number)
+  const dt = new Date(Date.UTC(a, m - 1, d))
+  const ok = dt.getUTCFullYear() === a && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+  return ok ? s : null
+}
+
 /** Ficha vigente de la empresa, o `null` si aún no hay incorporación explícita. */
 function obtener(db, empresaId) {
   return db.prepare(`SELECT * FROM plan_ficha_tributaria WHERE empresa_id = ?`).get(empresaId) || null
@@ -127,6 +137,33 @@ function normalizar(db, empresaId, entrada) {
       destino.fecha_inicio_actividades = String(src.fecha_inicio_actividades).trim()
     }
   }
+  // fecha_vigencia = INICIO de vigencia del régimen, día exacto. Puede ser
+  // histórica (una empresa puede llevar años con el régimen declarado): no se
+  // compara contra "hoy". Lo exigible es que sea una fecha real y que su año
+  // coincida con el ejercicio declarado en regimen_desde_ac.
+  if ('fecha_vigencia' in src) {
+    if (src.fecha_vigencia === null || src.fecha_vigencia === undefined || src.fecha_vigencia === '') {
+      destino.fecha_vigencia = null
+    } else {
+      const f = _fechaISO(src.fecha_vigencia)
+      if (!f) throw new Error('fecha_vigencia debe ser una fecha real con formato YYYY-MM-DD')
+      destino.fecha_vigencia = f
+    }
+  }
+  // Coherencia sobre el estado FINAL (no solo el delta): cubre cambiar
+  // regimen_desde_ac cuando ya había una fecha declarada, y viceversa.
+  const vigFinal = 'fecha_vigencia' in destino ? destino.fecha_vigencia : (fichaViva ? fichaViva.fecha_vigencia : null)
+  if (vigFinal !== null && vigFinal !== undefined) {
+    if (regimenFinal === 'PENDIENTE') {
+      throw new Error('Una ficha PENDIENTE no admite fecha_vigencia: no hay régimen vigente que declarar')
+    }
+    if (acFinal === null || acFinal === undefined) {
+      throw new Error('fecha_vigencia exige regimen_desde_ac (ejercicio comercial desde el que rige)')
+    }
+    if (String(vigFinal).slice(0, 4) !== String(acFinal)) {
+      throw new Error(`fecha_vigencia (${vigFinal}) debe pertenecer al ejercicio regimen_desde_ac (${acFinal})`)
+    }
+  }
   _actividades(src, destino, 'actividades_economicas')
   _propietarios(src, destino)
 
@@ -170,6 +207,7 @@ function _snapshot(f) {
     rut: f.rut, regimen: f.regimen, tipo_contribuyente: f.tipo_contribuyente,
     estado_ficha: f.estado_ficha, actividades_economicas: f.actividades_economicas,
     fecha_inicio_actividades: f.fecha_inicio_actividades, regimen_desde_ac: f.regimen_desde_ac,
+    fecha_vigencia: f.fecha_vigencia,
     propietarios_json: f.propietarios_json, sujeto_boletas_honorarios: f.sujeto_boletas_honorarios,
     vigente_desde: f.vigente_desde, vigente_hasta: f.vigente_hasta,
   }

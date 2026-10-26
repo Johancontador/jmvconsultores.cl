@@ -61,6 +61,8 @@ Documentación de traspaso del sistema real (`iva-mensual` / “Sistema Contable
 | 32 | `32-RUNBOOK-RECUPERACION-Y-RELEASE.md` | **F8**: procedimiento ejecutable de backup/restore, release, rollback, criterios de aborto y definición de RPO/RTO | Operaciones / SRE |
 | 33 | `33-MATRIZ-OPERACIONAL-VPS.md` | **F8**: verificaciones pendientes en el VPS, comandos, evidencia esperada y autorizaciones exactas | Operaciones |
 | 34 | `34-INFORME-EJECUTIVO-F3-F4.md` | **F3+F4**: informe de cierre en 10 puntos de esa fase (se conserva como evidencia) | Dirección / operaciones |
+| 34 | `34-A5-A6-R2-PUSHOVER.md` | **A5/A6**: respaldo R2 y notificaciones Pushover (diseño, verificación y límites) | Operaciones / seguridad |
+| 35 | `35-AUDITORIA-SALUD-TRIBUTARIA-FASE1.md` | **Auditoría Salud Tributaria**: flujo, fórmulas, 13 hallazgos con evidencia (ST-01…ST-13), reproducciones, plan P0–P3 y continuidad. **ST-01 a ST-09 implementados el 2026-10-26** (§6.1–§6.4); quedan ST-10 a ST-13 (P2/P3) y la validación del contador sobre remanente y casilla 091 | Dirección / contador responsable / QA |
 
 > **Estado de ejecución (2026-10-23):** F0, F1 y F2 están **implementadas y con
 > tests en verde** (ver `22`). Lo que los docs `05` y `16` describen como menú

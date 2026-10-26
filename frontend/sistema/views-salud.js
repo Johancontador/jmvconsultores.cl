@@ -297,19 +297,22 @@ VIEWS.salud = {
         <h3>Detalle por período · declarado (SII) vs. estimado (RCV)</h3>
         <div class="tbl-wrap"><table class="tbl">
           <thead><tr><th>Período</th><th>F29 SII</th><th class="num">Ventas netas</th><th class="num">IVA est.</th>
-            <th class="num">PPM est.</th><th class="num">F29 declarado</th><th class="num">Dif. total</th><th class="num">Dif. ventas</th></tr></thead>
+            <th class="num">CFT aplicado</th><th class="num">PPM est.</th><th class="num">F29 total (091)</th><th class="num">Dif. total</th><th class="num">Dif. ventas</th></tr></thead>
           <tbody>${(inf.mensuales || []).map((m) => `<tr>
             <td>${esc(m.nombre)}</td>
             <td><span class="chip ${chipEstado(m.f29_estado)}">${esc(m.f29_oficial?.etiqueta || 'No consultado')}</span></td>
             <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.ventas_neto)}</td>
             <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.iva_estimado)}</td>
+            <td class="num mono">${m.remanente_anterior ? fmtM(m.remanente_anterior) : sub}</td>
             <td class="num mono">${m.estado === 'sin_datos' ? sub : fmtM(m.ppm_estimado)}</td>
-            <td class="num mono">${m.f29_oficial?.monto_total != null ? fmtM(m.f29_oficial.monto_total) : sub}</td>
+            <td class="num mono">${m.f29_oficial?.monto_total != null ? `${fmtM(m.f29_oficial.monto_total)}${m.f29_oficial.conciliable === false ? '<sup>*</sup>' : ''}` : sub}</td>
             <td class="num mono">${m.f29_diferencia != null ? fmtM(m.f29_diferencia) : sub}</td>
             <td class="num mono">${m.comparacion?.diferencia_ventas != null ? fmtM(m.comparacion.diferencia_ventas) : sub}</td>
           </tr>`).join('')}</tbody>
         </table></div>
-        <p class="hint">«IVA est.» es una estimación propia desde el RCV; «F29 declarado» es lo que informa el SII. «Dif. total» = estimado − declarado y solo aparece cuando el mes tiene RCV ingerido y el SII entregó el monto; «Dif. ventas» = ventas declaradas − ventas del RCV (solo con Formulario Compacto del F29). Un «—» en las columnas estimadas significa que no hay RCV ingerido para ese mes: no se estima nada, no se afirma que no hubo movimiento.</p>
+        <p class="hint">«IVA est.» es una estimación propia desde el RCV; «F29 declarado» es lo que informa el SII. «Dif. total» = estimado − declarado y solo aparece cuando el mes tiene RCV ingerido y el monto declarado viene de una casilla identificada (091 del Formulario Compacto); «Dif. ventas» = ventas declaradas − ventas del RCV (solo con Formulario Compacto del F29). Un «—» en las columnas estimadas significa que no hay RCV ingerido para ese mes: no se estima nada, no se afirma que no hubo movimiento.</p>
+        ${(inf.mensuales || []).some((m) => m.f29_oficial?.conciliable === false) ? '<p class="hint"><sup>*</sup> Monto de la Consulta Integral del SII sin casilla identificada: se muestra informado, pero no se compara con la estimación (no es conciliable).</p>' : ''}
+        ${(inf.mensuales || []).some((m) => (m.iva_estimado || 0) < 0) ? '<p class="hint">Un «IVA est.» negativo es un remanente de crédito fiscal del mes (crédito mayor que débito), no un IVA a pagar.</p>' : ''}
       </div>
       <!-- Nueva sección: Comparativa F29 vs RCV -->
       <div class="card mt">
@@ -317,7 +320,7 @@ VIEWS.salud = {
         ${(inf.mensuales || []).length > 0 ? `
           <div class="kpi-grid kpi-grid-comparison">
             <div class="kpi kpi-comparative"><small>Período</small><strong>Actual</strong></div>
-            <div class="kpi kpi-comparative"><small>F29 declarado</small><strong>${inf.f29_declarado?.estado === 'disponible' ? 'Disponible' : 'No consultado'}</strong></div>
+            <div class="kpi kpi-comparative"><small>F29 total (091)</small><strong>${inf.f29_declarado?.estado === 'disponible' ? 'Disponible' : 'No consultado'}</strong></div>
             <div class="kpi kpi-comparative"><small>Estimado RCV</small><strong>${fmtCorto(kpis.declarado?.ventas || 0)}</strong></div>
             <div class="kpi kpi-comparative"><small>Diferencia</small><strong>${fmtCorto(kpis.declarado?.total_a_pagar || 0)}</strong></div>
           </div>
@@ -455,7 +458,7 @@ VIEWS.salud = {
           <div class="kpi"><small>Ventas netas</small><strong>${fmtCorto(kpis.ventas_periodo || 0)}</strong></div>
           <div class="kpi"><small>IVA estimado</small><strong>${fmtCorto(kpis.iva_periodo || 0)}</strong></div>
           <div class="kpi"><small>PPM estimado</small><strong>${fmtCorto(kpis.ppm_periodo || 0)}</strong></div>
-          <div class="kpi"><small>Margen bruto</small><strong>${kpis.margen_bruto_pct != null ? `${kpis.margen_bruto_pct}%` : '—'}</strong></div>
+          <div class="kpi"><small>Ventas − compras RCV</small><strong>${kpis.margen_bruto_evaluable === false ? 'No evaluable' : kpis.margen_bruto_pct != null ? `${kpis.margen_bruto_pct}%` : '—'}</strong>${kpis.margen_bruto_evaluable === false ? '<span class="sub">compras del RCV, no costo de ventas</span>' : ''}</div>
           <div class="kpi"><small>Fondos disponibles</small><strong>${teso.total_bancos != null ? fmtCorto(teso.total_bancos) : '—'}</strong></div>
           <div class="kpi ${(teso.cobranza?.vencido_30_dias || 0) > 0 ? 'bad' : ''}"><small>Cartera vencida &gt;30 días</small><strong>${teso.cobranza?.vencido_30_dias != null ? fmtCorto(teso.cobranza.vencido_30_dias) : '—'}</strong></div>
         </div>
@@ -524,9 +527,23 @@ VIEWS.salud = {
             <tr><th>Inicio de actividades</th><td>${esc(inf.identidad?.inicio_actividades || '—')}</td></tr>
             <tr><th>Fuente de la ficha</th><td class="sub">${esc(inf.identidad?.fuente || '—')}</td></tr>
             <tr><th>Período evaluado</th><td>${esc(inf.cobertura?.desde || '—')} → ${esc(inf.cobertura?.hasta || '—')}</td></tr>
-            <tr><th>Cobertura del diagnóstico</th><td>${op.cobertura_diagnostico}% · confianza ${esc(op.nivel_confianza || '—')}</td></tr>
+            <tr><th>Índice sobre peso con evidencia</th><td>${op.cobertura_diagnostico}% de las dimensiones evaluadas</td></tr>
+            <tr><th>Cobertura de fuentes</th><td>${op.cobertura_fuentes?.pct ?? 0}% · ${op.cobertura_fuentes?.consultadas ?? 0} de ${op.cobertura_fuentes?.requeridas ?? 0} fuentes consultadas</td></tr>
+            <tr><th>Nivel de confianza</th><td>${esc(op.nivel_confianza || '—')}</td></tr>
           </tbody></table></div>
         </div>
+      </div>
+      <div class="card mt">
+        <h3>Cobertura de fuentes del diagnóstico</h3>
+        <p class="hint">${esc(op.cobertura_fuentes?.nota || '')}</p>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Fuente</th><th>Estado</th><th>Detalle</th></tr></thead>
+          <tbody>${(op.cobertura_fuentes?.por_fuente || []).map((x) => `<tr>
+            <td><b>${esc(x.nombre)}</b></td>
+            <td><span class="chip ${x.estado === 'consultada' ? 'contabilizado' : x.estado === 'parcial' ? 'propuesto' : 'error'}">${esc(x.estado === 'no_consultada' ? 'no consultada' : x.estado)}</span></td>
+            <td class="sub">${esc(x.detalle || '')}</td></tr>`).join('')}</tbody>
+        </table></div>
+        ${(op.confianza_motivos || []).length ? `<h4 class="mt">Nivel de confianza: ${esc(op.nivel_confianza || '—')}</h4>${listaHtml(op.confianza_motivos)}` : ''}
       </div>
       <div class="card mt">
         <h3>Origen de los datos</h3>
@@ -589,10 +606,46 @@ VIEWS.salud = {
         </div>
       </div>`
 
+    // ---------------------------------------------------------
+    // Historial F29 (5 años): TODAS las declaraciones leídas al SII.
+    // Cada fila: folio, fecha de presentación, monto declarado y origen;
+    // «Resumen» abre el detalle de casillas del Formulario Compacto en línea
+    // y «PDF» abre el formulario original en el SII (mismo origen sesión).
+    // ---------------------------------------------------------
+    const histPeriodos = (inf.f29_historial && inf.f29_historial.estado === 'disponible' ? inf.f29_historial.periodos : []) || []
+    const histByPer = new Map(histPeriodos.map((p) => [String(p.periodo), p]))
+    const origenEtiqueta = { consulta_integral: 'Consulta Integral', compacto: 'Formulario Compacto' }
+    const nombrePeriodoSii = (p) => { const per = String(p); return per.length === 6 ? `${per.slice(4, 6)}/${per.slice(0, 4)}` : per }
+    const panelHistorialF29 = `
+      <div class="card">
+        <h3>Historial F29 (SII)${inf.f29_historial?.rango ? ` · ${esc(inf.f29_historial.rango)}` : ''}
+          <span class="chip neutral">${histPeriodos.length} período(s)</span></h3>
+        ${histPeriodos.length ? `
+        <div class="tbl-wrap"><table class="tbl" id="sl-hist-f29">
+          <thead><tr><th>Período</th><th>Estado</th><th>Folio</th><th>Fecha de presentación</th>
+            <th class="num">Monto declarado</th><th>Origen</th><th>Acciones</th></tr></thead>
+          <tbody>${histPeriodos.map((p) => `<tr data-per="${esc(String(p.periodo))}">
+            <td>${esc(nombrePeriodoSii(p.periodo))}</td>
+            <td><span class="chip ${chipEstado(p.estado)}">${esc({ declarada: 'Declarada', rectificada: 'Rectificada', pendiente: 'Pendiente', no_presentada: 'No presentada' }[p.estado] || p.estado || '—')}</span></td>
+            <td class="mono">${esc(p.folio || '—')}</td>
+            <td>${esc(p.fecha_presentacion || '—')}</td>
+            <td class="num mono">${p.monto_total != null ? `${fmtM(p.monto_total)}${p.monto_concepto === 'no_identificado' ? '<sup>*</sup>' : ''}` : sub}</td>
+            <td class="sub">${esc(origenEtiqueta[p.origen] || p.origen || '—')}</td>
+            <td style="white-space:nowrap">
+              ${p.resumen ? `<button class="btn btn-secondary" data-per="${esc(String(p.periodo))}" title="Ver el resumen de casillas del F29 declarado">Resumen</button>` : ''}
+              ${p.url ? ` <a class="btn btn-secondary" href="${esc(p.url)}" target="_blank" rel="noopener" title="Abrir el formulario original en el SII">PDF</a>` : ''}
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <p class="hint"><sup>*</sup> Monto informado por la Consulta Integral del SII sin casilla identificada: se muestra informado, no como total a pagar. La consulta no registra fecha de pago separada: el F29 declarado anota la presentación dentro del plazo legal.</p>`
+        : '<div class="empty">Sin consulta registrada. Ejecuta «Reunir antecedentes» o «Consultar declaraciones SII (5 años)» para leer el historial del F29.</div>'}
+      </div>`
+
     const tabs = [
       { id: 'resumen', label: 'Resumen', html: panelResumen },
       { id: 'cumplimiento', label: 'Cumplimiento', html: panelCumplimiento },
       { id: 'iva', label: 'IVA y conciliación', html: panelIva },
+      { id: 'historial-f29', label: 'Historial F29', html: panelHistorialF29 },
       { id: 'riesgos', label: 'Riesgos', html: panelRiesgos },
       { id: 'tendencias', label: 'Tendencias', html: panelTendencias },
       { id: 'deuda', label: 'Deuda fiscal (TGR)', html: panelDeuda },
@@ -627,7 +680,8 @@ VIEWS.salud = {
             <div class="sl-indice">
               <div class="sl-indice-num" style="color:${color}">${op.indice_evaluable === false ? '—' : esc(op.score)}<small>/100</small></div>
               <div class="sl-indice-meta">
-                <div><b>Cobertura</b> ${op.cobertura_diagnostico}%</div>
+                <div><b>Cobertura de fuentes</b> ${op.cobertura_fuentes?.pct ?? 0}% (${op.cobertura_fuentes?.consultadas ?? 0}/${op.cobertura_fuentes?.requeridas ?? 0})</div>
+                <div><b>Índice sobre</b> ${op.cobertura_diagnostico}% de su peso</div>
                 <div><b>Confianza</b> ${esc(op.nivel_confianza || '—')}</div>
                 <div><b>Alertas altas</b> ${altas}</div>
                 <div><b>Acciones</b> ${(op.plan_accion || []).length}</div>
@@ -679,6 +733,42 @@ VIEWS.salud = {
       paneles.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab))
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }))
+
+    // ---------------------------------------------------------
+    // Historial F29: clic en «Resumen» despliega el detalle del F29 del
+    // período (casillas del Formulario Compacto) sin recargar la vista.
+    // ---------------------------------------------------------
+    const detalleF29 = (p) => {
+      const r = p.resumen || {}
+      const val = (n) => (n == null ? '—' : fmt(n))
+      return `
+        <div class="sl-hist-detalle">
+          <b>F29 ${esc(nombrePeriodoSii(p.periodo))}${p.folio ? ` · folio ${esc(p.folio)}` : ''}</b>
+          <div class="tbl-wrap mt"><table class="tbl"><tbody>
+            <tr><th>Base imponible declarada</th><td class="num mono">${val(r.base_imponible)}</td></tr>
+            <tr><th>IVA determinado (089)</th><td class="num mono">${val(r.iva_determinado)}</td></tr>
+            <tr><th>PPM neto (062)</th><td class="num mono">${val(r.ppm_neto)}</td></tr>
+            <tr><th>Remanente de crédito fiscal (077)</th><td class="num mono">${val(r.remanente_credito_fiscal)}</td></tr>
+            <tr><th>Total a pagar (091)</th><td class="num mono">${val(r.total_a_pagar)}</td></tr>
+          </tbody></table></div>
+          <p class="hint">Fuente: ${esc(origenEtiqueta[p.origen] || p.origen || 'SII')}. Fecha de presentación del SII: ${esc(p.fecha_presentacion || '—')}. El formulario no registra fecha de pago separada en esta consulta.
+          ${p.url ? `· <a href="${esc(p.url)}" target="_blank" rel="noopener">Abrir el PDF original del F29 en el SII</a>` : ''}</p>
+        </div>`
+    }
+    document.getElementById('sl-hist-f29')?.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-per]')
+      if (!btn) return
+      const tr = btn.closest('tr')
+      if (!tr) return
+      const anterior = tr.nextElementSibling
+      if (anterior && anterior.classList.contains('sl-hist-fila-detalle')) { anterior.remove(); return }
+      const p = histByPer.get(btn.dataset.per)
+      if (!p) return
+      const fila = document.createElement('tr')
+      fila.className = 'sl-hist-fila-detalle'
+      fila.innerHTML = `<td colspan="7">${detalleF29(p)}</td>`
+      tr.after(fila)
+    })
 
     // ---------------------------------------------------------
     // Emitir informe imprimible (HTML → PDF del navegador)

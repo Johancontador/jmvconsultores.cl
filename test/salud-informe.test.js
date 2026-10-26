@@ -92,6 +92,11 @@ function depsFalsas(over = {}) {
   return {
     asegurarFicha: async () => ({ actualizada: true, motivo: 'ausente', regimen: 'Pro Pyme General (14 D)' }),
     consultarRCV: async () => [],
+    // Agregados mensuales del SII: también se inyectan. Sin esto el paso RCV
+    // caía en la dependencia REAL (`services/rcv`) y el job quedaba esperando
+    // al portal del SII: el test decía «sin red» pero tocaba la red.
+    consultarAgregadosVenta: async () => [],
+    guardarAgregados: () => ({ guardados: 0 }),
     ingestarBatch: async () => ({ insertados: 0, duplicados: 0, errores: [] }),
     sincronizarDeclaraciones: async () => ({ resultado: { f29: { periodos: 12 } }, aviso: null }),
     sincronizarFormularios: async () => ({ periodos: 12, con_formulario: 3, errores: [] }),
@@ -166,6 +171,32 @@ test('S4: el RCV no se vuelve a bajar para períodos que ya tienen documentos', 
   assert.ok(lista.length <= 3, 'respeta el tope de períodos por corrida')
   // La lista va del más reciente al más antiguo.
   assert.deepEqual(saludSync.periodosRecientes('202601', 3), ['202601', '202512', '202511'])
+})
+
+test('S18: el historial completo del F29 se imprime en el capítulo 3', () => {
+  const eid = empresa({ rut: '77000018-8' })
+  db.prepare(`
+    INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
+    VALUES (?, '77000018-8', 'F29', '202607', 'declarada', '123654789', '2026-05-20', 320000, ?)
+  `).run(eid, JSON.stringify({ monto_concepto: 'no_identificado' }))
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12 })
+  const html = informeHtml.renderInformeHtml(inf)
+
+  assert.ok(html.includes('Historial completo de F29'), 'el PDF trae la sección del historial')
+  const fechaEsperada = new Date('2026-05-20').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+  assert.ok(html.includes('123654789'), 'el folio del SII aparece en el PDF')
+  assert.ok(html.includes(fechaEsperada), 'la fecha de presentación aparece formateada')
+  // Sin casilla identificada el monto va con la nota de «monto informado».
+  assert.ok(html.includes('sin casilla identificada'))
+  // Nada de valores rotos en la tabla horrible.
+  for (const roto of ['undefined', 'NaN', '[object Object]']) {
+    assert.ok(!html.includes(roto), `la salida contiene «${roto}»`)
+  }
+  // Sin consulta al SII la sección se declara como tal (nunca disco vacío).
+  const inf2 = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12 })
+  inf2.f29_historial = { estado: 'no_consultado', periodos: [] }
+  const html2 = informeHtml.renderInformeHtml(inf2)
+  assert.ok(/Historial F29 no consultado/.test(html2))
 })
 
 test('S5: el informe imprimible tiene los 8 capítulos, la marca y la opinión', () => {
@@ -345,11 +376,28 @@ test('S11: el informe cabe en A4 (ninguna tabla desborda la caja imprimible)', (
 test('S12: la diferencia del detalle mensual es la misma del capítulo 1', () => {
   const eid = empresa({ rut: '77000012-2' })
   doc(eid, { periodo: '202610', neto: 1000000, iva: 190000, folio: 'DIF-1' })
-  // El SII declaró 300.000; el RCV estima 200.000 (IVA 190.000 + PPM 10.000).
+  // El SII declaró 300.000 (casilla 091 del Formulario Compacto); el RCV
+  // estima 200.000 (IVA 190.000 + PPM 10.000). El monto de la Consulta
+  // Integral no basta para comparar: ST-02 exige casilla identificada.
   db.prepare(`
     INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
-    VALUES (?, '77000012-2', 'F29', '202610', 'declarada', 'F29-DIF', '2026-11-20', 300000, '{}')
+    VALUES (?, '77000012-2', 'F29', '202610', 'declarada', 'F29-DIF', '2026-11-20', 300000, '{"monto_concepto":"no_identificado"}')
   `).run(eid)
+  decl.guardarFormularioF29(db, {
+    empresaId: eid,
+    rut: '77000012-2',
+    periodo: '202610',
+    fila: { folio: 'F29-DIF', estado: 'Vigente' },
+    estado: { situacion: 'DECLARACION VIGENTE I', monto_observado: 0, declaraciones_vigentes: 1, eventos: [] },
+    compacto: {
+      ok: true,
+      folio: 'F29-DIF',
+      casillas: [{ codigo: '091', monto: 300000 }],
+      verificaciones: [],
+      indicadores: { total_a_pagar: 300000 },
+      url: null,
+    },
+  })
 
   const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12 })
   const html = informeHtml.renderInformeHtml(inf)
@@ -373,6 +421,32 @@ test('S12: la diferencia del detalle mensual es la misma del capítulo 1', () =>
   assert.ok(html.includes('.dif-alerta'), 'el CSS define la clase de la diferencia')
   assert.ok(html.includes('.dif-ok'), 'el CSS define la clase de la diferencia sin alerta')
   assert.ok(!/class="der neg"|class="der pos"/.test(html), 'no quedan clases de color inexistentes')
+})
+
+test('S16: los montos chicos no se redondean a cero ni a 0,1 MM', () => {
+  // ST-07: antes, $63.892 se imprimía «$0,1 MM» (37% de error) y $30.000 «$0 MM».
+  assert.equal(informeHtml.mm(30000), '$30 mil')
+  assert.equal(informeHtml.mm(63892), '$63,89 mil')
+  assert.equal(informeHtml.mm(999), '$999')
+  assert.equal(informeHtml.mm(1454207), '$1,45 MM')
+  assert.equal(informeHtml.mm(3000000000), '$3.000 MM')
+  assert.equal(informeHtml.mm(null), '—')
+})
+
+test('S15: el ratio ventas − compras del RCV no se presenta como margen bruto', () => {
+  const eid = empresa({ rut: '77000015-5' })
+  doc(eid, { periodo: '202610', neto: 100000, iva: 19000, folio: 'MG-V' })
+  doc(eid, { periodo: '202610', flujo: 'compra', neto: 900000, iva: 171000, folio: 'MG-C' })
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12 })
+  const html = informeHtml.renderInformeHtml(inf)
+
+  // −800% no es un margen: el RCV de compras incluye bienes de capital y
+  // compras que no son costo de ventas.
+  assert.equal(inf.kpis.margen_bruto_evaluable, false)
+  assert.equal(inf.kpis.margen_bruto_pct, null)
+  assert.ok(html.includes('Ventas − compras RCV'), 'el KPI se rotula por lo que mide')
+  assert.ok(!html.includes('Margen bruto'), 'no queda ningún rótulo «Margen bruto»')
+  assert.ok(html.includes('No evaluable'), 'el KPI declara que no es evaluable')
 })
 
 test('S13: el F29 leído sólo como Formulario Compacto cuenta como consultado', () => {

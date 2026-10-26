@@ -7,6 +7,7 @@
  *  T2  Estado de la búsqueda de formularios («Vigente», «Rectificada»…).
  *  T3  Montos y fechas del SII en formato chileno.
  *  T4  Tabla del informe anual de boletas: 12 meses + totales.
+ *  T5  Grilla de búsqueda anual del F29: columnas por encabezado (ST-02).
  *
  * Los valores de los tooltips y de las columnas están copiados de respuestas
  * reales del SII (21-10-2026), no inventados.
@@ -184,6 +185,43 @@ test('T7: lectura de respaldo del Formulario Compacto por texto plano', () => {
   assert.equal(rRem.indicadores.total_a_pagar, 4457)
   assert.equal(rRem.indicadores.remanente_credito_anterior, 3438724)
   assert.ok(rRem.verificaciones.every((v) => v.ok), rRem.verificaciones.filter((v) => !v.ok).map((v) => v.detalle).join(' | '))
+})
+
+test('T5: grilla anual del F29 — columnas por encabezado, no por posición', () => {
+  // Valores copiados de la grilla real de la Consulta Integral (21-10-2026).
+  const filas = [
+    ['Periodo', 'Folio', 'Contribuyente', 'Fecha', 'Estado', 'Monto', 'Ver'],
+    ['2025-01', '123456789', 'EMPRESA UNO', '19/02/2025', 'Vigente', '$1.027.539', 'Ver'],
+    ['2025-02', '123456790', 'EMPRESA UNO', '20/03/2025', 'Rectificada', '$ 29.583', 'Ver'],
+  ]
+  const r = decl.parsearTablaBusquedaF29(filas)
+  assert.deepEqual(r.columnas, { periodo: 0, folio: 1, fecha: 3, estado: 4, monto: 5 })
+  assert.equal(r.filas.length, 2)
+  assert.equal(r.filas[0].periodo, '202501')
+  assert.equal(r.filas[0].folio, '123456789')
+  assert.equal(r.filas[0].fecha, '19/02/2025')
+  assert.equal(r.filas[0].estado, 'Vigente')
+  assert.equal(r.filas[0].monto, '$1.027.539')
+  // El monto se informa, pero SIN casilla: no es conciliable.
+  assert.equal(r.filas[0].monto_concepto, 'no_identificado')
+
+  // Si el SII agrega una columna antes del monto, se sigue leyendo «Monto»
+  // (antes se tomaba `c[5]`, que aquí sería «Estado»).
+  const movido = [
+    ['Período', 'Folio', 'Contribuyente', 'Cuota', 'Fecha', 'Estado', 'Monto'],
+    ['2025-03', '123456791', 'EMPRESA UNO', '12', '20/04/2025', 'Vigente', '$10.000'],
+  ]
+  const r2 = decl.parsearTablaBusquedaF29(movido)
+  assert.equal(r2.filas[0].monto, '$10.000')
+  assert.equal(r2.filas[0].estado, 'Vigente')
+
+  // Sin encabezado reconocible no se adivina por posición: mejor ninguna fila
+  // que una diferencia inventada.
+  assert.deepEqual(
+    decl.parsearTablaBusquedaF29([['2025-01', '1', 'X', '19/02/2025', 'Vigente', '$1', 'Ver']]),
+    { columnas: null, filas: [] },
+  )
+  assert.deepEqual(decl.parsearTablaBusquedaF29([]), { columnas: null, filas: [] })
 })
 
 test('T6: puppeteer-core es dependencia de producción y el Dockerfile instala chromium', () => {

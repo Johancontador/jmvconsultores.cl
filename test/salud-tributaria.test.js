@@ -143,23 +143,51 @@ test('T6: cobertura completa + ficha completa ⇒ AL_DIA', () => {
   assert.ok(inf.opinion.limitaciones.some((l) => /F29/.test(l)))
 })
 
-test('T8: F29 oficial se mezcla con la estimación y calcula diferencia', () => {
+test('T8: F29 con casilla 091 se mezcla con la estimación y calcula diferencia', () => {
   const eid = empresa({ rut: '76012345-6', tasa: 0.01 })
   doc(eid, { periodo: '202609', tipo: 33, neto: 1000000, iva: 190000, folio: 'F29-1' })
   db.prepare(`
     INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
     VALUES (?, '76012345-6', 'F29', '202609', 'declarada', '123456789', '2026-10-12', 200000, '{}')
   `).run(eid)
+  // Formulario Compacto: la ÚNICA vía que identifica la casilla 091.
+  db.prepare(`
+    INSERT INTO f29_formularios (empresa_id, rut, periodo, folio, estado, indicadores_json, casillas_json, verificaciones_json)
+    VALUES (?, '76012345-6', '202609', '123456789', 'declarada', ?, '[]', '[]')
+  `).run(eid, JSON.stringify({ total_a_pagar: 200000, iva_determinado: 190000, ppm_neto: 10000, base_imponible: 1000000 }))
   const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
   const m = inf.mensuales.find((x) => x.periodo === '202609')
   assert.equal(m.f29_estado, 'declarada')
   assert.equal(m.f29_oficial.folio, '123456789')
   assert.equal(m.f29_oficial.fecha_presentacion, '2026-10-12')
   assert.equal(m.f29_oficial.monto_total, 200000)
+  assert.equal(m.f29_oficial.monto_concepto, 'total_a_pagar_091')
+  assert.equal(m.f29_oficial.conciliable, true)
   // F29 estimado = IVA 190.000 + PPM 10.000 = 200.000 → diferencia 0.
   assert.equal(m.f29_diferencia, 0)
   assert.equal(inf.declaraciones.f29.estado, 'disponible')
   assert.equal(inf.declaraciones.f29.declaradas, 1)
+})
+
+// ST-02: el «Monto» de la Consulta Integral no identifica la casilla (091).
+// Compararlo con la estimación del RCV fabricaba diferencias y exposición.
+test('T8b: monto del F29 sin casilla identificada no genera diferencia ni exposición', () => {
+  const eid = empresa({ rut: '76123456-7', tasa: 0.01 })
+  doc(eid, { periodo: '202609', tipo: 33, neto: 1000000, iva: 190000, folio: 'SC-1' })
+  db.prepare(`
+    INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
+    VALUES (?, '76123456-7', 'F29', '202609', 'declarada', '999', '2026-10-12', 300000, ?)
+  `).run(eid, JSON.stringify({ monto_concepto: 'no_identificado', origen: 'sifmConsultaInternet (Consulta Integral F29)' }))
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const m = inf.mensuales.find((x) => x.periodo === '202609')
+  // El monto se INFORMA (es lo que dice el SII), pero no se compara.
+  assert.equal(m.f29_oficial.monto_total, 300000)
+  assert.equal(m.f29_oficial.monto_concepto, 'no_identificado')
+  assert.equal(m.f29_oficial.conciliable, false)
+  assert.equal(m.f29_diferencia, null)
+  assert.equal(inf.opinion.exposicion.por_naturaleza.diferencia_por_investigar, 0)
+  assert.ok(inf.opinion.limitaciones.some((l) => /casilla 091/.test(l)), 'la limitación explica por qué no se concilia')
 })
 
 test('T9: F29 pendiente según el SII ⇒ REQUIERE_REVISION', () => {
@@ -282,6 +310,248 @@ test('T12: ficha automática — ausente, vigente, vencida y error', async () =>
   assert.match(r4.error, /inaccesible/)
 
   limpiar()
+})
+
+// T17 (ST-01): el crédito fiscal que excede al débito NO se pierde. Antes,
+// cada mes se calculaba aislado: julio dejaba −190.000 y agosto se declaraba
+// como si ese crédito no existiera, sobrestimando el F29 estimado.
+test('T17: el remanente de crédito fiscal se arrastra entre meses', () => {
+  const eid = empresa({ rut: '76555004-5', tasa: 0.01 })
+  // Julio: crédito 380.000 > débito 190.000 ⇒ remanente 190.000.
+  doc(eid, { periodo: '202607', tipo: 33, neto: 1000000, iva: 190000, folio: 'CFT-V1' })
+  doc(eid, { periodo: '202607', flujo: 'compra', tipo: 33, neto: 2000000, iva: 380000, folio: 'CFT-C1' })
+  // Agosto: débito 190.000 cubierto por el remanente ⇒ IVA a pagar 0.
+  doc(eid, { periodo: '202608', tipo: 33, neto: 1000000, iva: 190000, folio: 'CFT-V2' })
+  // Septiembre: ya no hay remanente ⇒ IVA a pagar 190.000.
+  doc(eid, { periodo: '202609', tipo: 33, neto: 1000000, iva: 190000, folio: 'CFT-V3' })
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const mes = (p) => inf.mensuales.find((m) => m.periodo === p)
+  const jul = mes('202607')
+  const ago = mes('202608')
+  const sep = mes('202609')
+
+  // Julio: el neto sigue siendo negativo (diagnóstico) y el crédito queda como CFT.
+  assert.equal(jul.iva_estimado, -190000)
+  assert.equal(jul.remanente_anterior, 0)
+  assert.equal(jul.remanente_siguiente, 190000)
+  assert.equal(jul.iva_a_pagar, 0)
+  assert.equal(jul.f29_estimado, 10000, 'sin IVA a pagar solo queda el PPM')
+
+  // Agosto: consume el remanente completo; no se paga IVA.
+  assert.equal(ago.remanente_anterior, 190000)
+  assert.equal(ago.remanente_origen, 'estimado_propio')
+  assert.equal(ago.iva_a_pagar, 0)
+  assert.equal(ago.remanente_siguiente, 0)
+  assert.equal(ago.f29_estimado, 10000)
+
+  // Septiembre: sin remanente, vuelve a pagarse el IVA completo.
+  assert.equal(sep.remanente_anterior, 0)
+  assert.equal(sep.iva_a_pagar, 190000)
+  assert.equal(sep.f29_estimado, 200000)
+
+  // Total de la ventana: 10.000 + 10.000 + 200.000. Sin arrastre habría sido
+  // 10.000 + 200.000 + 200.000 = 410.000 (190.000 de crédito perdido).
+  const totalEstimado = inf.mensuales.reduce((s, m) => s + (m.f29_estimado || 0), 0)
+  assert.equal(totalEstimado, 220000)
+})
+
+// T17b: si el F29 declarado trae la casilla 504, esa cifra oficial manda sobre
+// el arrastre calculado con el RCV.
+test('T17b: la casilla 504 del F29 declarado fija el remanente anterior', () => {
+  const rut = '76555005-6'
+  const eid = empresa({ rut, tasa: 0.01 })
+  doc(eid, { periodo: '202609', tipo: 33, neto: 1000000, iva: 190000, folio: 'CFT-504' })
+  db.prepare(`
+    INSERT INTO f29_formularios (empresa_id, rut, periodo, folio, estado, indicadores_json, casillas_json, verificaciones_json)
+    VALUES (?, ?, '202609', '504-1', 'declarada', ?, '[]', '[]')
+  `).run(eid, rut, JSON.stringify({ remanente_credito_anterior: 50000, total_a_pagar: 140000 }))
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const m = inf.mensuales.find((x) => x.periodo === '202609')
+  assert.equal(m.remanente_anterior, 50000)
+  assert.equal(m.remanente_origen, 'casilla_504')
+  assert.equal(m.iva_a_pagar, 140000)
+  assert.equal(m.f29_estimado, 150000)
+})
+
+// T16 (ST-06): las compras del RCV no son costo de ventas; el ratio no es un
+// margen y, cuando no puede serlo (|%| > 100), se declara no evaluable.
+test('T16: ventas − compras del RCV no se publica como margen cuando no lo es', () => {
+  const eid = empresa({ rut: '76555003-4', tasa: 0.01 })
+  doc(eid, { periodo: '202609', tipo: 33, neto: 100000, iva: 19000, folio: 'MG-V' })
+  doc(eid, { periodo: '202609', flujo: 'compra', tipo: 33, neto: 60000, iva: 11400, folio: 'MG-C1' })
+  const ok = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(ok.kpis.margen_bruto_evaluable, true)
+  assert.equal(ok.kpis.margen_bruto_pct, 40)
+
+  // Compras desproporcionadas (bienes de capital, documentos de otro giro):
+  // el ratio daría −800% y eso no es un margen.
+  doc(eid, { periodo: '202609', flujo: 'compra', tipo: 33, neto: 840000, iva: 159600, folio: 'MG-C2' })
+  const raro = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(raro.kpis.margen_bruto_evaluable, false)
+  assert.equal(raro.kpis.margen_bruto_pct, null)
+})
+
+// T14 (ST-05): «riesgos» es la única dimensión que siempre puede puntuarse (los
+// hallazgos existen). Por sí sola NO mide salud tributaria: con la ficha y nada
+// más, el índice sería el puntaje de riesgos sin una sola fuente de datos.
+test('T14: con ficha y sin RCV ni declaraciones el índice no es evaluable', () => {
+  const eid = empresa({ rut: '76555001-2' })
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const op = inf.opinion
+  assert.deepEqual(
+    op.dimensiones.filter((d) => d.estado === 'evaluable').map((d) => d.clave),
+    ['riesgos'],
+    'sin RCV ni declaraciones la única dimensión con evidencia es riesgos',
+  )
+  assert.equal(op.indice_evaluable, false)
+  assert.equal(op.clasificacion.clave, 'NO_EVALUABLE')
+  assert.ok(/no basta/.test(op.resumen), 'el resumen explica que la ficha no basta')
+})
+
+// T15 (ST-04): la diferencia estimado − declarado tiene signo. Solo declarar de
+// MENOS es dinero en riesgo; declarar de MÁS se informa y NO suma a la exposición.
+test('T15: la sobre-declaración no suma a la exposición', () => {
+  const rut = '76555002-3'
+  const eid = empresa({ rut, tasa: 0.01 })
+  doc(eid, { periodo: '202609', tipo: 33, neto: 1000000, iva: 190000, folio: 'OV-1' })
+  const guardarForm = (total) => {
+    db.prepare(`
+      INSERT INTO f29_formularios (empresa_id, rut, periodo, folio, estado, indicadores_json, casillas_json, verificaciones_json)
+      VALUES (?, ?, '202609', 'OV-1', 'declarada', ?, '[]', '[]')
+      ON CONFLICT(empresa_id, periodo) DO UPDATE SET indicadores_json = excluded.indicadores_json
+    `).run(eid, rut, JSON.stringify({ total_a_pagar: total }))
+  }
+  const informe = () => salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+
+  // Estimado 200.000 (IVA 190.000 + PPM 10.000) · declarado 300.000 ⇒ −100.000.
+  guardarForm(300000)
+  const sobre = informe()
+  const m = sobre.mensuales.find((x) => x.periodo === '202609')
+  assert.equal(m.f29_diferencia, -100000)
+  assert.equal(sobre.opinion.exposicion.por_naturaleza.diferencia_por_investigar, 0)
+  assert.equal(sobre.opinion.exposicion.por_naturaleza.sobre_declaracion, 100000)
+  assert.equal(sobre.opinion.exposicion.total, 0, 'haber pagado de más no es exposición')
+  assert.equal(sobre.opinion.matriz_riesgos.find((r) => r.codigo === 'F29_DIFERENCIA').cuenta_exposicion, false)
+
+  // Declarado 150.000 ⇒ +50.000: subdeclaración, esta sí es exposición.
+  guardarForm(150000)
+  const sub = informe()
+  assert.equal(sub.opinion.exposicion.por_naturaleza.diferencia_por_investigar, 50000)
+  assert.equal(sub.opinion.exposicion.por_naturaleza.sobre_declaracion, 0)
+  assert.equal(sub.opinion.exposicion.total, 50000)
+})
+
+// T13 (ST-03): índice, cobertura del ÍNDICE y cobertura de FUENTES son tres
+// indicadores distintos. Antes, «cobertura» era el peso de las dimensiones con
+// evidencia (100% con ficha + RCV) y de ahí salía una confianza ALTA aunque la
+// TGR, el F22, las DJ y las boletas de honorarios nunca se hubieran consultado.
+test('T13: cobertura de fuentes y confianza son independientes del índice', () => {
+  const rut = '76444555-6'
+  const eid = empresa({ rut })
+  const periodos = salud.ultimosPeriodos(12, '202610')
+  // RCV + F29 oficial + Formulario Compacto de los 12 meses: las cinco
+  // dimensiones del índice quedan evaluables. La TGR, el F22, las DJ y las
+  // boletas de honorarios, en cambio, NO se consultaron.
+  periodos.forEach((p, i) => {
+    doc(eid, { periodo: p, tipo: 33, neto: 1000000 + i, iva: 190000, folio: `ST3-${p}` })
+    db.prepare(`
+      INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
+      VALUES (?, ?, 'F29', ?, 'declarada', ?, '2026-10-12', 200000, '{}')
+    `).run(eid, rut, p, `FO-${p}`)
+    db.prepare(`
+      INSERT INTO f29_formularios (empresa_id, rut, periodo, folio, estado, indicadores_json, casillas_json, verificaciones_json)
+      VALUES (?, ?, ?, ?, 'declarada', ?, '[]', ?)
+    `).run(
+      eid, rut, p, `FO-${p}`,
+      JSON.stringify({ total_a_pagar: 200000, iva_determinado: 190000, base_imponible: 1000000 }),
+      JSON.stringify([{ ok: true, nombre: 'total' }]),
+    )
+  })
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const op = inf.opinion
+
+  // El índice se evalúa completo: las cinco dimensiones tienen evidencia.
+  assert.equal(op.indice_evaluable, true)
+  assert.equal(op.cobertura_diagnostico, 100)
+  assert.ok(op.score >= 90)
+
+  // Pero de las nueve fuentes del diagnóstico solo se consultaron cuatro.
+  assert.equal(op.cobertura_fuentes.requeridas, 9)
+  assert.equal(op.cobertura_fuentes.consultadas, 4)
+  assert.equal(op.cobertura_fuentes.pct, 44)
+  assert.deepEqual(
+    op.cobertura_fuentes.por_fuente.filter((x) => x.estado === 'consultada').map((x) => x.clave).sort(),
+    ['f29_compacto', 'f29_consulta_integral', 'ficha_sii', 'rcv'],
+  )
+  assert.ok(op.cobertura_fuentes.faltantes.includes('Deuda fiscal (TGR)'))
+  assert.ok(op.cobertura_fuentes.faltantes.includes('Renta (F22)'))
+
+  // Con 44% de fuentes la confianza no puede ser alta, aunque la cobertura del
+  // índice sea 100%: ese era exactamente el error que ST-03 corrige. Además el
+  // motivo se imprime (no queda un nivel huérfano).
+  assert.equal(op.nivel_confianza, 'BAJA')
+  assert.ok(op.confianza_motivos.some((m) => /Cobertura de fuentes 44%/.test(m)))
+  assert.ok(op.confianza_motivos.some((m) => /Fuentes no consultadas/.test(m)))
+
+  // Al consultar F22, DJ y BHE sube la cobertura de FUENTES… y el índice no se
+  // mueve: medir fuentes no es medir salud tributaria.
+  for (const tipo of ['F22', 'BHE', 'DJ']) {
+    db.prepare(`
+      INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, datos_json)
+      VALUES (?, ?, ?, '2025', 'declarada', '{}')
+    `).run(eid, rut, tipo)
+  }
+  const inf2 = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  assert.equal(inf2.opinion.cobertura_fuentes.consultadas, 7)
+  assert.equal(inf2.opinion.cobertura_fuentes.pct, 78)
+  assert.equal(inf2.opinion.nivel_confianza, 'MEDIA', 'sin la TGR consultada no hay confianza alta')
+  assert.equal(inf2.opinion.score, op.score, 'consultar fuentes anuales no cambia el índice de salud tributaria')
+})
+
+// T18: el historial completo del F29 (los 5 años consultados) queda accesible
+// como tabla consultable: folio, fecha de presentación, monto declarado,
+// origen (Consulta Integral / Compacto), enlace al PDF y resumen de casillas
+// del compacto. Orden del más reciente al más antiguo.
+test('T18: historial F29 consultable — folio, fecha, monto, resumen y orden', () => {
+  const eid = empresa({ rut: '76333444-5', tasa: 0.01 })
+  // Consulta Integral: folio + fecha + monto SIN casilla identificada.
+  db.prepare(`
+    INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
+    VALUES (?, '76333444-5', 'F29', '202607', 'declarada', '111222333', '2026-05-20', 320000, ?)
+  `).run(eid, JSON.stringify({ monto_concepto: 'no_identificado' }))
+  db.prepare(`
+    INSERT INTO declaraciones_sii (empresa_id, rut, tipo, periodo, estado, folio, fecha_presentacion, monto_total, datos_json)
+    VALUES (?, '76333444-5', 'F29', '202606', 'declarada', '444555666', '2026-04-19', 200000, '{}')
+  `).run(eid)
+  // Formulario Compacto del mismo período: casillas leídas + enlace al PDF.
+  db.prepare(`
+    INSERT INTO f29_formularios (empresa_id, rut, periodo, folio, estado, indicadores_json, casillas_json, verificaciones_json, url)
+    VALUES (?, '76333444-5', '202606', '444555666', 'declarada', ?, '[]', '[]', 'https://www4.sii.cl/e-book/f29?folio=444555666')
+  `).run(eid, JSON.stringify({ total_a_pagar: 210000, iva_determinado: 195000, ppm_neto: 8000, base_imponible: 1026315, remanente_credito_fiscal: 0 }))
+
+  const inf = salud.construirInforme(db, { empresaId: eid, periodo: '202610', meses: 12, ficha: FICHA_COMPLETA })
+  const hist = inf.f29_historial
+  assert.equal(hist.estado, 'disponible')
+  assert.ok(hist.rango && /202606/.test(hist.rango))
+  // Orden: más reciente primero.
+  assert.equal(hist.periodos[0].periodo, '202607')
+  const julio = hist.periodos[0]
+  assert.equal(julio.folio, '111222333')
+  assert.equal(julio.fecha_presentacion, '2026-05-20')
+  assert.equal(julio.monto_total, 320000)
+  assert.equal(julio.monto_concepto, 'no_identificado')
+  assert.equal(julio.origen, 'consulta_integral')
+  // El PDF del compacto queda disponible aunque la fila venga de la Consulta
+  // Integral: un solo lugar para abrir el formulario original.
+  const junio = hist.periodos[1]
+  assert.ok(/folio=444555666/.test(junio.url))
+  assert.equal(junio.folio, '444555666')
+  assert.equal(junio.resumen.total_a_pagar, 210000)
+  assert.equal(junio.resumen.iva_determinado, 195000)
+  assert.equal(junio.resumen.ppm_neto, 8000)
 })
 
 test('T7: el snapshot guarda la opinión como evidencia inmutable', () => {

@@ -85,8 +85,14 @@ function clp(n) {
  */
 function mm(n) {
   if (n == null || Number.isNaN(Number(n))) return '—'
-  const v = Number(n) / 1000000
-  return `$${v.toLocaleString('es-CL', { maximumFractionDigits: 1 })} MM`
+  const v = Number(n)
+  const abs = Math.abs(v)
+  // ST-07: redondear SIEMPRE a 0,1 MM imprimía «$0,1 MM» para $63.892 (37% de
+  // error relativo) y «$0 MM» para $30.000. Bajo un millón se usa la unidad
+  // «mil» (dos decimales) y bajo mil, pesos exactos; la unidad se declara.
+  if (abs >= 1000000) return `$${(v / 1000000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} MM`
+  if (abs >= 1000) return `$${(v / 1000).toLocaleString('es-CL', { maximumFractionDigits: 2 })} mil`
+  return `$${num(v)}`
 }
 
 /** Monto de boletas: compacto en millones si es grande, exacto si es menor. */
@@ -195,7 +201,7 @@ function svgIva(mensuales) {
     return `<g>
       <rect x="${(x).toFixed(1)}" y="${d.toFixed(1)}" width="${gw.toFixed(1)}" height="${Math.max(0, pad.t + alto - d).toFixed(1)}" fill="${MARCA.bronce}" opacity="0.9"><title>${esc(m.nombre)} · débito fiscal ${clp(m.ventas_iva)}</title></rect>
       <rect x="${(x + gw + 2).toFixed(1)}" y="${c.toFixed(1)}" width="${gw.toFixed(1)}" height="${Math.max(0, pad.t + alto - c).toFixed(1)}" fill="${MARCA.bronceClaro}"><title>${esc(m.nombre)} · crédito fiscal ${clp(m.compras_iva)}</title></rect>
-      <circle cx="${(x + gw + 2 + gw / 2).toFixed(1)}" cy="${det.toFixed(1)}" r="3.2" fill="${MARCA.grafito}"><title>${esc(m.nombre)} · IVA determinado ${clp(m.iva_estimado)}</title></circle>
+      <circle cx="${(x + gw + 2 + gw / 2).toFixed(1)}" cy="${det.toFixed(1)}" r="3.2" fill="${MARCA.grafito}"><title>${esc(m.nombre)} · IVA estimado (RCV) ${clp(m.iva_estimado)}</title></circle>
       <text x="${(pad.l + i * paso + paso / 2).toFixed(1)}" y="${H - 26}" text-anchor="middle" font-size="10" fill="${MARCA.grafitoSuave}">${esc(etiquetaEje(m.nombre, datos.length))}</text>
     </g>`
   }).join('')
@@ -214,7 +220,7 @@ function svgIva(mensuales) {
     <g transform="translate(${pad.l},${H - 8})" font-size="10" fill="${MARCA.grafitoSuave}">
       <rect x="0" y="-9" width="9" height="9" fill="${MARCA.bronce}"/><text x="14" y="0">Débito fiscal</text>
       <rect x="96" y="-9" width="9" height="9" fill="${MARCA.bronceClaro}"/><text x="110" y="0">Crédito fiscal</text>
-      <line x1="200" y1="-5" x2="216" y2="-5" stroke="${MARCA.grafito}" stroke-dasharray="4 3"/><text x="222" y="0">IVA determinado</text>
+      <line x1="200" y1="-5" x2="216" y2="-5" stroke="${MARCA.grafito}" stroke-dasharray="4 3"/><text x="222" y="0">IVA estimado (RCV)</text>
     </g>
   </svg>`
 }
@@ -359,7 +365,7 @@ function svgPuente(declarado, estimados) {
     : [
       { label: 'Débito fiscal (RCV)', valor: Number(estimados?.ventas_iva) || 0, tipo: 'suma' },
       { label: 'Menos crédito fiscal (RCV)', valor: -(Number(estimados?.compras_iva) || 0), tipo: 'resta' },
-      { label: 'IVA determinado estimado', valor: Number(estimados?.iva) || 0, tipo: 'total' },
+      { label: 'IVA estimado (RCV)', valor: Number(estimados?.iva) || 0, tipo: 'total' },
       { label: 'PPM estimado', valor: Number(estimados?.ppm) || 0, tipo: 'suma' },
       { label: 'Total F29 estimado', valor: Number(estimados?.total) || 0, tipo: 'total' },
     ]
@@ -516,7 +522,7 @@ function tablaKpiPortada(informe) {
     { k: 'Alertas críticas', v: String(alertasAltas), s: 'severidad alta sin resolver' },
     { k: 'Exposición cuantificada', v: mm(exp.total || 0), s: 'sin duplicidad de conceptos' },
     { k: 'Acciones prioritarias', v: String(acciones), s: 'en el plan de acción' },
-    { k: 'Cobertura del diagnóstico', v: pct(op.cobertura_diagnostico), s: `confianza: ${op.nivel_confianza || '—'}` },
+    { k: 'Cobertura de fuentes', v: pct(op.cobertura_fuentes?.pct ?? op.cobertura_diagnostico), s: `${op.cobertura_fuentes?.consultadas ?? '—'}/${op.cobertura_fuentes?.requeridas ?? '—'} fuentes · confianza: ${op.nivel_confianza || '—'}` },
   ]
   return `<div class="kpi-grid">${tarjetas.map((t) => `
     <div class="kpi-card">
@@ -660,8 +666,8 @@ function tablaMensual(mensuales) {
     <thead><tr>
       <th style="width:13%">Período</th><th style="width:11%" class="der">Ventas netas</th>
       <th style="width:11%" class="der">Débito fiscal</th><th style="width:11%" class="der">Crédito fiscal</th>
-      <th style="width:9%" class="der">IVA det.</th><th style="width:9%" class="der">PPM</th>
-      <th style="width:12%" class="der">F29 declarado</th><th style="width:11%" class="der">Dif. (est. − decl.)</th>
+      <th style="width:9%" class="der">IVA est. RCV</th><th style="width:9%" class="der">PPM</th>
+      <th style="width:12%" class="der">F29 total (091)</th><th style="width:11%" class="der">Dif. (est. − decl.)</th>
       <th style="width:13%">Estado F29</th>
     </tr></thead>
     <tbody>${mensuales.map((m) => {
@@ -684,12 +690,58 @@ function tablaMensual(mensuales) {
       <td class="der">${est(m.compras_iva)}</td>
       <td class="der">${est(m.iva_estimado)}</td>
       <td class="der">${est(m.ppm_estimado)}</td>
-      <td class="der">${m.f29_oficial?.monto_total == null ? '—' : clpPartible(m.f29_oficial.monto_total)}</td>
+      <td class="der">${m.f29_oficial?.monto_total == null ? '—' : clpPartible(m.f29_oficial.monto_total)}${m.f29_oficial?.conciliable === false ? '<sup>*</sup>' : ''}</td>
       <td class="der ${dif == null ? '' : (Math.abs(dif) >= 1000 ? 'dif-alerta' : 'dif-ok')}">${dif == null ? '—' : clpPartible(dif)}</td>
       <td>${esc(m.f29_oficial?.etiqueta || 'No consultado')}</td>
     </tr>`
   }).join('')}</tbody>
-  </table>`
+  </table>${mensuales.some((m) => m.f29_oficial?.conciliable === false)
+      ? '<p class="nota"><sup>*</sup> Monto informado por la Consulta Integral del SII sin casilla identificada: se muestra como dato declarado, pero no se compara con la estimación del RCV (la conciliación exige el Formulario Compacto, casilla 091).</p>'
+      : ''}${mensuales.some((m) => (m.iva_estimado || 0) < 0)
+      ? '<p class="nota">Un «IVA est. RCV» negativo es un remanente de crédito fiscal del mes (crédito mayor que débito), no un IVA a pagar: el remanente se descuenta en los meses siguientes (D.L. 825 art. 26) y el F29 estimado suma IVA a pagar + PPM.</p>'
+      : ''}${mensuales.some((m) => (m.remanente_anterior || 0) > 0)
+      ? `<p class="nota">Remanente de crédito fiscal aplicado en la ventana: ${mensuales.filter((m) => (m.remanente_anterior || 0) > 0).map((m) => `${m.nombre} ${clp(m.remanente_anterior)}`).join(' · ')}. Al agotarlo, el IVA vuelve a pagarse.</p>`
+      : ''}`
+}
+
+/**
+ * Historial COMPLETO de F29 (los ~60 períodos consultados al SII, 5 años):
+ * período, estado, folio, fecha de presentación y montos. Filas paginadas
+ * por fila (page-break-inside: avoid) y anchos porcentuales que suman 100 %.
+ */
+function tablaHistorialF29(historial) {
+  const h = historial
+  if (!h || h.estado !== 'disponible' || !h.periodos?.length) {
+    return '<p class="nota">Historial F29 no consultado: ejecuta la consulta de declaraciones (5 años) en la vista de Salud Tributaria para llenarlo.</p>'
+  }
+  const MESESA = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+  const estadoEtiqueta = { declarada: 'Declarada', rectificada: 'Rectificada', pendiente: 'Pendiente', no_presentada: 'No presentada', sin_informacion: 'Sin información' }
+  return `<table class="tabla tabla-historial-f29">
+    <thead><tr>
+      <th style="width:12%">Período</th><th style="width:14%">Estado</th>
+      <th style="width:18%">Folio</th><th style="width:15%">Fecha de presentación</th>
+      <th style="width:13%" class="der">Monto consultado</th>
+      <th style="width:13%" class="der">IVA determinado</th>
+      <th style="width:15%" class="der">Total a pagar (091)</th>
+    </tr></thead>
+    <tbody>${h.periodos.map((p) => {
+    const per = String(p.periodo || '')
+    const nombre = per.length === 6 ? `${MESESA[Number(per.slice(4, 6)) - 1] || per.slice(4)} ${per.slice(0, 4)}` : per
+    const monto = p.monto_total == null ? null : p.monto_total
+    const resumen = p.resumen || {}
+    return `<tr>
+      <td>${esc(nombre)}</td>
+      <td><span class="chip chip-${esc(String(p.estado || 'sin_informacion').toLowerCase())}">${esc(estadoEtiqueta[p.estado] || p.estado || '—')}</span></td>
+      <td>${p.folio == null ? '—' : esc(String(p.folio))}</td>
+      <td>${p.fecha_presentacion ? esc(fechaCorta(p.fecha_presentacion)) : '—'}</td>
+      <td class="der">${monto == null ? '—' : clp(monto)}${p.monto_concepto === 'no_identificado' && monto != null ? '*' : ''}</td>
+      <td class="der">${resumen.iva_determinado == null ? '—' : clp(resumen.iva_determinado)}</td>
+      <td class="der">${resumen.total_a_pagar == null ? '—' : clp(resumen.total_a_pagar)}</td>
+    </tr>`
+  }).join('')}</tbody>
+  </table>${h.periodos.some((p) => p.monto_concepto === 'no_identificado' && p.monto_total != null)
+      ? '<p class="nota"><sup>*</sup> Monto informado por la Consulta Integral del SII sin casilla identificada: se muestra como dato declarado, no como total a pagar.</p>'
+      : ''}`
 }
 
 function tablaMatrizRiesgos(matriz) {
@@ -976,9 +1028,14 @@ function renderInformeHtml(informe, opts = {}) {
     ${tablaDeclaracionesAnuales(informe?.declaraciones_anuales)}
     <h3>Cobertura del diagnóstico</h3>
     <p class="nota">
-      Cobertura: <b>${pct(op.cobertura_diagnostico)}</b> · Nivel de confianza: <b>${esc(op.nivel_confianza || '—')}</b> ·
+      Cobertura del índice (peso con evidencia): <b>${pct(op.cobertura_diagnostico)}</b> ·
+      Cobertura de fuentes: <b>${pct(op.cobertura_fuentes?.pct ?? 0)}</b>
+      (${op.cobertura_fuentes?.consultadas ?? '—'}/${op.cobertura_fuentes?.requeridas ?? '—'} consultadas) ·
+      Nivel de confianza: <b>${esc(op.nivel_confianza || '—')}</b> ·
       Períodos con datos: ${informe?.cobertura?.con_datos ?? '—'} · sin movimiento: ${informe?.cobertura?.sin_movimiento ?? '—'} · sin sincronizar: ${informe?.cobertura?.sin_datos ?? '—'}.
     </p>
+    ${(op.confianza_motivos || []).length ? `<p class="nota">${esc(op.confianza_motivos.join(' '))}</p>` : ''}
+    ${(op.cobertura_fuentes?.faltantes || []).length ? `<p class="nota">Fuentes pendientes de consultar: ${esc(op.cobertura_fuentes.faltantes.join(', '))}.</p>` : ''}
   `)
 
   const cap3 = capitulo(3, 'Análisis del IVA y conciliaciones', `
@@ -989,6 +1046,9 @@ function renderInformeHtml(informe, opts = {}) {
     <h3>Detalle por período (declarado vs. estimado)</h3>
     ${tablaMensual(informe?.mensuales)}
     <p class="nota">«—» en las columnas estimadas significa que no hay RCV ingerido para ese período: no se estima nada, no se afirma que no hubo movimiento. El monto declarado proviene del SII y se muestra igual.</p>
+    <h3 class="mt">Historial completo de F29 (SII)${informe?.f29_historial?.rango ? ` · ${esc(informe.f29_historial.rango)}` : ''}</h3>
+    ${tablaHistorialF29(informe?.f29_historial)}
+    <p class="nota">Folio y fecha de presentación leídos de la Consulta Integral del SII; el IVA y el total vienen de las casillas del Formulario Compacto cuando existe. El sistema no registra fecha de pago separada: el F29 declarado registra la presentación dentro del plazo legal.</p>
   `)
 
   const cap4 = capitulo(4, 'Matriz de riesgos tributarios', `
@@ -1009,7 +1069,7 @@ function renderInformeHtml(informe, opts = {}) {
       <div class="kpi-card"><div class="kpi-k">Ventas del período</div><div class="kpi-v">${mm(kpis.ventas_periodo)}</div><div class="kpi-s">neto, ${informe?.cobertura?.con_datos ?? 0} mes(es) con datos</div></div>
       <div class="kpi-card"><div class="kpi-k">IVA del período</div><div class="kpi-v">${mm(kpis.iva_periodo)}</div><div class="kpi-s">estimado desde RCV</div></div>
       <div class="kpi-card"><div class="kpi-k">PPM del período</div><div class="kpi-v">${mm(kpis.ppm_periodo)}</div><div class="kpi-s">tasa ${pct((Number(kpis.tasa_ppm) || 0) * 100, 2)}</div></div>
-      <div class="kpi-card"><div class="kpi-k">Margen bruto</div><div class="kpi-v">${pct(kpis.margen_bruto_pct)}</div><div class="kpi-s">(ventas − compras) / ventas</div></div>
+      <div class="kpi-card"><div class="kpi-k">Ventas − compras RCV</div><div class="kpi-v">${kpis.margen_bruto_evaluable === false ? 'No evaluable' : pct(kpis.margen_bruto_pct)}</div><div class="kpi-s">(ventas − compras del RCV) / ventas · no es margen bruto</div></div>
       <div class="kpi-card"><div class="kpi-k">Fondos disponibles</div><div class="kpi-v">${mm(tes.total_bancos)}</div><div class="kpi-s">${tes.bancos?.length || 0} cuenta(s) bancaria(s)</div></div>
       <div class="kpi-card"><div class="kpi-k">Cartera por cobrar</div><div class="kpi-v">${mm(tes.cobranza?.total)}</div><div class="kpi-s">vencido &gt;30 días: ${mm(tes.cobranza?.vencido_30_dias)}</div></div>
     </div>
@@ -1108,7 +1168,7 @@ function renderInformeHtml(informe, opts = {}) {
         <div>
           <div class="estado" style="color:${color}">${esc(op.clasificacion?.titulo || op.titulo || '—')}</div>
           <div class="meta">${op.indice_evaluable === false ? 'Índice no evaluable con los antecedentes disponibles' : 'Clasificación según la escala JMV'}</div>
-          <div class="meta">Cobertura ${pct(op.cobertura_diagnostico)} · Confianza ${esc(op.nivel_confianza || '—')}</div>
+          <div class="meta">Cobertura de fuentes ${pct(op.cobertura_fuentes?.pct ?? op.cobertura_diagnostico)} · Confianza ${esc(op.nivel_confianza || '—')}</div>
         </div>
       </div>
       ${tablaKpiPortada(informe)}
