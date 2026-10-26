@@ -1129,4 +1129,10 @@ function migracionesCrmComercial(db) {
   require('./crm-comercial').migracionesCrmComercial(db)
 }
 
-module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesF29Formularios, migracionesDeudaTgr, migracionesRcvAgregados, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas }
+// Planificación tributaria (T0-A): delegada en su módulo aislado para que una
+// reversión futura toque solo ese archivo. Idempotente, sin tocar tablas previas.
+function migracionesPlanificacion(db) {
+  require('./planificacion-tablas').planificacionTablas(db)
+}
+
+module.exports = { migracionesFase1, migracionesFase2, migracionesFase3, migracionesFase4, migracionesFase5, migracionesSaas1, migracionesFase6, migracionesMemoria, migracionesFase7, migracionesFase8, migracionesFase9, migracionesSaas3, migracionesBovedaClientes, migracionesDte, migracionesDte2, migracionesUsuarioTemporal, migracionesPerfilYSalud, migracionesDeclaracionesSii, migracionesF29Formularios, migracionesDeudaTgr, migracionesRcvAgregados, migracionesCrm, migracionesCrmComercial, migracionesTesoreriaAplicaciones, seedPlanCuentas, migracionesPlanificacion }

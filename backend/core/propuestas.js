@@ -389,23 +389,41 @@ function confirmar(db, { empresaId, usuarioId, propuestaId, fecha = null, glosa 
   const glosaAsiento = String(glosa || '').trim() ||
     `${p.tipo_flujo === 'compra' ? 'Compra' : 'Venta'} ${p.tipo_doc} folio ${p.folio} — ${p.razon_social || p.rut_contraparte}`
 
-  const asiento = asientos.crear(db, {
-    empresaId, usuarioId, fecha: fechaAsiento, glosa: glosaAsiento, tipo: 'automatico',
-    lineas, origen: `propuesta:${propuestaId}`, ip,
-  })
+  const asiento = db.transaction(() => {
+  // TODO el flujo de confirmación es UNA transacción: el asiento (creado via
+  // asientos.crear, que aquí nestea como SAVEPOINT) y los UPDATE de estado
+  // comparten destino. Antes el asiento vivía fuera y los UPDATE en otra tx:
+  // si el guard de «carrera de estados» disparaba DESPUÉS de crearlo, en el
+  // libro quedaba un asiento huérfano — es el mismo error de partición de
+  // escritura que corrigió el restore con F-04/F-05.
+    // Revalidación DE ESTADO fresca dentro de la transacción: el snapshot leído
+    // antes puede haber cambiado (otra confirmación, re-clasificación, descarte).
+    const pViva = obtener(db, empresaId, propuestaId)
+    if (!pViva || pViva.estado !== 'PENDIENTE' || pViva.doc_estado !== 'PROPUESTO') {
+      const e = new Error('La propuesta cambió de estado durante la confirmación: nada se contabilizó')
+      e.status = 409
+      throw e
+    }
 
-  const tx = db.transaction(() => {
+    const a = asientos.crear(db, {
+      empresaId, usuarioId, fecha: fechaAsiento, glosa: glosaAsiento, tipo: 'automatico',
+      lineas, origen: `propuesta:${propuestaId}`, ip,
+    })
+
     const updP = db.prepare(`
       UPDATE propuestas SET estado = 'APLICADA', aplicada_asiento_id = ?, aplicada_por = ?, aplicada_en = datetime('now')
       WHERE id = ? AND estado = 'PENDIENTE'
-    `).run(asiento.id, usuarioId, propuestaId)
+    `).run(a.id, usuarioId, propuestaId)
     const updD = db.prepare(`
       UPDATE documentos SET estado = 'CONTABILIZADO', asiento_id = ?, actualizado_en = datetime('now')
       WHERE id = ? AND empresa_id = ? AND estado = 'PROPUESTO'
-    `).run(asiento.id, p.documento_id, empresaId)
+    `).run(a.id, p.documento_id, empresaId)
     if (updP.changes !== 1 || updD.changes !== 1) {
+      // Guard de carrera conservado — pero ahora dentro de la misma tx: el
+      // throw ROLLBACKEA también el asiento (antes quedaba huérfano).
       throw new Error('La confirmación no pudo actualizar propuesta/documento (carrera de estados)')
     }
+
     // MEMORIA DE CONTABILIZACIÓN: la contraparte usada queda vinculada al RUT
     // (solo si aún no tenía memoria — jamás pisa una decisión ya recordada).
     // El próximo mes ese proveedor/cliente se contabiliza automáticamente ahí.
@@ -419,18 +437,19 @@ function confirmar(db, { empresaId, usuarioId, propuestaId, fecha = null, glosa 
         `).run(contraUsada, empresaId, p.rut_contraparte)
       }
     }
+
     registrarAccion(db, {
       empresaId, usuarioId,
       accion: 'propuesta.confirmar', entidad: 'propuestas', entidadId: String(propuestaId),
       antes: { estado: 'PENDIENTE', doc_estado: 'PROPUESTO' },
       despues: {
         estado: 'APLICADA', doc_estado: 'CONTABILIZADO',
-        asiento_id: asiento.id, folio: asiento.folio, anio: asiento.anio, total: snapshot.debe,
+        asiento_id: a.id, folio: a.folio, anio: a.anio, total: snapshot.debe,
       },
       ip,
     })
-  })
-  tx()
+    return a
+  })()
 
   return { propuesta: obtener(db, empresaId, propuestaId), asiento }
 }

@@ -99,6 +99,9 @@ app.use('/api/contable', requireAuth, require('./routes/tesoreria'))
 app.use('/api/contable', requireAuth, require('./routes/activos'))
 app.use('/api/contable', requireAuth, require('./routes/niif'))
 app.use('/api/contable', requireAuth, require('./routes/asientos-externos'))
+// PLANIFICACIÓN TRIBUTARIA (T0-B): ficha tributaria — lectura con
+// 'planificacion:ver', declaración explícita con 'planificacion:gestionar'.
+app.use('/api/contable', requireAuth, require('./routes/planificacion'))
 // SAAS-3: pagos de la suscripción. SIN requireAuth global — el webhook de la
 // pasarela es público (validado por firma + re-consulta a la API); las demás
 // rutas piden requireAuth + RBAC dentro de routes/pagos.js.

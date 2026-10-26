@@ -396,6 +396,10 @@ require('./core/jobs-persistentes').migrar(db)
 require('./core/rate-limit-db').migrar(db)
 // BLOQUE 4 (masterplan): aplicaciones de cobro/pago trazables 1↔n y n↔1.
 require('./core/migraciones').migracionesTesoreriaAplicaciones(db)
+// PLANIFICACIÓN TRIBUTARIA (T0-A): esquema de ficha tributaria. Idempotente,
+// sin tablas nuevas dependencias previas y SIN poblar datos: las empresas
+// existentes permanecen sin ficha hasta una incorporación explícita.
+require('./core/migraciones').migracionesPlanificacion(db)
 require('./core/jobs-persistentes').recuperarAlArranque(db)
 
 module.exports = db

@@ -60,6 +60,11 @@ const CATALOGO_CAPACIDADES = {
   'dte:ver': 'Ver la configuración de emisión, los CAFs de folios y los DTEs emitidos de la empresa',
   'dte:emitir': 'Emitir DTEs, reintentar envíos rechazados y consultar su estado real en el SII',
   'dte:configurar': 'Configurar el emisor tributario de la empresa: certificado de firma, CAFs de folios, resolución SII y ambiente',
+  // PLANIFICACIÓN TRIBUTARIA (T0-B): ficha tributaria. Lectura para todos los
+  // roles con acceso a la empresa (el auditor y el dueño CONSULTAN); gestionar
+  // (incorporar/actualizar la declaración tributaria) solo contador/super_admin.
+  'planificacion:ver': 'Ver la ficha tributaria y su historial en Planificación',
+  'planificacion:gestionar': 'Incorporar o actualizar la ficha tributaria (declaración explícita, jamás automática)',
 }
 
 const TODAS_LAS_CAPACIDADES = Object.keys(CATALOGO_CAPACIDADES)
@@ -91,6 +96,8 @@ const PERMISOS_POR_ROL = {
     'licencias:ver', 'facturacion:emitir',
     // BLOQUE 2: el contador emite y configura la emisión de DTEs de sus clientes
     'dte:ver', 'dte:emitir', 'dte:configurar',
+    // Planificación: el contador declara y mantiene la ficha tributaria
+    'planificacion:ver', 'planificacion:gestionar',
   ],
 
   admin_empresa: [
@@ -116,6 +123,9 @@ const PERMISOS_POR_ROL = {
     'licencias:ver', 'licencias:pagar',
     // BLOQUE 2: el dueño configura SU emisor (su certificado es suyo) y emite
     'dte:ver', 'dte:emitir', 'dte:configurar',
+    // Planificación: el dueño consulta su ficha, no la declara (la declaración
+    // tributaria es del contador del despacho, hallazgo de la Fase T0/T1)
+    'planificacion:ver',
   ],
 
   auditor: [
@@ -139,6 +149,8 @@ const PERMISOS_POR_ROL = {
     'licencias:ver',
     // BLOQUE 2: el auditor ve los DTEs emitidos, no emite ni configura
     'dte:ver',
+    // Planificación: el auditor lee ficha e historial, jamás declara
+    'planificacion:ver',
   ],
 
   tesoreria: [
@@ -154,6 +166,8 @@ const PERMISOS_POR_ROL = {
     'licencias:ver',
     // BLOQUE 2: tesorería consulta los DTEs emitidos, no emite ni configura
     'dte:ver',
+    // Planificación: lectura de la ficha (el rol opera caja, no declara impuestos)
+    'planificacion:ver',
   ],
 }
 

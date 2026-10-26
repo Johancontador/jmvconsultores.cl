@@ -637,6 +637,10 @@ const MENU = [
       // juradas) se declara. `pill: 'salud'` pinta el score en el menú (y
       // «!» cuando requiere revisión).
       { key: 'salud', label: 'Salud Tributaria — Diagnóstico Ejecutivo', permiso: 'salud:ver', pill: 'salud' },
+      // Planificación (T0-B): dónde estamos (salud) a un compuás de a dónde vamos:
+      // ficha declarada explícitamente, historial append-only. Sin ficha no hay
+      // cálculo — la ausencia de declaración es un estado visible, no un default.
+      { key: 'planificacion', label: 'Planificación Tributaria — Ficha', permiso: 'planificacion:ver' },
       { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
       { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
       { key: 'proceso-masivo', label: 'Proceso masivo (F29 del mes)', permiso: 'crm:ver' },

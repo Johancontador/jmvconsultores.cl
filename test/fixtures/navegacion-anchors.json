@@ -1,5 +1,5 @@
 {
-  "_doc": "Golden de contratos de navegación (F0). Actualizado en F2 al reorganizar el menú en 6 áreas + Administración + Portal: los LABELS y SECCIONES cambian, los 49 anchors NO. Si un cambio deliberado reagrupa rutas, actualiza este archivo en el mismo commit.",
+  "_doc": "Golden de contratos de navegación (F0). Actualizado en F2 al reorganizar el menú en 6 áreas + Administración + Portal: los LABELS y SECCIONES cambian, los 50 anchors NO (49 + planificación, 2026-10-25). Si un cambio deliberado reagrupa rutas, actualiza este archivo en el mismo commit.",
   "roles": [
     "admin_empresa",
     "contador",
@@ -209,6 +209,19 @@
         "admin_empresa",
         "contador",
         "auditor",
+        "super_admin"
+      ]
+    },
+    {
+      "key": "planificacion",
+      "label": "Planificación Tributaria — Ficha",
+      "seccion": "Impuestos y Salud",
+      "permiso": "planificacion:ver",
+      "roles_ok": [
+        "admin_empresa",
+        "contador",
+        "auditor",
+        "tesoreria",
         "super_admin"
       ]
     },

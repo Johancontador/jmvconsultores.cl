@@ -1,6 +1,6 @@
 'use strict'
 /**
- * F0 · CONTRATOS DE NAVEGACIÓN — golden files de los 49 anchors.
+ * F0 · CONTRATOS DE NAVEGACIÓN — golden files de los 50 anchors.
  *
  * La suite de 634 pruebas no cubría el ROUTER del SPA: ninguna comprobaba que
  * una ruta resolviera SU identidad (título, breadcrumb, sección) y SUS permisos.
@@ -13,10 +13,10 @@
  *
  * Qué fija este archivo (contratos de COMPORTAMIENTO, no HTML completo):
  *  T1 — coherencia del golden con el código: MENU + RUTAS_FUERA_DE_MENU y el
- *       catálogo de VIEWS cubren exactamente los mismos 49 anchors.
+ *       catálogo de VIEWS cubren exactamente los mismos 50 anchors.
  *  T2 — identidad de ruta: cada anchor resuelve su título, su breadcrumb con
  *       su sección y marca exactamente un ítem de menú como activo.
- *  T3 — accesibilidad por rol derivada del RBAC real (5 roles × 49 rutas):
+ *  T3 — accesibilidad por rol derivada del RBAC real (5 roles × 50 rutas):
  *       el gate de UI se activa si y solo si el rol carece de la capacidad.
  *  T4 — rutas desconocidas y query de vista conservada (#balance8?periodo=…).
  *  T5 — cada vista fuera de menú declara la MISMA capacidad que exige su
@@ -190,10 +190,10 @@ const BLOQUEADO = /no tiene permiso para esta sección/
 
 /* ---------- T1: golden ↔ código ---------- */
 
-test('T1: el golden y el código cubren los mismos 49 anchors (43 de menú + 6 de reportes)', () => {
-  assert.strictEqual(GOLDEN.anchors.length, 43, 'anchors con entrada de menú')
+test('T1: el golden y el código cubren los mismos 50 anchors (44 de menú + 6 de reportes)', () => {
+  assert.strictEqual(GOLDEN.anchors.length, 44, 'anchors con entrada de menú')
   assert.strictEqual(GOLDEN.rutas_fuera_de_menu.length, 6, 'vistas alcanzables sin menú')
-  assert.strictEqual(TODOS_LOS_ANCHORS.length, 49, '49 anchors en total')
+  assert.strictEqual(TODOS_LOS_ANCHORS.length, 50, '50 anchors en total')
 
   // MENU real == golden (keys, etiquetas, sección y capacidad).
   // JSON round-trip: los objetos vienen de otro realm (vm) y deepStrictEqual
