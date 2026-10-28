@@ -31,12 +31,20 @@ const OPERACIONES = {
 // ";", data[1..] son las filas (también separadas por ";"). No son objetos JSON.
 function parsearFilasCSV(dataArray) {
   if (!Array.isArray(dataArray) || dataArray.length < 1) return []
+  if (typeof dataArray[0] !== 'string') throw new Error('RCV SII devolvió encabezados con formato inesperado')
   const headers = dataArray[0].split(';').map((h) => h.trim())
+  if (headers.length < 2 || headers.some((h) => !h) || new Set(headers).size !== headers.length) {
+    throw new Error('RCV SII devolvió encabezados vacíos, duplicados o incompletos')
+  }
   const filas = []
   for (let i = 1; i < dataArray.length; i++) {
     const linea = dataArray[i]
     if (!linea) continue
+    if (typeof linea !== 'string') throw new Error(`RCV SII devolvió una fila inválida en posición ${i}`)
     const valores = linea.split(';')
+    if (valores.length !== headers.length) {
+      throw new Error(`RCV SII devolvió ${valores.length} columnas para ${headers.length} encabezados (fila ${i})`)
+    }
     const fila = {}
     headers.forEach((h, idx) => {
       fila[h] = valores[idx] !== undefined ? valores[idx].trim() : ''
@@ -128,8 +136,19 @@ function normalizarFila(fila, tipo) {
 }
 
 function extraerDocumentos(json, tipo) {
-  if (!json || !Array.isArray(json.data)) return []
-  return parsearFilasCSV(json.data).map((fila) => normalizarFila(fila, tipo))
+  if (!json || !Array.isArray(json.data)) throw new Error('RCV SII no devolvió una lista CSV de documentos')
+  if (json.data.length === 0) throw new Error('RCV SII devolvió una respuesta sin encabezados de columnas')
+  const filas = parsearFilasCSV(json.data)
+  const requeridas = tipo === 'ventas'
+    ? ['Folio', 'Rut cliente', 'Tipo Doc', 'Monto Neto', 'Monto IVA', 'Fecha Docto']
+    : tipo === 'compras'
+      ? ['Folio', 'RUT Proveedor', 'Tipo Doc', 'Monto Neto', 'Monto IVA Recuperable', 'Fecha Docto']
+      : null
+  if (!requeridas) throw new Error(`Tipo RCV inválido: ${tipo}`)
+  const encabezados = new Set(json.data[0].split(';').map((h) => h.trim()))
+  const ausentes = requeridas.filter((h) => !encabezados.has(h))
+  if (ausentes.length) throw new Error(`RCV SII cambió el esquema; faltan columnas: ${ausentes.join(', ')}`)
+  return filas.map((fila) => normalizarFila(fila, tipo))
 }
 
 async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null) {
@@ -204,7 +223,7 @@ async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null
     if (/no hay documentos/i.test(String(msg))) {
       if (periodoCerrado(periodo)) {
         console.log(`[SII] ${metodo} (${periodo}) → sin documentos (período cerrado)`)
-        return { data: [], metaData: {} }
+        return { data: [], metaData: {}, sinDocumentos: true }
       }
       throw new Error('SII_RCV_DIFERIDO: el SII exige consulta diferida del período en curso')
     }
@@ -215,18 +234,20 @@ async function consultarDetalleRCV(jar, token, rut, tipo, periodo, pagina = null
   console.log(`[SII] ${metodo} (${periodo}) → ${Math.max(filas, 0)} documentos`)
 
   return json
-}
-
-async function consultarRCV(rut, clave, tipo, periodo, reintento = false) {
+}async function consultarRCV(rut, clave, tipo, periodo, reintento = false) {
   await esperarRateLimit()
 
   try {
     const { jar, token } = await obtenerSesion(rut, clave)
     const json = await consultarDetalleRCV(jar, token, rut, tipo, periodo)
+    if (json?.sinDocumentos === true) return []
     let docs = extraerDocumentos(json, tipo)
 
-    const totalPaginas = json?.metaData?.page?.totalPages || 1
-    const paginaActual = json?.metaData?.page?.pageNro || 1
+    const totalPaginas = Number(json?.metaData?.page?.totalPages)
+    const paginaActual = Number(json?.metaData?.page?.pageNro)
+    if (!Number.isInteger(totalPaginas) || !Number.isInteger(paginaActual) || totalPaginas < 1 || paginaActual < 1 || paginaActual > totalPaginas) {
+      throw new Error(`RCV SII devolvió paginación inválida: página ${paginaActual || 'desconocida'} de ${totalPaginas || 'desconocido'}`)
+    }
 
     if (totalPaginas > paginaActual) {
       for (let p = paginaActual + 1; p <= totalPaginas; p++) {
@@ -235,11 +256,17 @@ async function consultarRCV(rut, clave, tipo, periodo, reintento = false) {
           pageNro: p,
           totalPages: totalPaginas,
         })
+        const paginaRecibida = Number(next?.metaData?.page?.pageNro)
+        const totalRecibidas = Number(next?.metaData?.page?.totalPages)
+        if (paginaRecibida !== p || totalRecibidas !== totalPaginas) {
+          throw new Error(`RCV SII devolvió página ${paginaRecibida || 'sin número'} de ${totalRecibidas || 'total desconocido'}; se esperaba página ${p} de ${totalPaginas}`)
+        }
         docs = docs.concat(extraerDocumentos(next, tipo))
       }
     }
 
     return docs
+
   } catch (err) {
     if (!reintento && (err.message.includes('Sesión') || err.message.includes('expirada'))) {
       invalidarSesion(rut)
@@ -358,7 +385,14 @@ async function consultarAgregadosVenta(rut, clave, periodo, reintento = false) {
         // filtrado) y la fila agregada pone la CANTIDAD en "Folio". La fecha
         // de recepción viene con hora ("30/03/2026 08:45:41"); nos quedamos
         // con el día para fecha_agregado.
+        if (!Array.isArray(json?.data) || json.data.length === 0) {
+          throw new Error(`RCV SII devolvió respuesta sin esquema para agregados tipo ${codTipoDoc}`)
+        }
         const filas = parsearFilasCSV(json.data)
+        const esperadas = ['Folio', 'Monto Exento', 'Monto Neto', 'Monto IVA', 'Monto total']
+        const encabezados = new Set(json.data[0].split(';').map((h) => h.trim()))
+        const ausentes = esperadas.filter((h) => !encabezados.has(h))
+        if (ausentes.length) throw new Error(`RCV SII cambió el esquema de agregados; faltan columnas: ${ausentes.join(', ')}`)
         return filas
           .map((fila) => ({
             tipoDoc: Number(codTipoDoc),
@@ -431,4 +465,4 @@ async function probarConexion(rut, clave) {
   }
 }
 
-module.exports = { consultarRCV, consultarResumen, consultarAgregadosVenta, parsearFilasCSV, probarConexion }
+module.exports = { consultarRCV, consultarResumen, consultarAgregadosVenta, parsearFilasCSV, extraerDocumentos, probarConexion }

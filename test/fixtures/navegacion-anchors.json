@@ -75,7 +75,7 @@
     },
     {
       "key": "onboarding",
-      "label": "Onboarding y Extracción",
+      "label": "Ficha tributaria e historial RCV",
       "seccion": "Documentos",
       "permiso": "documentos:ver",
       "roles_ok": [
@@ -125,7 +125,7 @@
     },
     {
       "key": "automatizacion",
-      "label": "Contabilización y Pendientes",
+      "label": "Estado de contabilización",
       "seccion": "Contabilidad",
       "permiso": "propuestas:ver",
       "roles_ok": [
@@ -138,7 +138,7 @@
     },
     {
       "key": "propuestas",
-      "label": "Propuestas y Conciliación",
+      "label": "Revisar y contabilizar documentos",
       "seccion": "Contabilidad",
       "permiso": "propuestas:ver",
       "roles_ok": [
@@ -164,7 +164,7 @@
     },
     {
       "key": "memoria",
-      "label": "Memoria de Contabilización",
+      "label": "Cuentas habituales por cliente y proveedor",
       "seccion": "Contabilidad",
       "permiso": "documentos:ver",
       "roles_ok": [
@@ -227,7 +227,7 @@
     },
     {
       "key": "analitica",
-      "label": "Dashboard Tributario (IVA)",
+      "label": "Resumen anual de IVA, compras y ventas",
       "seccion": "Impuestos y Salud",
       "permiso": "reportes:ver",
       "roles_ok": [
@@ -253,7 +253,7 @@
     },
     {
       "key": "proceso-masivo",
-      "label": "Proceso masivo (F29 del mes)",
+      "label": "Calcular F29 para todos los clientes",
       "seccion": "Impuestos y Salud",
       "permiso": "crm:ver",
       "roles_ok": [
@@ -263,7 +263,7 @@
     },
     {
       "key": "tesoreria",
-      "label": "Bancos, Libro Banco y Conciliación",
+      "label": "Bancos y conciliación bancaria",
       "seccion": "Tesorería",
       "permiso": "tesoreria:ver",
       "roles_ok": [
@@ -287,7 +287,7 @@
     },
     {
       "key": "externos",
-      "label": "Cartola externa (Geo Daniela)",
+      "label": "Asientos recibidos de otros sistemas",
       "seccion": "Tesorería",
       "permiso": "asientos:ver",
       "roles_ok": [
@@ -339,7 +339,7 @@
     },
     {
       "key": "informe-rango",
-      "label": "Informe por rango",
+      "label": "Análisis de compras y ventas por período",
       "seccion": "Informes",
       "permiso": "crm:ver",
       "roles_ok": [
@@ -349,7 +349,7 @@
     },
     {
       "key": "exportacion-masiva",
-      "label": "Reporte masivo (ZIP)",
+      "label": "Descargar informes de todos los clientes (ZIP)",
       "seccion": "Informes",
       "permiso": "crm:ver",
       "roles_ok": [

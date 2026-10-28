@@ -1,7 +1,32 @@
 # 05 · Menús, submenús y navegación
 
 > Fuente: `MENU`, `DOCK`, `ORDEN_FLUJO`, `menuVisible()`, `renderShell()`, `renderRoute()`, `breadcrumbHTML()` en `frontend/sistema/app.js`.
-> Pantallas: `04`. Navegación objetivo: `16`.
+> Pantallas: `04`. Navegación objetivo: `16`. Implementación verificada: `22` (F2, 2026-10-23).
+
+---
+
+## Estado vigente de la navegación (F2, 2026-10-23)
+
+La tabla de §2 más abajo registra la estructura histórica previa a F2 y se conserva como evidencia de auditoría. **No es el menú vigente.** La estructura implementada tiene 8 grupos (6 áreas principales y 2 destinos secundarios) y 44 ítems de menú; los 6 reportes directos adicionales conservan sus rutas con permiso `reportes:ver`, para 50 anchors con contrato. Los nombres de rutas (`key`) no cambiaron.
+
+| Orden | Grupo | Rutas e ítems | Propósito |
+|---:|---|---|---|
+| 1 | **Inicio** | Hoy (`inicio`), Alertas (`alertas`), Todos los módulos (`centro`) | Prioriza el trabajo pendiente y deja el catálogo de aplicaciones como destino secundario. |
+| 2 | **Documentos** | Bandeja (`documentos`), Libros (`libros`), Configuración y extracción (`onboarding`), Emitir DTE (`dte-emision`), Emitidos (`dte`), Configuración del emisor (`dte-config`) | Entrada del RCV y emisión de documentos. Cada ruta conserva su permiso. |
+| 3 | **Contabilidad** | Contabilización (`automatizacion`), Propuestas (`propuestas`), Asientos (`asientos`), Memoria (`memoria`), Activos (`activos`), Cierre (`cierre`) | Registro, revisión y cierre contable. |
+| 4 | **Impuestos y Salud** | Salud (`salud`), Planificación (`planificacion`), IVA (`analitica`), Calculadora (`calculadora-iva`), Proceso F29 masivo (`proceso-masivo`) | Seguimiento y operación tributaria. |
+| 5 | **Tesorería** | Bancos (`tesoreria`), Cobranza (`cobranza`), Cartola externa (`externos`) | Movimientos de dinero y conciliación. |
+| 6 | **Informes** | Centro de Reportes (`reportes`), Cuentas corrientes (`cclientes`, `cproveedores`), Informe por rango (`informe-rango`), Exportación masiva (`exportacion-masiva`) | Reportes individuales y de cartera. Las vistas de estados financieros conservan anchors directos fuera del menú. |
+| 7 | **Portal de cliente** | 10 rutas `portal-*` | Consultas comerciales de solo lectura por empresa. |
+| 8 | **Administración** | Administración (`admin`), Auditoría (`auditoria`), Integraciones (`integraciones`), Suscripción (`suscripcion`), CRM (`crm`), Portafolio (`portafolio`) | Configuración y herramientas del despacho. CRM y portafolio requieren `crm:ver`. |
+
+**Orden por rol:** `menuVisible()` mantiene esos grupos para usuarios internos; para `admin_empresa`, Portal de cliente aparece primero e Inicio segundo. Las secciones vacías por RBAC se ocultan. `#externos` está en Tesorería, `#cierre` en Contabilidad, las cuentas corrientes en Informes. Véase la ejecución y verificación en `22-EJECUCION-F0-F1-F2.md` §F2.
+
+**Interacción y diseño:** el menú lateral es un acordeón, solo mantiene abierta el área elegida, recuerda la preferencia por usuario y abre la sección de la ruta activa. En móvil se muestra como panel accesible desde el botón Menú; las opciones tienen mínimo de 44 px de alto. Las rutas, breadcrumbs y gates visuales respetan los permisos RBAC; el servidor sigue siendo la autoridad final. El Centro (`#centro`) conserva su anchor y se titula «Todos los módulos».
+
+**Inspección de diseño:** los grupos corresponden a tareas (no a implementaciones o archivos), la secuencia principal va de documentos a registro, tributación, tesorería e informes, y las herramientas de despacho quedan separadas del portal. Se conserva una navegación directa al Centro por compatibilidad. La inspección fue de código, estilos y contratos automatizados; no equivale a una captura ni a una prueba visual en navegador.
+
+**Alcance histórico del resto del documento:** las secciones §1–§8 que siguen registran el diagnóstico anterior a F2 y no describen el menú vigente cuando difieran de «Estado vigente» o del informe de ejecución `22`. Se mantienen para rastrear qué motivó la reorganización; para el orden actual, número de ítems y contratos usar el resumen anterior y las pruebas `test/navegacion-contratos.test.js`.
 
 ---
 

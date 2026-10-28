@@ -168,7 +168,7 @@ router.post('/empresas/:empresaId/salud-tributaria/declaraciones', requirePermis
   if (!salud.periodoValido(periodo)) {
     return res.status(400).json({ ok: false, error: 'Período inválido (YYYYMM)' })
   }
-  const anios = Math.min(Math.max(Number(req.body.anios) || 5, 1), 6)
+  const anios = Math.min(Math.max(Number(req.body.anios) || 5, 1), 5)
 
   try {
     const declaraciones = require('../core/declaraciones-sii')
@@ -222,7 +222,7 @@ router.post('/empresas/:empresaId/salud-tributaria/reunion', requirePermiso('sal
       usuarioId: req.user.id,
       periodo,
       meses: leerMeses(req.body.meses, 12),
-      anios: Math.min(Math.max(Number(req.body.anios) || 5, 1), 6),
+      anios: Math.min(Math.max(Number(req.body.anios) || 5, 1), 5),
       ip: req.ip || null,
     })
     res.json({ ok: true, ...r })

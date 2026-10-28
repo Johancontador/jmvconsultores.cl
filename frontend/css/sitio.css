@@ -164,6 +164,7 @@ ul { margin: 0; }
 .pv-btn--lg { font-size: var(--pv-fs-md); padding: 0.9rem 1.6rem; min-height: 52px; }
 .pv-btn--sm { font-size: var(--pv-fs-xs); padding: 0.5rem 0.9rem; min-height: 40px; }
 .pv-btn--block { width: 100%; }
+.pv-register-cta { margin-top: var(--pv-s3); }
 .pv-btn[disabled], .pv-btn[aria-disabled='true'] { opacity: 0.65; pointer-events: none; }
 .pv-btn .pv-spin {
   width: 15px; height: 15px; border: 2px solid currentColor; border-top-color: transparent;

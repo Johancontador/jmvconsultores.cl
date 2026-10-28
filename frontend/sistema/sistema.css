@@ -1755,6 +1755,15 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
 .sl-tab:hover { color: var(--fg-primary); background: var(--bg-hover); }
 .sl-tab.active { color: var(--fg-primary); border-bottom-color: var(--accent); font-weight: 600; }
 .sl-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sl-hist-detalle { min-width: 0; padding: var(--space-3); background: var(--bg-elevated); border-radius: var(--radius-md); }
+.sl-hist-fila-detalle > td { padding: var(--space-2) !important; white-space: normal; }
+.sl-hist-fila-detalle .tbl-wrap { max-width: 100%; }
+.sl-f22-resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: var(--space-2); margin-top: var(--space-3); }
+.sl-f22-resumen-grid > div { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-3); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+.sl-f22-resumen-grid span { color: var(--fg-muted); font-size: var(--fs-xs); }
+.sl-f22-resumen-grid strong { overflow-wrap: anywhere; }
+.sl-f22-resumen-grid .sl-f22-total { grid-column: 1 / -1; }
+.sl-hist-detalle a { overflow-wrap: anywhere; }
 
 /* Gráficos: los mismos SVG del PDF (una sola fuente de verdad). */
 .sl-chart { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-3); }
@@ -1795,6 +1804,16 @@ mark.hl { background: var(--accent-strong); color: inherit; border-radius: 3px; 
   .sl-acciones { flex-direction: row; flex-wrap: wrap; }
   .sl-acciones .btn { flex: 1 1 auto; }
   .sl-acciones .hint { flex-basis: 100%; text-align: left !important; }
+}
+@media (max-width: 640px) {
+  .sl-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .sl-tab { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+  .sl-hist-detalle { padding: var(--space-2); }
+  .sl-hist-f29 { min-width: 760px; }
+  #sl-hist-f22 { min-width: 640px; }
+  .sl-f22-resumen-grid { grid-template-columns: minmax(0, 1fr); }
+  .sl-f22-resumen-grid .sl-f22-total { grid-column: auto; }
+  .sl-acciones .btn, .sl-preview-toggle { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sl-kpi, .sl-tab { transition: none; }

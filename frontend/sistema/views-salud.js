@@ -479,14 +479,15 @@ VIEWS.salud = {
         <div class="card">
           <h3>Renta (F22)</h3>
           ${(inf.renta?.anios || []).length ? `<div class="tbl-wrap"><table class="tbl">
-            <thead><tr><th>Año</th><th>Estado</th><th class="num">Monto declarado</th><th class="num">Remanente devuelto</th></tr></thead>
+            <thead><tr><th>Año tributario</th><th>Estado SII</th><th>Folio</th><th>Fecha de tramitación</th><th>Resumen</th></tr></thead>
             <tbody>${inf.renta.anios.map((r) => `<tr>
               <td>${esc(r.anio)}</td>
               <td><span class="chip ${chipEstado(r.estado)}">${esc(r.estado || '—')}</span></td>
-              <td class="num mono">${r.monto_total != null ? fmt(r.monto_total) : sub}</td>
-              <td class="num mono">${r.remanente_devuelto ? fmt(r.remanente_devuelto) : sub}</td>
+              <td class="mono">${esc(r.folio || '—')}</td>
+              <td>${esc(r.fecha_presentacion || '—')}</td>
+              <td><button class="btn btn-secondary sl-preview-toggle" data-preview="f22" data-anio="${esc(r.anio)}" aria-expanded="false">Ver resumen</button></td>
             </tr>`).join('')}</tbody>
-          </table></div>` : '<div class="empty">Renta no consultada: la existencia de la declaración anual no está verificada.</div>'}
+          </table></div><p class="hint">La consulta de estado F22 informa devolución solicitada/devuelta y giros; no expone el total a pagar del formulario.</p>` : '<div class="empty">Renta no consultada: la existencia de la declaración anual no está verificada.</div>'}
         </div>
       </div>`
 
@@ -614,11 +615,13 @@ VIEWS.salud = {
     // ---------------------------------------------------------
     const histPeriodos = (inf.f29_historial && inf.f29_historial.estado === 'disponible' ? inf.f29_historial.periodos : []) || []
     const histByPer = new Map(histPeriodos.map((p) => [String(p.periodo), p]))
+    const histF22 = (inf.renta?.anios || []).slice().sort((a, b) => String(b.anio).localeCompare(String(a.anio)))
+    const histF22ByAnio = new Map(histF22.map((r) => [String(r.anio), r]))
     const origenEtiqueta = { consulta_integral: 'Consulta Integral', compacto: 'Formulario Compacto' }
     const nombrePeriodoSii = (p) => { const per = String(p); return per.length === 6 ? `${per.slice(4, 6)}/${per.slice(0, 4)}` : per }
     const panelHistorialF29 = `
       <div class="card">
-        <h3>Historial F29 (SII)${inf.f29_historial?.rango ? ` · ${esc(inf.f29_historial.rango)}` : ''}
+        <h3>Historial F29 (SII)${inf.f29_historial?.desde ? ` · cobertura ${esc(nombrePeriodoSii(inf.f29_historial.desde))}–${esc(nombrePeriodoSii(inf.f29_historial.hasta))}` : ''}${inf.f29_historial?.rango ? ` · ${esc(inf.f29_historial.rango)}` : ''}
           <span class="chip neutral">${histPeriodos.length} período(s)</span></h3>
         ${histPeriodos.length ? `
         <div class="tbl-wrap"><table class="tbl" id="sl-hist-f29">
@@ -632,13 +635,30 @@ VIEWS.salud = {
             <td class="num mono">${p.monto_total != null ? `${fmtM(p.monto_total)}${p.monto_concepto === 'no_identificado' ? '<sup>*</sup>' : ''}` : sub}</td>
             <td class="sub">${esc(origenEtiqueta[p.origen] || p.origen || '—')}</td>
             <td style="white-space:nowrap">
-              ${p.resumen ? `<button class="btn btn-secondary" data-per="${esc(String(p.periodo))}" title="Ver el resumen de casillas del F29 declarado">Resumen</button>` : ''}
+              ${p.resumen ? `<button class="btn btn-secondary" data-per="${esc(String(p.periodo))}" aria-expanded="false" title="Ver el resumen de casillas del F29 declarado">Ver resumen</button>` : ''}
               ${p.url ? ` <a class="btn btn-secondary" href="${esc(p.url)}" target="_blank" rel="noopener" title="Abrir el formulario original en el SII">PDF</a>` : ''}
             </td>
           </tr>`).join('')}</tbody>
         </table></div>
-        <p class="hint"><sup>*</sup> Monto informado por la Consulta Integral del SII sin casilla identificada: se muestra informado, no como total a pagar. La consulta no registra fecha de pago separada: el F29 declarado anota la presentación dentro del plazo legal.</p>`
+        <p class="hint"><sup>*</sup> Monto informado por la Consulta Integral del SII sin casilla identificada: se muestra informado, no como total a pagar. El F29 Compacto muestra el total declarado a pagar (casilla 091); no acredita por sí solo que el pago efectivo se haya realizado.</p>`
         : '<div class="empty">Sin consulta registrada. Ejecuta «Reunir antecedentes» o «Consultar declaraciones SII (5 años)» para leer el historial del F29.</div>'}
+      </div>`
+
+    const panelHistorialF22 = `
+      <div class="card">
+        <h3>Historial F22 (SII)${inf.renta?.rango ? ` · ${inf.renta.rango.desde}–${inf.renta.rango.hasta}` : ''}
+          <span class="chip neutral">${histF22.length} año(s)</span></h3>
+        ${histF22.length ? `<div class="tbl-wrap"><table class="tbl" id="sl-hist-f22">
+          <thead><tr><th>Año tributario</th><th>Estado</th><th>Folio</th><th>Fecha de tramitación</th><th>Resumen declarado</th><th>Acciones</th></tr></thead>
+          <tbody>${histF22.map((r) => `<tr data-anio="${esc(r.anio)}">
+            <td>${esc(r.anio)}</td><td><span class="chip ${chipEstado(r.estado)}">${esc(r.estado || '—')}</span></td>
+            <td class="mono">${esc(r.folio || '—')}</td><td>${esc(r.fecha_presentacion || '—')}</td>
+            <td>${r.resumen ? `<span class="mono">${r.resumen.total_declarado != null ? fmt(r.resumen.total_declarado) : 'Total F22 no disponible en consulta'}</span>` : sub}</td>
+            <td>${r.resumen ? `<button class="btn btn-secondary sl-preview-toggle" data-preview="f22" data-anio="${esc(r.anio)}" aria-expanded="false">Ver resumen</button>` : '<span class="sub">Sin detalle del formulario</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <p class="hint">El SII entrega el estado, devolución solicitada/devuelta, giros y eventos; el total a pagar del formulario no se expone en esta consulta. Estos datos no equivalen a comprobante de pago efectivo.</p>`
+          : '<div class="empty">Sin consulta F22 registrada. Ejecuta «Reunir antecedentes» para consultar hasta cinco años en el SII.</div>'}
       </div>`
 
     const tabs = [
@@ -646,6 +666,7 @@ VIEWS.salud = {
       { id: 'cumplimiento', label: 'Cumplimiento', html: panelCumplimiento },
       { id: 'iva', label: 'IVA y conciliación', html: panelIva },
       { id: 'historial-f29', label: 'Historial F29', html: panelHistorialF29 },
+      { id: 'historial-f22', label: 'Historial F22', html: panelHistorialF22 },
       { id: 'riesgos', label: 'Riesgos', html: panelRiesgos },
       { id: 'tendencias', label: 'Tendencias', html: panelTendencias },
       { id: 'deuda', label: 'Deuda fiscal (TGR)', html: panelDeuda },
@@ -731,7 +752,6 @@ VIEWS.salud = {
     botones.forEach((b) => b.addEventListener('click', () => {
       botones.forEach((x) => x.classList.toggle('active', x === b))
       paneles.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== b.dataset.tab))
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }))
 
     // ---------------------------------------------------------
@@ -761,13 +781,51 @@ VIEWS.salud = {
       const tr = btn.closest('tr')
       if (!tr) return
       const anterior = tr.nextElementSibling
-      if (anterior && anterior.classList.contains('sl-hist-fila-detalle')) { anterior.remove(); return }
+      if (anterior && anterior.classList.contains('sl-hist-fila-detalle')) { anterior.remove(); btn.setAttribute('aria-expanded', 'false'); btn.textContent = 'Ver resumen'; return }
       const p = histByPer.get(btn.dataset.per)
       if (!p) return
       const fila = document.createElement('tr')
       fila.className = 'sl-hist-fila-detalle'
       fila.innerHTML = `<td colspan="7">${detalleF29(p)}</td>`
       tr.after(fila)
+      btn.setAttribute('aria-expanded', 'true')
+      btn.textContent = 'Ocultar resumen'
+    })
+
+    const detalleF22 = (r) => {
+      const x = r.resumen || {}
+      const monto = (n) => n == null ? 'No disponible en esta consulta' : fmt(n)
+      return `<div class="sl-hist-detalle sl-hist-detalle-f22">
+        <b>F22 año tributario ${esc(r.anio)}${r.folio ? ` · folio ${esc(r.folio)}` : ''}</b>
+        <div class="sl-f22-resumen-grid">
+          <div><span>Estado</span><strong>${esc(r.situacion_etiqueta || r.estado || '—')}</strong></div>
+          <div><span>Remanente solicitado</span><strong>${monto(x.remanente_solicitado)}</strong></div>
+          <div><span>Remanente devuelto</span><strong>${monto(x.remanente_devuelto)}</strong></div>
+          <div><span>Giro informado</span><strong>${monto(x.monto_giro)}</strong></div>
+          <div class="sl-f22-total"><span>Total del F22 declarado</span><strong>No disponible en la consulta de estado SII</strong></div>
+        </div>
+        ${r.glosa ? `<p class="hint">Glosa SII: ${esc(r.glosa)}</p>` : ''}
+        ${r.observaciones?.length ? `<p class="hint">Observaciones SII: ${esc(r.observaciones.map((o) => o.descripcion || o.glosa || JSON.stringify(o)).join(' · '))}</p>` : ''}
+        ${r.eventos?.length ? `<div class="tbl-wrap mt"><table class="tbl"><thead><tr><th>Fecha</th><th>Evento SII</th><th>Detalle</th></tr></thead><tbody>${r.eventos.map((e) => `<tr><td>${esc(e.fecha || '—')}</td><td>${esc(e.nombre || e.codigo || '—')}</td><td>${esc(e.referencia || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Sin eventos de devolución/giro informados.</p>'}
+        ${r.url ? `<p><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Abrir consulta oficial F22 en el SII</a></p>` : ''}
+        <p class="hint">Montos informados por el estado F22 del SII; no acreditan pago o abono efectivo. Para confirmar pago se requiere el comprobante correspondiente del SII/TGR.</p>
+      </div>`
+    }
+    document.getElementById('sl-hist-f22')?.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('button[data-preview="f22"]')
+      if (!btn) return
+      const tr = btn.closest('tr')
+      if (!tr) return
+      const anterior = tr.nextElementSibling
+      if (anterior && anterior.classList.contains('sl-hist-fila-detalle')) { anterior.remove(); btn.setAttribute('aria-expanded', 'false'); btn.textContent = 'Ver resumen'; return }
+      const r = histF22ByAnio.get(btn.dataset.anio)
+      if (!r) return
+      const fila = document.createElement('tr')
+      fila.className = 'sl-hist-fila-detalle'
+      fila.innerHTML = `<td colspan="6">${detalleF22(r)}</td>`
+      tr.after(fila)
+      btn.setAttribute('aria-expanded', 'true')
+      btn.textContent = 'Ocultar resumen'
     })
 
     // ---------------------------------------------------------

@@ -96,12 +96,17 @@ function depsFalsas(over = {}) {
     // caía en la dependencia REAL (`services/rcv`) y el job quedaba esperando
     // al portal del SII: el test decía «sin red» pero tocaba la red.
     consultarAgregadosVenta: async () => [],
+    rcvProveedor: () => 'sii',
     guardarAgregados: () => ({ guardados: 0 }),
     ingestarBatch: async () => ({ insertados: 0, duplicados: 0, errores: [] }),
-    sincronizarDeclaraciones: async () => ({ resultado: { f29: { periodos: 12 } }, aviso: null }),
-    sincronizarFormularios: async () => ({ periodos: 12, con_formulario: 3, errores: [] }),
-    consultarRenta: async () => ({ anios: [{ anio: '2025', vigente: true, folio: 'F22-1' }], aviso: null }),
-    guardarRenta: async () => 1,
+    sincronizarDeclaraciones: async () => ({ resultado: {
+      f29: { periodos: 60, cobertura_periodos: decl.ultimosPeriodos(60, '202610'), anios_con_error: [] }, boletas: { anios: 5, anios_con_error: 0 }, juradas: { anios: 5, guardados: 5, resultados: Array.from({ length: 5 }, (_, i) => ({ anio: String(2026 - i) })) }, f22: { anios: 5, guardados: 5, resultados: Array.from({ length: 5 }, (_, i) => ({ anio: String(2026 - i) })) },
+    }, aviso: null }),
+    sincronizarFormularios: async (_db, { periodo, periodos }) => ({
+      periodos, con_formulario: 3, errores: [], revisados: decl.ultimosPeriodos(periodos, periodo), consultados: decl.ultimosPeriodos(periodos, periodo),
+    }),
+    consultarRenta: async ({ anios }) => ({ anios: anios.map((anio, i) => ({ anio: String(anio), vigente: true, folio: `F22-${i + 1}` })), aviso: null }),
+    guardarRenta: (_db, { anios }) => anios.length,
     consultarDeudaTgr: async () => ({
       id: 1, estado: 'sin_deuda', total: 0, fecha_emision: '2026-10-22', pdf_ruta: 'data/certificados-tgr/demo.pdf',
     }),
@@ -123,8 +128,12 @@ test('S1: la reunión corre los seis pasos y termina en «completado»', async (
     assert.equal(p.estado, 'ok', `el paso ${p.clave} debio quedar ok`)
   }
   assert.ok(est.resumen.formularios.con_formulario === 3)
-  assert.ok(est.resumen.renta.anios === 1)
+  assert.ok(est.resumen.renta.anios === 5)
+  assert.equal(est.resumen.declaraciones.juradas.anios, 5)
+  assert.equal(est.resumen.declaraciones.f22.anios, 5)
+  assert.equal(est.resumen.formularios.periodos, 60)
   assert.ok(est.resumen.informe.snapshot_id > 0, 'la reunión deja evidencia (snapshot)')
+
 })
 
 test('S2: un paso fallido no impide el resto y el informe se emite igual', async () => {
@@ -160,17 +169,61 @@ test('S3: el estado del job es privado del usuario que lo lanzó', async () => {
   assert.equal(saludSync.obtenerEstado('sal_inexistente', uid), null)
 })
 
-test('S4: el RCV no se vuelve a bajar para períodos que ya tienen documentos', () => {
+test('S4: la reunión cubre la ventana completa aunque ya existan documentos', () => {
   const eid = empresa({ rut: '77000004-4' })
   doc(eid, { periodo: '202609', folio: 'YA-1' })
   doc(eid, { periodo: '202608', folio: 'YA-2' })
-  const lista = saludSync.periodosParaRcV(db, eid, '202610', 4, 3)
-  assert.ok(lista.includes('202610'), 'el período pedido siempre se sincroniza')
-  assert.ok(!lista.includes('202609'), '202609 ya tiene documentos: no se vuelve a bajar')
-  assert.ok(!lista.includes('202608'), '202608 ya tiene documentos: no se vuelve a bajar')
-  assert.ok(lista.length <= 3, 'respeta el tope de períodos por corrida')
+  const lista = saludSync.periodosParaRcV(db, eid, '202610', 4, 4)
+  assert.deepEqual(lista, ['202610', '202609', '202608', '202607'], 'un documento previo no demuestra que estén completos ambos flujos y agregados')
+  assert.deepEqual(saludSync.periodosParaRcV(db, eid, '202610', 4), ['202610', '202609', '202608', '202607'])
+  assert.deepEqual(saludSync.periodosParaRcV(db, eid, '202610', 4, 2), ['202610', '202609'], 'el límite explícito sigue aplicándose')
   // La lista va del más reciente al más antiguo.
   assert.deepEqual(saludSync.periodosRecientes('202601', 3), ['202601', '202512', '202511'])
+})
+
+test('S4b: consulta todos los meses de la ventana y detecta un fallo RCV parcial', async () => {
+  const eid = empresa({ rut: '77000044-4' })
+  const uid = usuario('reunion-rcv-incompleto')
+  doc(eid, { periodo: '202609', folio: 'PREEXISTENTE' })
+  const llamados = []
+  const { jobId } = saludSync.iniciar(db, {
+    empresaId: eid, usuarioId: uid, periodo: '202610', meses: 3,
+    deps: depsFalsas({
+      consultarRCV: async (_rut, _clave, tipo, p) => {
+        llamados.push(`${p}:${tipo}`)
+        if (p === '202609' && tipo === 'compras') throw new Error('RCV compra no disponible')
+        return []
+      },
+      consultarAgregadosVenta: async (_rut, _clave, p) => { llamados.push(`${p}:agregados`); return [] },
+    }),
+  })
+  const est = await esperarJob(jobId, uid)
+  assert.deepEqual(llamados, [
+    '202610:compras', '202610:ventas', '202610:agregados',
+    '202609:compras', '202609:ventas', '202609:agregados',
+    '202608:compras', '202608:ventas', '202608:agregados',
+  ], 'cada período debe consultar compras, ventas y agregados aun cuando ya había documentos')
+  const paso = est.pasos.find((p) => p.clave === 'rcv')
+  assert.equal(paso.estado, 'error', 'un flujo fallido no puede reportarse como extracción completa')
+  assert.deepEqual(est.resumen.rcv.periodos, ['202610', '202609', '202608'])
+  assert.equal(est.resumen.rcv.consultados, 3)
+  assert.equal(est.resumen.rcv.errores, 1)
+  assert.match(paso.error, /RCV incompleto.*202609 compras.*RCV compra no disponible/)
+  assert.equal(est.estado, 'completado_con_errores')
+})
+
+test('S4c: proveedor alternativo no puede declararse como extracción completa', async () => {
+  const eid = empresa({ rut: '77000046-0' })
+  const uid = usuario('reunion-rcv-provider')
+  const { jobId } = saludSync.iniciar(db, {
+    empresaId: eid, usuarioId: uid, periodo: '202610', meses: 1,
+    deps: depsFalsas({ rcvProveedor: () => 'simpleapi' }),
+  })
+  const est = await esperarJob(jobId, uid)
+  const paso = est.pasos.find((p) => p.clave === 'rcv')
+  assert.equal(paso.estado, 'error')
+  assert.match(paso.error, /no permite certificar la extracción completa/)
+  assert.equal(est.estado, 'completado_con_errores')
 })
 
 test('S18: el historial completo del F29 se imprime en el capítulo 3', () => {

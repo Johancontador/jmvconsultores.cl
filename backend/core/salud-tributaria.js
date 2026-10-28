@@ -238,7 +238,14 @@ function leerDeclaraciones(db, empresaId, tipo, desde, hasta) {
   for (const f of filas) {
     let datos = null
     try { datos = JSON.parse(f.datos_json) } catch { datos = null }
-    mapa.set(String(f.periodo), { ...f, periodo: String(f.periodo), datos })
+    mapa.set(String(f.periodo), {
+      ...f,
+      periodo: String(f.periodo),
+      // El F22 no expone un total a pagar en esta consulta; el campo histórico
+      // guardaba devoluciones/giro y no es un total declarado.
+      monto_total: tipo === 'F22' ? null : f.monto_total,
+      datos,
+    })
   }
   return mapa
 }
@@ -372,7 +379,15 @@ function leerRenta(db, empresaId, desde, hasta) {
       estado: f.estado || 'sin_informacion',
       folio: f.folio || null,
       fecha_presentacion: f.fecha_presentacion || null,
-      monto_total: f.monto_total == null ? null : Number(f.monto_total),
+      // consultaestadof22ui no entrega el total a pagar del F22. La antigua
+      // columna guardaba remanente/giro como si fuera monto total declarado.
+      monto_total: null,
+      resumen: {
+        total_declarado: datos?.monto_total_declarado ?? null,
+        remanente_solicitado: datos?.resumen?.remanente_solicitado ?? datos?.remanente_solicitado ?? null,
+        remanente_devuelto: datos?.resumen?.remanente_devuelto ?? datos?.remanente_devuelto ?? null,
+        monto_giro: datos?.resumen?.monto_giro ?? datos?.monto_giro ?? null,
+      },
       glosa: datos?.glosa || null,
       concordancia: datos?.concordancia || null,
       cod_concordancia: datos?.cod_concordancia || null,
@@ -382,6 +397,7 @@ function leerRenta(db, empresaId, desde, hasta) {
       remanente_solicitado: datos?.remanente_solicitado ?? null,
       remanente_devuelto: datos?.remanente_devuelto ?? null,
       monto_giro: datos?.monto_giro ?? null,
+      url: datos?.url || (f.folio ? 'https://www4.sii.cl/consultaestadof22ui/' : null),
       eventos: Array.isArray(datos?.eventos) ? datos.eventos : [],
       observaciones: Array.isArray(datos?.observaciones) ? datos.observaciones : [],
       consultado_en: f.consultado_en || null,
@@ -762,18 +778,16 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
 
   // Declaraciones OFICIALES ya consultadas al SII (si las hay).
   const anioHasta = Number(periodoFinal.slice(0, 4))
-  const anioDesde = anioHasta - 5
-  // Las declaraciones se leen en TODO el rango que entrega el SII (5 años),
-  // no solo en la ventana del RCV: un F29 no presentado de hace tres años es
-  // un riesgo real y no puede desaparecer porque el período analizado sea
-  // corto. La ventana del RCV sigue mandando en montos, calendario y
-  // gráficos; aquí manda el historial de cumplimiento.
-  const f29Oficial = leerDeclaraciones(db, empresaId, 'F29', `${anioDesde}01`, periodoFinal)
+  const anioDesde = anioHasta - 4
+  const desdeF29 = ultimosPeriodos(60, periodoFinal)[0]
+  // F29 cubre 60 períodos mensuales; F22, DJ y boletas cubren los cinco años
+  // tributarios que terminan en el año de análisis.
+  const f29Oficial = leerDeclaraciones(db, empresaId, 'F29', desdeF29, periodoFinal)
   const f22Oficial = leerDeclaraciones(db, empresaId, 'F22', anioDesde, anioHasta)
   const bheOficial = leerDeclaraciones(db, empresaId, 'BHE', anioDesde, anioHasta)
 
   // NUEVO v2: Formulario Compacto del F29 (casillas DECLARADAS) y tesorería.
-  const f29Formularios = leerFormulariosF29(db, empresaId, desde, periodoFinal)
+  const f29Formularios = leerFormulariosF29(db, empresaId, desdeF29, periodoFinal)
   const rentaAnual = leerRenta(db, empresaId, anioDesde, anioHasta)
   const juradas = leerJuradas(db, empresaId, anioDesde, anioHasta)
   const djPresentadas = [...juradas.values()].flatMap((j) =>
@@ -1785,7 +1799,7 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
       fuente: f.origen || 'ficha guardada',
     },
     declaraciones: {
-      f29: resumenTipoDeclaraciones(new Map(f29Historial.map((d) => [d.periodo, d])), { desde: `${anioDesde}01`, hasta: periodoFinal, etiquetaBase: 'Consulta Integral F29' }),
+      f29: resumenTipoDeclaraciones(new Map(f29Historial.map((d) => [d.periodo, d])), { desde: desdeF29, hasta: periodoFinal, etiquetaBase: 'Consulta Integral F29' }),
       renta_f22: resumenTipoDeclaraciones(f22Oficial, { desde: anioDesde, hasta: anioHasta, etiquetaBase: 'Renta (F22)' }),
       juradas: resumenTipoDeclaraciones(leerDeclaraciones(db, empresaId, 'DJ', anioDesde, anioHasta), {
         desde: anioDesde, hasta: anioHasta, etiquetaBase: 'Declaraciones juradas',
@@ -1808,8 +1822,16 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
             etiqueta: ETIQUETA_ESTADO_DECL[f22.estado] || 'Sin información',
             folio: f22.folio || null,
             fecha_presentacion: f22.fecha_presentacion || null,
-            monto_total: f22.monto_total == null ? null : Number(f22.monto_total),
+            // El total a pagar no está disponible en la consulta de estado F22.
+            monto_total: null,
+            resumen: f22.resumen || {
+              total_declarado: null,
+              remanente_solicitado: f22.remanente_solicitado ?? null,
+              remanente_devuelto: f22.remanente_devuelto ?? null,
+              monto_giro: f22.monto_giro ?? null,
+            },
           } : null,
+
           boletas_honorarios: bhe ? {
             emitidas: bhe.datos?.emitidas || null,
             recibidas: bhe.datos?.recibidas || null,
@@ -1868,6 +1890,7 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
     renta: {
       estado: rentaAnual.size ? 'disponible' : 'no_consultado',
       anios: [...rentaAnual.values()].sort((a, b) => b.anio.localeCompare(a.anio)),
+      rango: { desde: anioDesde, hasta: anioHasta, anios: 5 },
     },
     f29_declarado: {
       estado: f29Formularios.size ? 'disponible' : 'no_consultado',
@@ -1882,6 +1905,8 @@ function construirInforme(db, { empresaId, periodo, meses = 12, ficha = null }) 
     // Formulario Compacto agregan el resumen de casillas y el enlace al PDF
     // original, que se abre tal como se presentó ante el SII.
     f29_historial: {
+      desde: desdeF29,
+      hasta: periodoFinal,
       estado: f29Historial.length ? 'disponible' : 'no_consultado',
       fuente: 'Consulta Integral + Formulario Compacto del F29 (SII)',
       rango: rangoF29,

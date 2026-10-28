@@ -94,18 +94,22 @@ async function consultarAnio(jar, { rut, dv, anio }) {
   const base = { rut: String(rut), dv: String(dv), periodo: Number(anio) }
   let atributos = []
   let tipoContribuyente = null
+  const erroresPerfil = []
 
-  // El perfil (régimen/segmento) es lo que el portal envía para perfilar las
-  // DJ; si falla, se consulta igual con el perfil vacío (el SII devuelve las
-  // presentadas con o sin él).
+  // El perfil (régimen/segmento) filtra las DJ aplicables. Si no se puede
+  // leer, consultar con filtros vacíos devolvería una lista parcial como si
+  // fuera completa; se conserva el error del SII para que el job no la acepte.
   try {
     const info = await llamar('obtenerInfoContribuyente', base, jar)
-    tipoContribuyente = info?.data?.tipoContribuyente ?? null
-  } catch { /* se sigue sin perfil */ }
+    if (info?.data?.tipoContribuyente == null) throw new Error('El SII no devolvió tipo de contribuyente para las DJ')
+    tipoContribuyente = info.data.tipoContribuyente
+  } catch (err) { erroresPerfil.push(`perfil contribuyente: ${err.message}`) }
   try {
     const at = await llamar('obtenerAtributosContribuyente', base, jar)
-    atributos = Array.isArray(at?.data?.atributos) ? at.data.atributos : []
-  } catch { /* se sigue sin atributos */ }
+    if (!Array.isArray(at?.data?.atributos)) throw new Error('El SII no devolvió la lista de atributos del contribuyente')
+    atributos = at.data.atributos
+  } catch (err) { erroresPerfil.push(`atributos: ${err.message}`) }
+  if (erroresPerfil.length) throw new Error(`Perfil requerido para consulta DJ incompleto: ${erroresPerfil.join('; ')}`)
 
   // SOLO los atributos de RÉGIMEN. Verificado contra el SII (2026-10-22): si
   // se manda también el SEGMENTO (SGPM), la consulta responde «No Existen
@@ -119,7 +123,8 @@ async function consultarAnio(jar, { rut, dv, anio }) {
     tipoContribuyente,
   }, jar)
 
-  const filas = Array.isArray(r?.data) ? r.data : []
+  if (!Array.isArray(r?.data)) throw new Error('El SII no devolvió una lista de declaraciones juradas para el año')
+  const filas = r.data
   const todas = filas.map(normalizarDj).filter((d) => d.dj)
   const presentadas = todas.filter((d) => d.presentada)
   // Filas con folio 0 y sin fecha: el SII las lista como DJ aplicables al

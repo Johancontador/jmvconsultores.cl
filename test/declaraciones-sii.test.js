@@ -23,6 +23,8 @@ process.env.DB_PATH = dbFile
 
 const decl = require('../backend/core/declaraciones-sii')
 const db = require('../backend/db')
+const rentaSii = require('../backend/core/renta-sii')
+const salud = require('../backend/core/salud-tributaria')
 
 test.after(() => {
   try { db.close() } catch { /* ya cerrada */ }
@@ -222,6 +224,34 @@ test('T5: grilla anual del F29 — columnas por encabezado, no por posición', (
     { columnas: null, filas: [] },
   )
   assert.deepEqual(decl.parsearTablaBusquedaF29([]), { columnas: null, filas: [] })
+})
+
+test('T8: cobertura predeterminada de declaraciones y F29 es cinco años (60 períodos)', () => {
+  assert.deepEqual(decl.ultimosPeriodos(60, '202610').slice(0, 3), ['202111', '202112', '202201'])
+  assert.deepEqual(decl.ultimosPeriodos(60, '202610').slice(-3), ['202608', '202609', '202610'])
+  assert.equal(decl.ultimosPeriodos(60, '202610').length, 60)
+})
+
+test('T9: el F22 conserva resumen de devolución y evita rotularlo como pago efectivo', () => {
+  const empresaId = Number(db.prepare(`INSERT INTO empresas (rut, nombre, clave_sii, activo) VALUES ('76312274-3', 'F22 test', 'k', 1)`).run().lastInsertRowid)
+  const anio = {
+    anio: '2025', folio: 'F22-123', vigente: true, declaradas: 1,
+    fecha_tramitacion: '2025-05-20', remanente_solicitado: 120000, remanente_devuelto: 100000,
+    monto_giro: 5000, resumen: { remanente_solicitado: 120000, remanente_devuelto: 100000, monto_giro: 5000 },
+    eventos: [{ fecha: '2025-05-22', codigo: 'DEV', nombre: 'Devolución autorizada', referencia: '$100.000' }],
+    observaciones: [],
+  }
+  assert.equal(rentaSii.guardar(db, { empresaId, rut: '76312274-3', anios: [anio] }), 1)
+  const fila = db.prepare(`SELECT monto_total, datos_json FROM declaraciones_sii WHERE empresa_id = ? AND tipo = 'F22' AND periodo = '2025'`).get(empresaId)
+  assert.equal(fila.monto_total, 100000, 'el campo legado queda para compatibilidad con filas antiguas')
+  const datos = JSON.parse(fila.datos_json)
+  assert.equal(datos.resumen.remanente_solicitado, 120000)
+  assert.equal(datos.resumen.remanente_devuelto, 100000)
+  assert.equal(datos.monto_total_declarado, null)
+  const informe = salud.construirInforme(db, { empresaId, periodo: '202610' })
+  const f22 = informe.renta.anios.find((r) => r.anio === '2025')
+  assert.equal(f22.monto_total, null, 'el monto guardado históricamente no se muestra como total del F22')
+  assert.equal(f22.resumen.remanente_devuelto, 100000)
 })
 
 test('T6: puppeteer-core es dependencia de producción y el Dockerfile instala chromium', () => {

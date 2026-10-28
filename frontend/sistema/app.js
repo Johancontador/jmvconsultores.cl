@@ -609,7 +609,7 @@ const MENU = [
     seccion: 'Documentos', items: [
       { key: 'documentos', label: 'Bandeja de Documentos', permiso: 'documentos:ver', pill: 'documentos' },
       { key: 'libros', label: 'Libros de Compras y Ventas', permiso: 'documentos:ver' },
-      { key: 'onboarding', label: 'Onboarding y Extracción', permiso: 'documentos:ver' },
+      { key: 'onboarding', label: 'Ficha tributaria e historial RCV', permiso: 'documentos:ver' },
       { key: 'dte-emision', label: 'Emitir Factura o Nota', permiso: 'dte:emitir' },
       { key: 'dte', label: 'Bandeja de DTEs Emitidos', permiso: 'dte:ver' },
       { key: 'dte-config', label: 'Configuración del Emisor', permiso: 'dte:ver' },
@@ -619,10 +619,10 @@ const MENU = [
     // ÁREA 3 — CONTABILIDAD: cómo queda registrado lo que entró. El cierre es
     // un proceso contable, no un reporte: se quedó con su sección.
     seccion: 'Contabilidad', items: [
-      { key: 'automatizacion', label: 'Contabilización y Pendientes', permiso: 'propuestas:ver' },
-      { key: 'propuestas', label: 'Propuestas y Conciliación', permiso: 'propuestas:ver' },
+      { key: 'automatizacion', label: 'Estado de contabilización', permiso: 'propuestas:ver' },
+      { key: 'propuestas', label: 'Revisar y contabilizar documentos', permiso: 'propuestas:ver' },
       { key: 'asientos', label: 'Asientos — Diario, Mayor y Plan', permiso: 'asientos:ver' },
-      { key: 'memoria', label: 'Memoria de Contabilización', permiso: 'documentos:ver' },
+      { key: 'memoria', label: 'Cuentas habituales por cliente y proveedor', permiso: 'documentos:ver' },
       { key: 'activos', label: 'Activos Fijos y Depreciación', permiso: 'activos:ver' },
       { key: 'cierre', label: 'Cierre de Período', permiso: 'reportes:ver' },
     ]
@@ -641,18 +641,18 @@ const MENU = [
       // ficha declarada explícitamente, historial append-only. Sin ficha no hay
       // cálculo — la ausencia de declaración es un estado visible, no un default.
       { key: 'planificacion', label: 'Planificación Tributaria — Ficha', permiso: 'planificacion:ver' },
-      { key: 'analitica', label: 'Dashboard Tributario (IVA)', permiso: 'reportes:ver' },
+      { key: 'analitica', label: 'Resumen anual de IVA, compras y ventas', permiso: 'reportes:ver' },
       { key: 'calculadora-iva', label: 'Calculadora de IVA', permiso: null },
-      { key: 'proceso-masivo', label: 'Proceso masivo (F29 del mes)', permiso: 'crm:ver' },
+      { key: 'proceso-masivo', label: 'Calcular F29 para todos los clientes', permiso: 'crm:ver' },
     ]
   },
   {
     // ÁREA 5 — TESORERÍA: el dinero que entra y sale. Banco, cobranza y la
     // cartola externa (Geo Daniela) comparten la misma pregunta.
     seccion: 'Tesorería', items: [
-      { key: 'tesoreria', label: 'Bancos, Libro Banco y Conciliación', permiso: 'tesoreria:ver' },
+      { key: 'tesoreria', label: 'Bancos y conciliación bancaria', permiso: 'tesoreria:ver' },
       { key: 'cobranza', label: 'Cobranza y Mora', permiso: 'tesoreria:ver' },
-      { key: 'externos', label: 'Cartola externa (Geo Daniela)', permiso: 'asientos:ver' },
+      { key: 'externos', label: 'Asientos recibidos de otros sistemas', permiso: 'asientos:ver' },
     ]
   },
   {
@@ -668,8 +668,8 @@ const MENU = [
       { key: 'reportes', label: 'Centro de Reportes', permiso: 'reportes:ver' },
       { key: 'cclientes', label: 'Clientes — Cuenta Corriente', permiso: 'reportes:ver' },
       { key: 'cproveedores', label: 'Proveedores — Cuenta Corriente', permiso: 'reportes:ver' },
-      { key: 'informe-rango', label: 'Informe por rango', permiso: 'crm:ver' },
-      { key: 'exportacion-masiva', label: 'Reporte masivo (ZIP)', permiso: 'crm:ver' },
+      { key: 'informe-rango', label: 'Análisis de compras y ventas por período', permiso: 'crm:ver' },
+      { key: 'exportacion-masiva', label: 'Descargar informes de todos los clientes (ZIP)', permiso: 'crm:ver' },
     ]
   },
   {

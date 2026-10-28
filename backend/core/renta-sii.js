@@ -116,12 +116,14 @@ async function consultarAnio(jar, { rut, dv, anio }) {
   const principal = vigentes[0] || lista[0] || null
 
   const eventos = []
+  let errorEventos = null
   if (principal && principal.folio) {
     try {
       const ev = await llamar('buscaEventos', {
         periodo: Number(anio), rut: String(rut), dv: String(dv), folio: String(principal.folio),
       }, jar)
-      for (const e of (Array.isArray(ev?.data) ? ev.data : [])) {
+      if (!Array.isArray(ev?.data)) throw new Error('El SII no devolvió una lista de eventos F22')
+      for (const e of ev.data) {
         eventos.push({
           fecha: normalizarFecha(e.fechaEvento),
           codigo: e.codEvento || null,
@@ -130,19 +132,24 @@ async function consultarAnio(jar, { rut, dv, anio }) {
           codigo_carta: e.codCarta || null,
         })
       }
-    } catch {
-      // Sin historial no se inventa: se deja la lista vacía.
+    } catch (err) {
+      errorEventos = err.message
     }
   }
 
   let observaciones = []
+  let errorObservaciones = null
   try {
     const ob = await llamar('situacionObservacion', {
       periodo: Number(anio), rut: String(rut), dv: String(dv), folio: String(principal?.folio || ''),
     }, jar)
-    observaciones = Array.isArray(ob?.data) ? ob.data : []
-  } catch {
-    observaciones = []
+    if (!Array.isArray(ob?.data)) throw new Error('El SII no devolvió una lista de observaciones F22')
+    observaciones = ob.data
+  } catch (err) {
+    errorObservaciones = err.message
+  }
+  if (errorEventos || errorObservaciones) {
+    throw new Error(`Detalle F22 incompleto${errorEventos ? `; eventos: ${errorEventos}` : ''}${errorObservaciones ? `; observaciones: ${errorObservaciones}` : ''}`)
   }
 
   const codConc = principal?.codConc != null ? String(principal.codConc) : null
@@ -151,6 +158,8 @@ async function consultarAnio(jar, { rut, dv, anio }) {
   return {
     anio: String(anio),
     folio: principal?.folio != null ? String(principal.folio) : null,
+    url: principal?.folio != null ? `https://www4.sii.cl/consultaestadof22ui/` : null,
+    monto_total_declarado: null,
     cod_concordancia: codConc,
     concordancia: codConc ? (ETIQUETA_CONCORDANCIA[codConc] || `Código ${codConc}`) : null,
     situacion: principal?.evigCodigo || null,
@@ -162,6 +171,11 @@ async function consultarAnio(jar, { rut, dv, anio }) {
     remanente_solicitado: principal?.remanenteSolicitado != null ? Number(principal.remanenteSolicitado) : null,
     remanente_devuelto: principal?.remanenteDevuelto != null ? Number(principal.remanenteDevuelto) : null,
     monto_giro: principal?.montoGiro != null ? Number(principal.montoGiro) : null,
+    resumen: {
+      remanente_solicitado: principal?.remanenteSolicitado != null ? Number(principal.remanenteSolicitado) : null,
+      remanente_devuelto: principal?.remanenteDevuelto != null ? Number(principal.remanenteDevuelto) : null,
+      monto_giro: principal?.montoGiro != null ? Number(principal.montoGiro) : null,
+    },
     glosa,
     eventos,
     observaciones,
@@ -200,9 +214,10 @@ async function consultarRenta({ rut, dv, anios, jar = null, clave = null, cierre
     sesion = await loginSII(rut, clave)
     propia = true
   }
+  const aniosSolicitados = [...new Set((anios || []).map((a) => String(a)))].slice(0, 5)
   const resultado = { anios: [], aviso: null }
   try {
-    for (const anio of anios) {
+    for (const anio of aniosSolicitados) {
       try {
         resultado.anios.push(await consultarAnio(sesion, { rut: cuerpo, dv: dvRut, anio }))
       } catch (err) {
@@ -261,6 +276,9 @@ function guardar(db, { empresaId, rut, anios }) {
         remanente_solicitado: a.remanente_solicitado,
         remanente_devuelto: a.remanente_devuelto,
         monto_giro: a.monto_giro,
+        resumen: a.resumen,
+        monto_total_declarado: a.monto_total_declarado ?? null,
+        url: a.url || (a.folio ? 'https://www4.sii.cl/consultaestadof22ui/' : null),
         glosa: a.glosa,
         eventos: a.eventos,
         observaciones: a.observaciones,

@@ -64,19 +64,20 @@ snapshots quedan intactos (`test/salud-tributaria.test.js` y
 **Antes:** 10 secciones / 43 ítems simultáneos, con «Lote del despacho» (4
 herramientas) y «Gestión comercial» (CRM + cuentas corrientes) como áreas.
 
-**Ahora:** 6 áreas de trabajo + 2 destinos secundarios, con **los 43 anchors
-intactos**:
+**Ahora:** 6 áreas de trabajo + 2 destinos secundarios, con **44 ítems de menú y 6 rutas de reporte fuera del menú**; los 50 anchors de la prueba golden se conservan:
 
 | Área | Ítems | Pregunta que responde |
 |---|---|---|
 | **Inicio** | Hoy · Alertas · Todos los módulos | ¿Qué requiere mi atención? |
 | **Documentos** | Bandeja · Libros · Onboarding · Emitir DTE · DTEs emitidos · Config. emisor | ¿Qué entró y qué emití? |
 | **Contabilidad** | Contabilización · Propuestas · Asientos · Memoria · Activos · Cierre | ¿Cómo está registrado? |
-| **Impuestos y Salud** | Salud Tributaria · Dashboard IVA · Calculadora IVA · Proceso masivo (F29) | ¿Cómo está mi situación tributaria? |
+| **Impuestos y Salud** | Salud Tributaria · Planificación Tributaria · Dashboard IVA · Calculadora IVA · Proceso masivo (F29) | ¿Cómo está mi situación tributaria? |
 | **Tesorería** | Bancos y conciliación · Cobranza · Cartola externa | ¿Qué dinero entró y salió? |
 | **Informes** | Centro de Reportes · Cta. cte. clientes · Cta. cte. proveedores · Informe por rango · Reporte masivo | ¿Qué reporte entrego? |
 | **Administración** (secundaria) | Admin · Auditoría · Integraciones · Suscripción · CRM · Portafolio | ¿Cómo está configurado? |
 | **Portal de cliente** (secundaria) | 10 vistas read-only | ¿Cómo va mi negocio? |
+
+**Inspección de diseño registrada:** las áreas se nombran por la tarea que resuelven; la jerarquía prioriza Inicio, Documentos, Contabilidad, Impuestos y Salud, Tesorería e Informes, separando Portal de cliente y Administración como destinos secundarios. `docs/handoff-integral/05-MENUS-SUBMENUS-NAVEGACION.md` §«Estado vigente» documenta el mapa por ruta, los permisos heredados, el orden especial de `admin_empresa`, la interacción acordeón/móvil y los límites de la revisión. La inspección se basó en el código, CSS y contratos automatizados; no se hicieron capturas ni inspección visual en navegador.
 
 Cambios asociados:
 - **Acordeón**: abrir un área cierra las demás. El estado se sigue guardando por
@@ -91,9 +92,9 @@ Cambios asociados:
 - `#externos` (cartola Geo Daniela) se movió de Contabilidad a Tesorería; el
   anchor no cambió.
 
-**Compatibilidad:** los 49 anchors siguen resolviendo (T1/T2 del golden),
+**Compatibilidad:** los 50 anchors siguen resolviendo (T1/T2 del golden),
 el breadcrumb muestra el área nueva y el gate de UI se mantiene atado al RBAC
-(T3: 5 roles × 49 rutas).
+(T3: 5 roles × 50 rutas).
 
 ---
 

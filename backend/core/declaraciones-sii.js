@@ -306,6 +306,12 @@ const COLUMNAS_BUSQUEDA_F29 = {
   monto: ['monto'],
 }
 
+function resultadoBusquedaF29(filas, sinResultados = false) {
+  filas.consultaConfirmada = true
+  filas.sinResultados = sinResultados
+  return filas
+}
+
 /** Texto comparable: minúsculas, sin tildes ni espacios sobrantes. */
 function plano(txt) {
   return String(txt || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -339,7 +345,7 @@ function parsearTablaBusquedaF29(filasTexto) {
           if (nombres.some((n) => t === n || t.startsWith(n))) { idx[clave] = i; break }
         }
       }
-      if (idx.periodo != null && idx.folio != null && idx.monto != null) {
+      if (Object.keys(COLUMNAS_BUSQUEDA_F29).every((clave) => idx[clave] != null)) {
         columnas = idx
         continue
       }
@@ -382,15 +388,18 @@ async function buscarF29Anio(page, anio) {
     const b = r.getBoundingClientRect()
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
   })
-  if (radio) {
-    await page.mouse.click(radio.x, radio.y)
-    await dormir(800)
-  }
+  if (!radio) throw new Error(`No se encontró la opción «Anual» al buscar F29 ${anio}`)
+  await page.mouse.click(radio.x, radio.y)
+  await dormir(800)
 
-  await page.evaluate((anio) => {
+  const anioSeleccionado = await page.evaluate((anio) => {
     const s = [...document.querySelectorAll('select')].find((x) => [...x.options].some((o) => o.value === String(anio)))
-    if (s) { s.value = String(anio); s.dispatchEvent(new Event('change', { bubbles: true })) }
+    if (!s) return false
+    s.value = String(anio)
+    s.dispatchEvent(new Event('change', { bubbles: true }))
+    return s.value === String(anio)
   }, anio)
+  if (!anioSeleccionado) throw new Error(`El selector del SII no ofrece el año ${anio} para buscar F29`)
   await dormir(500)
 
   const boton = await page.evaluate(() => {
@@ -400,7 +409,7 @@ async function buscarF29Anio(page, anio) {
     const r = el.getBoundingClientRect()
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
   })
-  if (!boton) return []
+  if (!boton) throw new Error(`No se encontró el botón «Consultar» al buscar F29 ${anio}`)
   await page.mouse.click(boton.x, boton.y)
 
   // La grilla del SII se pinta después del click y a veces tarda más de los 4 s
@@ -421,18 +430,32 @@ async function buscarF29Anio(page, anio) {
   let filas = []
   let anterior = -1
   let estables = 0
+  let tablaLista = false
+  let textoPortal = ''
   while (Date.now() < limite) {
     await dormir(1000)
-    filas = parsearTablaBusquedaF29(await leerFilas()).filas
-    if (filas.length >= 12) return filas
-    if (filas.length > 0 && filas.length === anterior) {
-      // Estable sin llegar a 12: hay períodos sin declaración, se usa lo leído.
-      if (++estables >= 6) return filas
+    const filasTabla = await leerFilas()
+    const lectura = parsearTablaBusquedaF29(filasTabla)
+    filas = lectura.filas
+    if (lectura.columnas) tablaLista = true
+    if (filas.some((f) => f.periodo.slice(0, 4) !== String(anio))) {
+      throw new Error(`El SII devolvió períodos de otro año en la consulta F29 ${anio}`)
+    }
+    if (filas.length >= 12) return resultadoBusquedaF29(filas)
+    if (tablaLista && filas.length === anterior) {
+      // Una tabla válida y estable puede tener menos de 12 períodos con
+      // declaración. Una grilla sin encabezados NO cuenta como consulta vacía.
+      if (++estables >= 6) return resultadoBusquedaF29(filas)
     } else {
       anterior = filas.length
       estables = 0
     }
+    if (!tablaLista) textoPortal = await page.evaluate(() => document.body?.innerText || '')
+    if (/sin resultados|no existen registros|no se encontraron|sin declaraciones/i.test(textoPortal)) {
+      return resultadoBusquedaF29([], true) // El SII confirma explícitamente una búsqueda anual vacía.
+    }
   }
+  if (!tablaLista) throw new Error(`La búsqueda F29 ${anio} no cargó una tabla reconocible del SII`)
   return filas
 }
 
@@ -495,9 +518,17 @@ async function leerBhe(page, { rut, dv, anio, tipo }) {
     if (!t) return []
     return [...t.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => (td.innerText || '').trim()))
   })
+  if (!filasTexto.length) throw new Error(`El informe anual de boletas ${tipo} ${anio} no entregó la tabla de 12 meses`)
   const filas = parsearTablaBhe(filasTexto)
   const totales = filas.find((f) => f.totales) || null
-  return { filas: filas.filter((f) => !f.totales), totales, url }
+  const meses = filas.filter((f) => !f.totales)
+  const mesesEsperados = MESES_NUM.length
+  const mesesEncontrados = new Set(meses.map((f) => f.mes))
+  const faltantes = MESES_NUM.filter((mes) => !mesesEncontrados.has(mes))
+  if (meses.length !== mesesEsperados || faltantes.length || !totales) {
+    throw new Error(`El informe anual de boletas ${tipo} ${anio} está incompleto: ${mesesEncontrados.size}/${mesesEsperados} meses${faltantes.length ? ` (faltan ${faltantes.join(', ')})` : ''} y ${totales ? 'con' : 'sin'} totales`)
+  }
+  return { filas: meses, totales, url }
 }
 
 // ---------------------------------------------------------------------------
@@ -824,7 +855,7 @@ async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo
 
   const lista = ultimosPeriodos(periodos, periodo)
   const desde = lista[0]
-  const resultado = { periodos: 0, con_formulario: 0, errores: [], consultados: [] }
+  const resultado = { periodos: 0, con_formulario: 0, errores: [], consultados: [], revisados: [] }
   let ctx = null
 
   try {
@@ -869,13 +900,25 @@ async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo
           resultado.errores.push(`Búsqueda F29 ${anio}: ${err.message}`)
           break
         }
+        resultado.revisados.push(...periodosAnio)
         const porPeriodo = new Map(filas.map((f) => [f.periodo, f]))
+        const coberturaConfirmada = filas.consultaConfirmada === true
+        const busquedaVaciaConfirmada = filas.sinResultados === true
         let sesionPerdida = false
 
         for (const per of periodosAnio) {
           if (resultado.consultados.includes(per)) continue
           const fila = porPeriodo.get(per)
-          if (!fila || !fila.folio) continue // no hay declaración: nada que leer
+          if (!fila || !fila.folio) {
+            if (!coberturaConfirmada && !busquedaVaciaConfirmada) {
+              resultado.errores.push(`${per}: la búsqueda anual no devolvió el período y no confirmó que esté sin declaración`)
+              continue
+            }
+            // La respuesta anual completa incluye la ventana consultada y
+            // este período no aparece: no hay formulario presentado.
+            resultado.consultados.push(per)
+            continue
+          }
           if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'leyendo' })
           try {
             // La consulta de estado se abre desde la pestaña de resultados.
@@ -896,13 +939,18 @@ async function sincronizarFormularios(db, { empresaId, usuarioId = null, periodo
             const estado = await leerEstadoF29(page)
             const compacto = await leerFormularioCompacto(page, { periodo: per })
 
-            const conFormulario = guardarFormularioF29(db, {
-              empresaId, rut: emp.rut, periodo: per, fila, estado, compacto,
-            })
-            resultado.periodos++
-            if (conFormulario) resultado.con_formulario++
-            resultado.consultados.push(per)
-            if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'ok', compactado: compacto.ok })
+            if (!compacto.ok || !Array.isArray(compacto.casillas) || compacto.casillas.length === 0) {
+              resultado.errores.push(`${per}: Formulario Compacto no legible: ${compacto.error || 'PDF sin casillas extraídas'}`)
+              if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'error', error: compacto.error || 'PDF sin casillas extraídas' })
+            } else {
+              const conFormulario = guardarFormularioF29(db, {
+                empresaId, rut: emp.rut, periodo: per, fila, estado, compacto,
+              })
+              resultado.periodos++
+              if (conFormulario) resultado.con_formulario++
+              resultado.consultados.push(per)
+              if (onProgress) onProgress({ fase: 'f29', periodo: per, estado: 'ok', compactado: true })
+            }
           } catch (err) {
             if (err.codigo === 'SII_SESION_INVALIDA' && vuelta === 1) {
               sesionPerdida = true
@@ -947,9 +995,12 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
 
   const [rutCuerpo, dv] = emp.rut.split('-')
   const anioHasta = Number(periodo.slice(0, 4))
-  const anioDesde = anioHasta - anios + 1
+  const coberturaAnios = Math.min(Math.max(Number(anios) || 5, 1), 5)
+  const anioDesde = anioHasta - coberturaAnios + 1
   const aniosLista = []
   for (let a = anioHasta; a >= anioDesde; a--) aniosLista.push(String(a))
+  const mesesCoberturaF29 = ultimosPeriodos(coberturaAnios * 12, periodo)
+  const aniosF29Lista = [...new Set(mesesCoberturaF29.map((p) => p.slice(0, 4)))].sort((a, b) => b.localeCompare(a))
 
   const resultado = { f29: null, f22: null, juradas: null, boletas: null }
   const avisos = []
@@ -961,6 +1012,12 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
 
     // ---------- F29: matriz de estados (una sola página) ----------
     const matriz = await leerMatrizF29(page)
+    if (!Array.isArray(matriz.anios) || !Array.isArray(matriz.meses) || !matriz.anios.length || matriz.meses.length !== MESES.length) {
+      throw new Error(`La Consulta Integral F29 no confirmó su matriz completa (años=${matriz.anios?.length || 0}, meses=${matriz.meses?.length || 0}/12)`)
+    }
+    const aniosMatriz = new Set(matriz.anios.map(Number))
+    const faltanAniosF29 = aniosF29Lista.filter((a) => !aniosMatriz.has(Number(a)))
+    if (faltanAniosF29.length) avisos.push(`La matriz F29 no expone los años solicitados: ${faltanAniosF29.join(', ')}`)
     const porPeriodo = new Map()
     for (const fila of matriz.meses) {
       const mesIdx = MESES.indexOf(fila.mes)
@@ -968,8 +1025,9 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       fila.celdas.forEach((tooltip, i) => {
         const anio = matriz.anios[i]
         if (!anio) return
-        if (Number(anio) < anioDesde) return
-        porPeriodo.set(`${anio}${MESES_NUM[mesIdx]}`, {
+        const periodoMatriz = `${anio}${MESES_NUM[mesIdx]}`
+        if (periodoMatriz < mesesCoberturaF29[0] || periodoMatriz > periodo) return
+        porPeriodo.set(periodoMatriz, {
           estado: estadoDesdeTooltip(tooltip),
           tooltip,
         })
@@ -980,15 +1038,18 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
     // La búsqueda anual trae todos los meses declarados en una tabla; el mes a
     // mes solo se usa si la anual no devuelve filas.
     let buscadas = 0
-    for (const anio of aniosLista) {
+    const aniosF29Consultados = []
+    for (const anio of aniosF29Lista) {
       let filas = []
       try {
         filas = await buscarF29Anio(page, anio)
+        aniosF29Consultados.push(anio)
       } catch (err) {
         avisos.push(`Búsqueda F29 ${anio}: ${err.message}`)
         continue
       }
       for (const f of filas) {
+        if (f.periodo < mesesCoberturaF29[0] || f.periodo > periodo) continue
         const prev = porPeriodo.get(f.periodo) || {}
         porPeriodo.set(f.periodo, {
           ...prev,
@@ -1024,11 +1085,15 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       })
     }
     resultado.f29 = {
-      periodos: porPeriodo.size,
+      periodos: mesesCoberturaF29.length,
       con_folio: buscadas,
-      desde: `${anioDesde}01`,
+      desde: mesesCoberturaF29[0],
       hasta: periodo,
       anios: matriz.anios,
+      anios_solicitados: aniosF29Lista,
+      anios_consultados: aniosF29Consultados,
+      anios_con_error: aniosF29Lista.filter((a) => !aniosF29Consultados.includes(a)),
+      cobertura_periodos: mesesCoberturaF29,
     }
 
     // ---------- Boletas de honorarios ----------
@@ -1055,12 +1120,21 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       }
       resultado.boletas = {
         anios: aniosLista.length,
+        anios_consultados: aniosLista,
+        anios_con_error: [],
+        guardados: aniosLista.length,
         emitidas_bruto: aniosLista.reduce((s, a) => s + (emitidas[a].totales?.honorario_bruto || 0), 0),
         recibidas_bruto: aniosLista.reduce((s, a) => s + (recibidas[a].totales?.honorario_bruto || 0), 0),
       }
     } catch (err) {
       avisos.push(`Boletas de honorarios: ${err.message}`)
-      resultado.boletas = { anios: 0, error: err.message }
+      resultado.boletas = {
+        anios: 0,
+        anios_consultados: [],
+        anios_con_error: aniosLista,
+        guardados: 0,
+        error: err.message,
+      }
     }
 
     // ---------- Declaraciones juradas (fachada JSON, sin navegador) ----------
@@ -1073,7 +1147,10 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       resultado.juradas = {
         estado: 'consultado',
         anios: r.anios.length,
+        anios_solicitados: aniosLista,
+        anios_guardados: r.anios.filter((a) => !a.error).map((a) => a.anio),
         guardados,
+        resultados: r.anios,
         presentadas: r.anios.reduce((s, a) => s + (a.presentadas || []).length, 0),
         aviso: r.aviso || null,
       }
@@ -1090,7 +1167,10 @@ async function sincronizar(db, { empresaId, usuarioId = null, periodo, anios = 5
       resultado.f22 = {
         estado: 'consultado',
         anios: r.anios.length,
+        anios_solicitados: aniosLista,
+        anios_guardados: r.anios.filter((a) => !a.error).map((a) => a.anio),
         guardados,
+        resultados: r.anios,
         aviso: r.aviso || null,
       }
       if (r.aviso) avisos.push(`Renta: ${r.aviso}`)
