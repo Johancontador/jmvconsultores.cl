@@ -9,7 +9,7 @@
 
 ## 1. Propósito y alcance funcional
 
-El módulo de **Planificación Tributaria** administra la ficha tributaria por empresa, capturando el régimen tributario, el tipo de contribuyente, la fecha de vigencia del régimen y las actividades económicas. Sirve como base para:
+El módulo de **Planificación Tributaria** administra la ficha tributaria por empresa, capturando el régimen tributario, el tipo de contribuyente, la fecha de vigencia del régimen y las actividades económicas. Se declara como base para los siguientes usos, que **hoy no están integrados** en ningún módulo (ver «Estado de integración» más abajo):
 
 - Determinar la tasa PPM aplicable
 - Clasificar la empresa para efectos de reportes y salud tributaria
@@ -69,7 +69,7 @@ Tabla `plan_ficha_tributaria` con los siguientes campos (tipos según better-sql
 | `fecha_inicio_actividades` | TEXT | `YYYY-MM-DD` o NULL | Fecha de inicio de actividades |
 | `propietarios_json` | TEXT | NOT NULL DEFAULT `'[]'` | JSON array de `{ rut, participacion, gravado_finales }`; la API recibe `propietarios` y el núcleo persiste en `propietarios_json` |
 | `sujeto_boletas_honorarios` | INTEGER | NOT NULL DEFAULT 0; CHECK IN (0, 1) | Opt-in explícito de la regla BHE |
-| `vigente_desde` / `vigente_hasta` | TEXT | `vigente_desde` NOT NULL DEFAULT `date('now')` | Vigencia de la fila |
+| `vigente_desde` / `vigente_hasta` | TEXT | `vigente_desde` NOT NULL DEFAULT `date('now')`; `vigente_hasta` NULL | Marcas de vigencia de la fila; **no versionan el historial**: existe **una sola fila por empresa** (`UNIQUE(empresa_id)`) que el `PUT` **sobrescribe** (`plan-ficha.js` L265), y los cambios quedan en `plan_ficha_historial` (append-only). Hoy solo se snapshotean al firmar el historial (`_snapshot`, L212); ningún cálculo ni filtro las consume |
 | `creado_en` / `actualizado_en` | TEXT | DEFAULT `datetime('now')` | Marcas de tiempo (los nombres reales de columna; no son `created_at`/`updated_at`) |
 
 **Índices y protecciones:** `UNIQUE(empresa_id)` (una ficha por empresa) + índice `idx_plan_ficha_tributaria_rut` sobre `rut`. El historial `plan_ficha_historial` es **append-only por triggers de BD** (UPDATE y DELETE abortan con `RAISE`).
