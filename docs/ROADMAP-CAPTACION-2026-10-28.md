@@ -3,6 +3,7 @@
 **Fecha de revisión:** 2026-10-28
 **Estado:** propuesta; no hay campaña lanzada ni configuración externa cambiada.
 **Estrategia y gates:** [`PLAN-CEO-CAPTACION-SALUD-TRIBUTARIA.md`](PLAN-CEO-CAPTACION-SALUD-TRIBUTARIA.md)
+**Registro de fase:** uno de los seis documentos de la fase documental D1 (28-10-2026), corregida en D2 (29-10-2026); el inventario completo vive en `CURRENT_STATE.md` §11 (D2 añadió este archivo al registro, que antes omitía este documento).
 
 ## Estado del producto y del roadmap existente
 
@@ -26,12 +27,23 @@
 
 Confirmado por el usuario: el destino para “Google” es Google Search Console. Preparación documentada; **no se accedió a la cuenta, no se subió el roadmap, no se envió sitemap ni se solicitó indexación**. Esas acciones requieren autenticación y la propiedad verificada por el titular.
 
-URLs a comprobar antes de operar en Search Console:
-- Sitemap: `https://jmvconsultores.cl/sitemap.xml`
-- Páginas públicas aprobadas: landing, servicios, privacidad, términos y contacto según política de indexación.
-- Excluir: rutas `/sistema/`, API, login, registro, tokens de campaña, informes de usuarios y cualquier ruta con información tributaria privada.
+### Validación pública completada (28-10-2026)
 
-Fuentes: [Search Console: sitemaps](https://support.google.com/webmasters/answer/7451001?hl=es), [Inspección de URLs](https://support.google.com/webmasters/answer/9012289?hl=es).
+Sondeo HTTPS en producción, seguido de redirects: `https://jmvconsultores.cl/sitemap.xml` responde 200 como XML y contiene 28 URLs. Las 28 respondieron 200, todas tienen `<title>` y canonical absoluto que coincide exactamente con su `<loc>`. `https://jmvconsultores.cl/robots.txt` responde 200, permite el sitio público y declara `Sitemap: https://jmvconsultores.cl/sitemap.xml`. El mapa corresponde al host corporativo canónico; no enviar el sitemap separado de `app.jmvconsultores.cl` (ese host sirve el portal y su landing canoniza a la web corporativa).
+
+### Checklist para el titular en Search Console
+
+- [ ] Abrir la propiedad verificada `https://jmvconsultores.cl/` (o su propiedad de dominio) con la cuenta Google de JMV.
+- [ ] Confirmar que `/robots.txt` responde 200 y referencia el sitemap de este host.
+- [ ] En **Indexación → Sitemaps**, enviar `https://jmvconsultores.cl/sitemap.xml`; comprobar “Correcto”, última lectura y URLs descubiertas (28 al validar).
+- [ ] Inspeccionar la portada y al menos una URL de servicio, una guía/blog y una página legal; confirmar que Google puede rastrear y que la canonical seleccionada coincide con la declarada.
+- [ ] Si una URL pública cambió recientemente, solicitar indexación solo para esa URL y revisar el informe de cobertura después del rastreo.
+- [ ] No enviar `app.jmvconsultores.cl/sitemap.xml` a la propiedad corporativa ni solicitar indexación de `/sistema/`, API, login, registro, tokens promocionales o informes tributarios privados.
+- [ ] Registrar fecha y resultado de envío en el checklist operativo; no publicar el roadmap interno.
+
+El sondeo fue de solo lectura: no autenticó en Google, no envió el sitemap ni pidió indexación. Search Console requiere que el titular complete esos pasos y no garantiza indexación.
+
+Fuentes oficiales: [Search Console: sitemaps](https://support.google.com/webmasters/answer/7451001?hl=es), [Inspección de URLs](https://support.google.com/webmasters/answer/9012289?hl=es).
 
 ## Métricas que gobiernan el piloto
 

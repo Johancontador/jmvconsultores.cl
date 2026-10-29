@@ -199,6 +199,14 @@ con evidencia, no con supuestos.
 > `548f1d6`, cuyo `package.json` es `6d38a022…` (difiere de `85f93e9`). Ya está corregido
 > en ese documento.
 
+> **Cronología de despliegues (aclaración D2.1, 29-10-2026 — registros históricos conservados):**
+>
+> | Fecha de la lectura | Commit observado | Nivel de evidencia |
+> |---|---|---|
+> | 22-10-2026 (esta §10.2) | `548f1d6` | `VERIFICADO` **en VPS en su fecha**: `deploy-state.json` (`origen push`, `salud healthy`, `escritura_ok true`, 22:25:32 UTC), repo bare, 5/5 hashes y 163/163 archivos. Es la lectura de esa fecha, **no** el estado actual. |
+> | 25-10-2026 (§15) | `bc7a5a2` | **Evidencia documental histórica**: **último despliegue documentado** (`deploy-state.json` commit `bc7a5a2`, `escritura_ok:true`, 19:32:26 UTC). |
+> | 29-10-2026 (D2.1) | — | **Pendiente de verificación externa (VPS)**: relectura de `deploy-state.json` y de la versión realmente activa. **No se afirma cuál es la versión activa**; `8f215f2` (HEAD local) **no se declara desplegado** (sin evidencia de despliegue posterior a `bc7a5a2`). Esta fase no ejecutó scripts contra el VPS. |
+
 ### 10.3 Clave maestra (`G1`, `G2`)
 
 | Control | Evidencia | Estado |
@@ -948,6 +956,13 @@ rango 25–28 que el runbook de `29` desaconseja). Push a `vps` y a `github` del
 
 El reinicio reanudó **4 ingestas históricas** pendientes; quedaron `completado` (no hay
 `historico_rcv` pendientes). No se modificaron datos contables (mismos conteos del backup).
+
+> **Aclaración D2.1 (29-10-2026):** §15 es el **último despliegue documentado**, con
+> **fecha** 25-10-2026 y **commit** `bc7a5a2`; es evidencia de la fecha del registro, **no**
+> del estado actual del VPS. El registro vivo (`deploy-state.json`) y la versión realmente
+> activa están **pendientes de relectura en VPS** (ver la cronología de §10.2); esta fase no
+> ejecutó ningún script contra el contenedor. **Rollback documentado:** commit `548f1d6` con
+> imagen `sha256:9e1faaa08633`.
 
 ### 15.1 Hallazgo posterior (preexistente, no bloqueante)
 

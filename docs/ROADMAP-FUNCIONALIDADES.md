@@ -136,3 +136,44 @@ marcado "no tocar sin necesidad" en MASTERPLAN.md. Todas las funcionalidades de
 este roadmap fueron diseñadas para consumir **solo** lo que esas dos capas ya
 entregan hoy (documentos RCV con montos) más lo persistido en SQLite. Si mañana
 cambia el SII, el roadmap sobrevive.
+
+--- estado de implementación al 28-10-2026 ---
+
+| Funcionalidad | Evidencia |
+|---|---|
+| Duplicadas (detecta folios repetidos) | Implementada y verificada: 2.744 analizadas → 10 folios duplicados ($3.000.000) |
+| Comparador F29 (IVA+PPM mes a mes) | Implementada: 9 meses, promedio $4,8M en datos reales |
+| Interés penal art. 53 CT | Implementada; prellena último vencimiento |
+| Checklist cierre (10 pasos) | Implementada: persistente por empresa+mes (localStorage) Septiembre 2026 |
+| Cobranza (wa.me prellenado) | Implementada; mensaje en 3 tonos (cordial/formal/firme) |
+| Conversor DTE → Excel | Implementada; 100% en navegador, nada sale del computador |
+| Validador IVA (doc-to-doc + conciliación) | Implementada; concilia a $0 con datos reales |
+| Calculadora PPM y F29 (editable) | Implementada; ventas sincronizadas como default; escenarios anuales |
+| Calendario tributario (F29/F22) | Implementada; badges Venció/Esta semana/En plazo; F22 de abril |
+| Documentos pendientes (reclamadas, sin RUT, NC, sin IVA) | Implementada; agrupados con detalle desde `informe_documentos` |
+| Observaciones (checklist + alertas + KPIs) | Implementada; panel completo con todo lo anterior |
+| Comparación YoY (mismo mes año anterior) | Usa `informe_meses`; consulta agrupada + tabla; dato ya existe |
+| Concentración de cartera y compras | Usa `informe_top_contrapartes`; KPI "3 mayores clientes = 61% ventas" |
+| Análisis de Notas de Crédito | Usa `informe_documentos` (tipoDoc 60/61); NC por mes, % ventas, ranking clientes |
+| Mapa de calor estacionalidad | Usa `informe_meses`; mes×año con ventas netas coloreadas |
+| Boletas vs facturas (mix tipoDoc) | Usa `informe_meses`; boleta 39/41 vs factura 33/34; útil retail |
+| Proyección cierre mes en curso | Consulta "live” al abrir reporte; ventas/IVA proyectado de cierre |
+| Sincronización automática mensual | Usa cron + `rcv_cache`; informe mes cerrado para todos clientes; costo reintentos cero |
+| Resumen WhatsApp programado | `proceso.js` redacta `generarMensajeWhatsApp()`; extensión a envío programado pendiente |
+| Alertas activas (caída ≥30%, remanente 3M, sin RUT, facturas reclamadas) | Hoy es reporte que hay que abrir; pendiente enviar por WhatsApp/correo post-sync |
+| Recordatorio calendario tributario (F29) | Con `tasa_ppm` guardada; estimar F29 y avisar X días antes |
+| Detector clave SII vencida | Guardar último intento por cliente (estado/error_msg en informes/processes); N fallos → badge "clave vencida" |
+| Crédito no recuperable / uso común | Motor `columnasMontosGestion` detecta columnas dinámicas; falta reporte dedicado |
+| Libro mayor por contraparte | Click cliente/proveedor Top → drill-down a documentos por `rut_doc` (ya en `informe_documentos`) |
+| Conciliación compras vs ventas (exportadores) | Clientes con ventas exentas + compras crédito alto = remanente estructural; reporte "Exportaciones" analítico con montos exentos por RUT |
+| Auditoría de folios | GROUP BY tipoDoc, folio con detección de saltos; señal facturas anuladas sin NC |
+| Carpetas clientes/equipos | `clientes.user_id` existe; pendiente `cliente_grupos` para filtrar por giro/responsable |
+| Roles secundarios (solo-lectura, solo-un-cliente) | `users.is_admin` existe; pendiente `users.cliente_id` opcional |
+| Configuración desde la app | `NOMBRE_CONTADOR`, `RCV_PROVIDER` en `.env`; pendiente mover a tabla `config` editable UI |
+| Historial consultas SII (auditoría) | Tabla `sii_log`; quién consultó qué período y cuándo |
+| API para contador externo | Token por usuario + `/api/informe/:id/export?formato=csv`; implementado |
+| Planificación Tributaria (ficha régimen/fecha_vigencia) | Implementada en código: rutas `/api/contable/empresas/:id/planificacion/*` (GET devuelve 200 con `ficha:null` si aún no hay incorporación — no 404; POST crea una única vez y devuelve **409** si ya existe; PUT actualiza y devuelve **404** sin ficha); esquema con `regimen`, `regimen_desde_ac`, `fecha_vigencia`; 3 archivos de test listados en `package.json`; `CAMPOS_TRIBUTARIOS` es un objeto: `TIPO_CONTRIBUTUYENTE = ['PENDIENTE','PERSONA_NATURAL','PERSONA_JURIDICA']`, `REGIMEN = ['PENDIENTE','PRO_PMYE_GENERAL','PRO_PMYE_TRANSPARENTE','GENERAL_14A','PRESUNTO','NO_SUJETO_14']`, `ESTADO_FICHA = ['SIN_CONFIGURAR','CONFIGURADA']`. **No marcada como terminada solo por existir prueba** — `fecha_vigencia` hoy **no es obligatoria** (ni capa de aplicación ni CHECK de BD; decisión de negocio pendiente), se requiere validación contable de coherencia `fecha_vigencia`/`regimen_desde_ac` y tratamiento de empresas sin ficha.
+| Salud Tributaria v2 (F29+boletas+F22+indicadores+PDF) | Implementada en código: `declaraciones-sii.js`, `salud-tributaria.js`, formularios F29, `renta-sii.js`, `informe-salud-html.js`; tests: corrida documentada 28-10 citada como «82 de salud» (no reejecutada en D2; conteo estático 29-10: 76 declaraciones en 7 suites relacionadas); datos históricos: **5 de 6 empresas** con 5 años F29+boletas (1, 2, 3, 5, 6 — la **empresa 4 falló por sesión/credenciales**, sin datos); PDF generable; score/cobertura/confianza. **No marcada como terminada solo por existir prueba** — pendientes ST-10 a ST-13 (rótulos, año tributario AT, 14 pruebas numéricas §8, metodología); diferencias tributarias requieren revisión contable comparando conceptos equivalentes.
+| TGR (Deuda Fiscal) | *Implementado en código:* SSO delegado en SII (clave Tributaria → OAuth SII), certificado PDF embebido, token `vr`; lectura estructurada (`backend/core/deuda-tgr.js`, detalle por línea), persistencia (tabla `deuda_tgr` con `INSERT`), endpoints en `backend/routes/tesoreria.js`, panel «Deuda fiscal (TGR)» en `frontend/sistema/views-salud.js` e informe (`deudas.fiscal_tgr`); `test/deuda-tgr.test.js` en `npm test` (commit `85f93e9`, 23-10). *Pendiente de verificación en producción (VPS):* filas reales, ejecución programada y funcionamiento efectivo. **No marcada como terminada:** la verificación de datos en producción no se hizo.
+| Backups R2 + notificaciones Pushover | *Cron local de backup cifrado — evidencia documental histórica:* `docs/33` §15 (25-10) registra `[BACKUP-CHECK] OK` cada 6 h y backup de las 03:00 cifrado «verificado y restaurado en aislado»; no re-ejecutado en D2. *Integración externa R2 + Pushover:* implementados técnicamente (script, flujo, bucket, credenciales) **sin cron ni ejecución documentados**; estado operativo no verificado. **No se afirma que falten respaldos automáticos.** |
+| Captación / CEO (roadmap interno) | Documentado en `docs/ROADMAP-CAPTACION-2026-10-28.md`; pendiente validación legal, revisión privacidad/retención, Search Console (checklist 7 pasos sin autenticar), piloto QA cerrado, contenido orgánico, pauta requiere gates legales. **No marcar como lista para pauta pagada.**
