@@ -20,6 +20,9 @@ nginx/certs/
 tmp-*.json
 cookies*.txt
 
+# Export de espacio de trabajo GTM (local, no es parte del proyecto)
+GTM-WBHXSS56_workspace2.json
+
 # SO / editor
 .DS_Store
 Thumbs.db
