@@ -236,11 +236,11 @@ Tests de expansión de criterios: qué sucede al completar distintos campos, có
 2. **F29 estimado ← `empresas.tasa_ppm` (no la ficha de planificación):** el PPM estimado se calcula como `ingresos netos × tasa_ppm` con la tasa de la tabla `empresas` (`salud-tributaria.js` L777, L821); `regimen` de la ficha de planificación no interviene. Si `tasa_ppm` es 0 o falta, el PPM estimado resulta 0 — no hay una «tasa por defecto» derivada del régimen.
 3. **Ficha SII en sync-diaria (entidad distinta de la ficha de planificación):** `empresas-sii.asegurarFicha` corre al final de cada sync diaria exitosa y refresca la **ficha oficial del SII** (`data/sii-fichas/<rut>.json`) si falta o tiene >7 días; si el RCV falla, no se busca (test T8 de sync-diaria). Esta función **no escribe en `plan_ficha_tributaria`**: la ficha de Planificación solo nace por incorporación explícita (§4). La redacción anterior («la ficha se crea…») inducía a creer lo contrario — corregido en D2.2.
 4. **Datos históricos citados (no re-validados en D2):** la evidencia documental (`CURRENT_STATE.md`, 21-10) registra 5 años de F29 + boletas en **5 de 6 empresas** — 1, 2, 3, 5 y 6; la **empresa 4 falló por sesión/credenciales** (clave SII incorrecta) y no tiene datos. Scores de esa corrida: empresas 1 y 6 con score 90 (CON_OBSERVACIONES, con `F29_DIFERENCIA`), empresas 2 y 3 con score 75 (REQUIERE_REVISION, `COBERTURA_RCV_PARCIAL`), empresa 4 con 32 SIN_INFORMACION y empresa 5 con 87. Son cifras de esa corrida histórica, no una validación actual ni cobertura completa.
+5. **Resuelto en código (29-10-2026):** la tasa PPM del cálculo proviene de `empresas.tasa_ppm` y la ficha que alimenta el informe es la del SII; la ficha de planificación no participa (ver los puntos 1 y 2). Queda como **decisión de producto** (no verificable en esta fase) si debería pasar a alimentarlas en el futuro.
 
 ### Conexiones no verificadas en este diagnóstico
 
 - No se ejecutó login a producción ni se consultaron datos reales del SII desde este programa.
-- **Resuelto en código (29-10-2026):** la tasa PPM del cálculo proviene de `empresas.tasa_ppm` y la ficha que alimenta el informe es la del SII; la ficha de planificación no participa. Queda como **decisión de producto** (no verificable en esta fase) si debe pasar a alimentarlas en el futuro.
 
 ---
 
